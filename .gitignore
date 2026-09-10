@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+labs/checkpoints/
+*.pt
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+# local
+.claude/
