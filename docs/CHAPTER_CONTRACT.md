@@ -78,3 +78,18 @@ if simplifying, say so.
 - Interactives must work with mouse AND touch (use `pointerdown/pointermove/pointerup`).
 - Never block the main thread: do at most a few hundred training steps per animation frame.
 - Do not use `alert`, `fetch`, or any network call.
+
+## Cache busting
+
+Every asset URL in `index.html` carries a `?v=N` query string. GitHub Pages serves
+JS and CSS with a long cache lifetime, so without this a reader who has visited
+before keeps running the old chapter files after you push changes.
+
+**When you change any file under `app/`, bump every `?v=N` in `index.html`:**
+
+```bash
+sed -i -E 's/\?v=[0-9]+/?v=3/g' index.html
+```
+
+There is no build step to do this automatically. If a change does not show up in a
+browser, this is almost always why; a hard reload (Ctrl+Shift+R) confirms it.
