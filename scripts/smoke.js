@@ -12,6 +12,12 @@ const vm = require('vm');
 const ROOT = path.join(__dirname, '..');
 const FRAMES = parseInt(process.env.SMOKE_FRAMES || '40', 10);
 
+/* Interactive-first format budget. Chapter 01 is the reference implementation. */
+const MIN_INTERACTIVES = 5;   // things the reader can touch
+const MAX_INTRO_WORDS = 120;  // prose before the first one
+const MAX_PARA_WORDS = 110;   // any single paragraph
+const STRUCTURE_ONLY_OK = new Set([]); // ids exempt from the format checks
+
 /* ---------- fake DOM ---------- */
 function makeCanvasCtx() {
   const noop = () => {};
@@ -182,13 +188,40 @@ for (const f of files) {
     rafQueue.length = 0; timers.length = 0;
     const words = root.textContent.split(/\s+/).filter(Boolean).length;
     const quiz = root.querySelectorAll('.quiz').length, canvases = root.querySelectorAll('canvas').length, callouts = root.querySelectorAll('.callout').length;
+
+    /* ---- interactive-first format checks (see docs/CHAPTER_CONTRACT.md) ----
+       Walk the rendered tree in document order and measure how much reading the
+       reader must do before they can touch anything, and whether any single
+       block of prose is a wall. These are failures, not warnings: the format is
+       the product. */
+    const figures = root.querySelectorAll('.figure');
+    let wordsBeforeFirstFigure = 0, sawFigure = false, maxPara = 0, longParas = 0;
+    (function walkFmt(el) {
+      for (const c of el.children) {
+        if (!(c instanceof Element)) continue;
+        if (c.classList.contains('figure')) { sawFigure = true; continue; }
+        if (c.classList.contains('quiz')) continue;
+        if (c.tagName === 'P') {
+          const w = c.textContent.split(/\s+/).filter(Boolean).length;
+          if (w > maxPara) maxPara = w;
+          if (w > MAX_PARA_WORDS) longParas++;
+          if (!sawFigure) wordsBeforeFirstFigure += w;
+        } else if (c.tagName === 'DIV' || c.tagName === 'SECTION') walkFmt(c);
+      }
+    })(root);
+
     const problems = [];
     if (errors.length) problems.push(errors.length + ' runtime error(s): ' + errors[0].split('\n').slice(0, 3).join(' | '));
     if (!quiz) problems.push('no quiz');
     if (!canvases) problems.push('no canvas');
     if (words < 900) problems.push('thin prose (' + words + ' words rendered)');
+    if (!STRUCTURE_ONLY_OK.has(id)) {
+      if (figures.length < MIN_INTERACTIVES) problems.push('only ' + figures.length + ' interactive(s), need ' + MIN_INTERACTIVES + '+');
+      if (wordsBeforeFirstFigure > MAX_INTRO_WORDS) problems.push(wordsBeforeFirstFigure + ' words before the first interactive, max ' + MAX_INTRO_WORDS);
+      if (longParas) problems.push(longParas + ' paragraph(s) over ' + MAX_PARA_WORDS + ' words (longest ' + maxPara + ')');
+    }
     if (problems.length) { failures++; console.log('FAIL ' + id + ': ' + problems.join('; ')); }
-    else console.log('ok   ' + id + ' — ' + words + ' words, ' + canvases + ' canvases, ' + callouts + ' callouts, ' + poked + ' controls poked');
+    else console.log('ok   ' + id + ' — ' + words + 'w, ' + figures.length + ' interactives, ' + wordsBeforeFirstFigure + 'w intro, longest para ' + maxPara + 'w, ' + callouts + ' callouts, ' + poked + ' controls');
   } catch (e) {
     failures++;
     console.log('FAIL ' + id + ': ' + String(e.stack || e).split('\n').slice(0, 4).join(' | '));

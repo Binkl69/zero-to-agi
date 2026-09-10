@@ -51,25 +51,70 @@ Canvas background is `#0a0e16`; draw with `ctx.colors` (accent blue `#7c9cff`, g
 warn yellow `#fbbf24`, danger red `#fb7185`, pink, purple, orange, muted grey). Text colour `#e6ebf5`.
 Always `clearRect` and redraw the whole canvas each frame. Keep each animation cheap (<2 ms/frame).
 
-## Pedagogy — the non-negotiable structure
+## Pedagogy — INTERACTIVE FIRST. This is the whole product.
 
-The reader is a smart adult with no ML background who feels "behind". Each chapter:
+The reader is a smart adult with no ML background who feels behind, and who learns by doing,
+not by reading. **`app/chapters/01-what-is-learning.js` is the reference implementation. Read it
+before writing anything.**
 
-1. **Hook** (2–3 paragraphs): a concrete real-world situation, then the question this chapter answers.
-2. **Mechanism**: explain the actual thing, with a diagram or animation. Introduce jargon only after
-   the idea, then name it (`<em>` the term the first time). Use one worked numeric example where possible.
-3. **Interactive(s)**: at least ONE substantial interactive per chapter (two is better) where the reader
-   changes something and sees the consequence. Precede each with a `tryit` callout that tells them
-   exactly what to try and what to notice.
-4. **Real-world examples** (`example` callouts): where this idea shows up in products they use.
-5. **History** (`history` callout): who, when, and why it mattered — one or two paragraphs.
-6. **Why it matters for modern AI**: connect to today's LLMs/agents.
-7. **Quiz**: 3–5 questions with explanations.
-8. **Go deeper**: 3–5 links (papers, videos, code) as a `ctx.ul` of `<a href target="_blank">`.
+The governing rule: **the reader touches something before they read anything, and every paragraph
+that exists is there to explain something they just did with their own hands.** A paragraph that
+explains a thing the reader has not yet experienced is in the wrong place. Move the interactive up.
 
-Aim for 1200–2000 words of prose per chapter plus the interactives. Write like a great teacher,
-not a textbook: short sentences, vivid analogies, no hedging, no fluff. Be precise and correct;
-if simplifying, say so.
+### The loop, repeated 5–9 times per chapter
+
+```
+tryit callout  ->  INTERACTIVE  ->  1–2 short paragraphs on what they just saw  ->  next idea
+```
+
+Never: three paragraphs, then a demo. Always: demo, then the short explanation that now lands.
+
+### Hard budget (enforced by `node scripts/smoke.js`, which FAILS the chapter otherwise)
+
+| Rule | Limit |
+|---|---|
+| Interactives (`ctx.figure`) per chapter | **5 minimum**, 6–9 is the target |
+| Prose words before the FIRST interactive | **120 max** (chapter 01 does it in 24) |
+| Any single paragraph | **110 words max**, aim for 25–70 |
+| Total rendered words | 900 minimum |
+
+### Thorough, not thin
+
+Short paragraphs are not an excuse to cover less. **Be longer and more thorough than the old
+text-heavy chapters were, not shorter.** Aim for **1,500–2,500 words of prose**, chopped into
+25–70 word blocks and spread between many interactives. Nothing from the old chapter's substance
+should be lost. Redistribute it: a long explanation usually becomes a short paragraph plus a
+figure caption plus a callout, and is better for the split.
+
+Figure captions carry real teaching weight. Use them for the detail that would otherwise bloat a
+paragraph.
+
+### Still required, woven through
+
+- **Jargon after the experience.** Let them do the thing, then name it with `<em>` on first use.
+- **A worked numeric example**, ideally as a live panel where they change the numbers.
+- **`example` callouts**: where this shows up in products they already use.
+- **A `history` callout**: who, when, why it mattered.
+- **Why it matters for modern AI**: connect to today's models and agents.
+- **`quiz`**: 5 questions, each with an explanation.
+- **Go deeper**: 3–5 real links as a `ctx.ul` of `<a href target="_blank" rel="noopener">`.
+
+### Designing an interactive that teaches
+
+Good ones let the reader **fail informatively**, or make an invisible quantity visible and
+draggable. The best in chapter 01 lets you try an impossible task until you feel why it is
+impossible. Prefer:
+
+- a thing the reader drives by hand, before the machine does it automatically
+- a live counter or score that reacts to what they changed
+- a preset that is deliberately broken, so they can see the failure mode
+- a slider that crosses a threshold where behaviour visibly changes
+
+Avoid decorative animations that the reader cannot influence. If it has no control, it should be
+a diagram that responds to hover at minimum.
+
+Write like a great teacher: short sentences, vivid analogies, no hedging, no fluff. Be precise;
+if you simplify, say so.
 
 ## Quality bar
 
