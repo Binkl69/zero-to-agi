@@ -10,16 +10,18 @@ beyond high-school and no machine-learning background. It is built on the belief
 exposure are the best teacher, so every chapter has things you can poke at: live-training networks,
 draggable points, sliders, games, and a language model that trains in your browser tab.
 
-## Run it
+## Read it now
 
-No build step, no dependencies. Open `index.html` in any modern browser, or serve the folder:
+**→ [binkl69.github.io/zero-to-agi](https://binkl69.github.io/zero-to-agi/)**
+
+Or run it locally. No build step, no dependencies. Open `index.html` in any modern browser, or serve
+the folder:
 
 ```bash
 python -m http.server 8000
 ```
 
-then visit http://localhost:8000. If you enable GitHub Pages for this repository (Settings → Pages →
-deploy from `main`, root), the course is hosted for free at `https://<your-user>.github.io/zero-to-agi/`.
+then visit http://localhost:8000.
 
 Progress (completed chapters, learning-path milestones) is saved in your browser's local storage.
 
