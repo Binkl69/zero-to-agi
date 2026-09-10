@@ -72,11 +72,25 @@ index.html              the app shell (loads every chapter as a plain <script>)
 app/css/style.css       shared styles
 app/js/core.js          chapter registry + helper toolkit (canvas, sliders, loops, quizzes)
 app/js/main.js          router, sidebar, home / learning path / glossary pages
-app/js/glossary.js      glossary data
+app/js/glossary.js      170-term glossary
 app/chapters/NN-*.js    one self-contained file per chapter
 labs/                   Python labs
+scripts/smoke.js        headless test harness for the chapters
 docs/CHAPTER_CONTRACT.md  how chapters are written (useful if you want to add one)
 ```
+
+## Testing
+
+The chapters are plain JavaScript with no test framework, so there is a small harness
+that renders every chapter into a fake DOM, ticks its animation loops, clicks every
+button, drags every slider, and fails on any runtime error, missing quiz, blank canvas
+or thin prose:
+
+```bash
+node scripts/smoke.js
+```
+
+Add a chapter id to test just one, for example `node scripts/smoke.js 07-transformers`.
 
 ## Contributing / extending
 
