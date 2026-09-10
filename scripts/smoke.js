@@ -121,7 +121,10 @@ const document = {
   activeElement: null, hidden: false,
 };
 window.document = document; window.window = window; window.Node = Element; window.HTMLElement = Element; window.Element = Element;
-window.Event = class { constructor(type, init) { this.type = type; Object.assign(this, init || {}); } };
+// Real DOM event constructors take `type` from the first argument only; keys in
+// the init dict never override it. Assign first, then stamp type, or a chapter
+// that passes an existing event as init can silently re-trigger its own handler.
+window.Event = class { constructor(type, init) { Object.assign(this, init || {}); this.type = type; } };
 window.CustomEvent = window.Event; window.PointerEvent = window.Event; window.MouseEvent = window.Event; window.KeyboardEvent = window.Event;
 window.navigator = { userAgent: 'smoke', maxTouchPoints: 0, clipboard: { writeText: async () => {} } };
 window.console = console; window.Math = Math; window.JSON = JSON; window.Date = Date;

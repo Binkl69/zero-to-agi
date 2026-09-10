@@ -1,515 +1,796 @@
-/* Zero → AGI · Chapter 01 · What does it mean for a machine to learn?
-   Perceptron (Rosenblatt 1958), the perceptron learning rule, linear separability and XOR.
-   Interactives: neuron calculator with flowing signals; click-to-place perceptron trainer with
-   animated weight updates; nested AI ⊃ ML ⊃ DL diagram. Plain JS, no dependencies. */
+/* Chapter 1 — What does it mean for a machine to learn?
+   DESIGN RULE FOR THIS CHAPTER: the reader touches something in the first ten
+   seconds. Text exists only to explain what they just saw with their own hands.
+   Target: under 1,000 words of prose, six things to play with. */
 (function () {
+  const ZTA = window.ZTA;
+
+  /* The four corners of the square. Every puzzle uses the same four dots and
+     only changes which ones are "on". That is the whole point: same dots,
+     wildly different difficulty. */
+  const PTS = [[0, 0], [0, 1], [1, 0], [1, 1]];
+  const PUZZLES = {
+    AND:  { labels: [0, 0, 0, 1], blurb: 'Light up ONLY when both switches are on.' },
+    OR:   { labels: [0, 1, 1, 1], blurb: 'Light up when EITHER switch is on.' },
+    XOR:  { labels: [0, 1, 1, 0], blurb: 'Light up when EXACTLY ONE switch is on.' },
+  };
+
   ZTA.registerChapter({
     id: '01-what-is-learning',
     num: 1,
     part: 'I',
     title: 'What does it mean for a machine to learn?',
-    tagline: 'A single artificial neuron from 1958 already contains the whole idea: weights, examples, mistakes, and small nudges.',
+    tagline: 'Start by doing it yourself. Four dots, one ruler, three puzzles. The third one is impossible, and that fact shaped the next fifty years.',
+
     render(root, ctx) {
-      const { h, p, section, callout, ul, ol } = ctx;
-      const C = ctx.colors;
-      const FONT = '13px Inter, system-ui, sans-serif';
-      const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
-      /* toFixed, but: a value that rounds to zero never prints as "−0.00", non-finite values
-         never print as "NaN" in the middle of a diagram, and the minus sign is the real U+2212
-         used everywhere else on these canvases. */
-      const fix = (v, d) => {
-        if (!isFinite(v)) return v > 0 ? '∞' : v < 0 ? '−∞' : '—';
-        const s = (Math.abs(v) < 0.5 * Math.pow(10, -d) ? 0 : v).toFixed(d);
-        return s.charAt(0) === '-' ? '−' + s.slice(1) : s;
-      };
-      const f1 = (v) => fix(v, 1);
-      const f2 = (v) => fix(v, 2);
-      const sgn = (v) => (v < 0 ? '−' : '+');
-      const big = (v) => (v >= 100000 ? Math.round(v / 1000) + 'k' : String(v));
+      const h = ctx.h;
 
-      /* ------------------------------------------------------------------ */
-      /* Interactive B: the neuron calculator                                 */
-      /* ------------------------------------------------------------------ */
-      function neuronCalculator() {
-        const W = 720, H = 320;
-        const [cv, g] = ctx.canvas(W, H);
-        const S = { x: [3, 1, 2], w: [0.8, 1.5, 0.4], b: -2 };
-        const names = ['currency symbols', 'sender unknown?', 'exclamation marks'];
-        /* Every control moves on a 0.5 (inputs) or 0.1 (weights, bias) grid, so the arithmetic on
-           screen is exact to two decimals. Snapping to 1e-6 stops binary-float dust from making a
-           displayed "0.00" claim to be above zero, which would contradict the printed output. */
-        const snap = (v) => Math.round(v * 1e6) / 1e6;
-        // x2 answers a yes/no question, so it only takes the values 0 and 1; the other two are counts
-        const xRange = [{ max: 8, step: 0.5 }, { max: 1, step: 1 }, { max: 8, step: 0.5 }];
-        const xs = S.x.map((v, i) => ctx.slider({ label: 'x' + (i + 1) + ' · ' + names[i], min: 0, max: xRange[i].max, step: xRange[i].step, value: v, fmt: f1, onChange: (val) => { S.x[i] = val; } }));
-        const ws = S.w.map((v, i) => ctx.slider({ label: 'w' + (i + 1) + ' (weight)', min: -2, max: 2, step: 0.1, value: v, fmt: f1, onChange: (val) => { S.w[i] = val; } }));
-        const bs = ctx.slider({ label: 'b (bias)', min: -5, max: 5, step: 0.1, value: S.b, fmt: f1, onChange: (val) => { S.b = val; } });
-        const ro = ctx.readout();
-        const inX = 200, inY = [78, 158, 238], nX = 452, nY = 158, R = 44, biasX = 352, biasY = 40;
-        const boxX = 528, boxW = 184, boxC = boxX + boxW / 2;
-        function total() {
-          const prods = S.w.map((w, i) => snap(w * S.x[i]));
-          const sum = snap(prods.reduce((a, b) => a + b, 0) + S.b);
-          return { prods, sum, out: sum > 0 ? 1 : 0 };
-        }
-
-        function node(x, y, r, fill, stroke) {
-          g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fillStyle = fill; g.fill();
-          g.lineWidth = 2; g.strokeStyle = stroke; g.stroke();
-        }
-        function edge(x0, y0, x1, y1, val, label, t, labelDy) {
-          const mag = Math.abs(val);
-          const col = val > 0 ? C.danger : val < 0 ? C.accent : C.muted;
-          g.strokeStyle = col; g.globalAlpha = 0.35 + Math.min(0.65, mag * 0.25);
-          g.lineWidth = 1 + Math.min(7, mag * 1.2);
-          g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
-          g.globalAlpha = 1;
-          // flowing dots: speed grows with the size of the signal
-          if (mag > 0.001) {
-            const speed = 0.25 + Math.min(1.2, mag * 0.25);
-            for (let k = 0; k < 3; k++) {
-              const u = ((t * speed + k / 3) % 1 + 1) % 1;
-              const px = x0 + (x1 - x0) * u, py = y0 + (y1 - y0) * u;
-              g.beginPath(); g.arc(px, py, 3.5, 0, Math.PI * 2); g.fillStyle = col; g.fill();
-            }
-          }
-          g.font = MONO; g.fillStyle = col; g.textAlign = 'center';
-          const mx = x0 + (x1 - x0) * 0.5, my = y0 + (y1 - y0) * 0.5;
-          g.fillText(label, mx, my + (labelDy || -9));
-        }
-        const show = (r) => ({ 'weighted sum + bias': f2(r.sum), output: r.out ? '1 (yes: spam)' : '0 (no: not spam)' });
-        let roTimer = 0;
-        function draw(dt, t) {
-          g.clearRect(0, 0, W, H);
-          const r = total(), prods = r.prods, sum = r.sum, out = r.out;
-          // inputs
-          for (let i = 0; i < 3; i++) {
-            edge(inX + 18, inY[i], nX - R, nY, prods[i], f1(S.w[i]) + ' × ' + f1(S.x[i]) + ' = ' + f2(prods[i]), t, i === 2 ? 16 : -10);
-          }
-          edge(biasX, biasY + 14, nX - 16, nY - R + 6, S.b, 'b = ' + f1(S.b), t, -10);
-          for (let i = 0; i < 3; i++) {
-            node(inX, inY[i], 18, '#111827', C.text);
-            g.fillStyle = C.text; g.font = MONO; g.textAlign = 'center'; g.fillText('x' + (i + 1), inX, inY[i] + 4);
-            g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'right'; g.fillText(names[i] + ' = ' + f1(S.x[i]), inX - 26, inY[i] + 4);
-          }
-          node(biasX, biasY, 14, '#111827', C.muted);
-          g.fillStyle = C.text; g.font = MONO; g.textAlign = 'center'; g.fillText('1', biasX, biasY + 4);
-          g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'right'; g.fillText('bias input (always 1)', biasX - 24, biasY + 4);
-          // the neuron
-          node(nX, nY, R, '#0f1520', out ? C.green : C.line);
-          g.fillStyle = C.text; g.font = 'bold 16px Inter, system-ui, sans-serif'; g.textAlign = 'center';
-          g.fillText('Σ', nX, nY - 8);
-          g.font = MONO; g.fillStyle = out ? C.danger : C.accent; g.fillText(f2(sum), nX, nY + 14);
-          // threshold → output
-          g.strokeStyle = C.muted; g.lineWidth = 2; g.beginPath(); g.moveTo(nX + R, nY); g.lineTo(boxX - 4, nY); g.stroke();
-          g.beginPath(); g.moveTo(boxX - 4, nY); g.lineTo(boxX - 13, nY - 5); g.lineTo(boxX - 13, nY + 5); g.closePath(); g.fillStyle = C.muted; g.fill();
-          g.fillStyle = '#111827'; g.strokeStyle = out ? C.green : C.line; g.lineWidth = 2;
-          g.beginPath();
-          if (g.roundRect) g.roundRect(boxX, nY - 34, boxW, 68, 10); else g.rect(boxX, nY - 34, boxW, 68);
-          g.fill(); g.stroke();
-          g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'center'; g.fillText('is the total > 0 ?', boxC, nY - 12);
-          g.font = 'bold 15px Inter, system-ui, sans-serif'; g.fillStyle = out ? C.green : C.muted;
-          g.fillText(out ? 'output 1 → SPAM' : 'output 0 → not spam', boxC, nY + 14);
-          // formula line
-          g.font = MONO; g.fillStyle = C.text; g.textAlign = 'center';
-          const terms = S.w.map((w, i) => f1(w) + '×' + f1(S.x[i])).join(' + ');
-          g.fillText(terms + ' ' + sgn(S.b) + ' ' + f1(Math.abs(S.b)) + ' = ' + f2(sum) + (out ? '  (above 0 → 1)' : '  (not above 0 → 0)'), W / 2, H - 14);
-          roTimer += dt;
-          if (roTimer > 0.15) { roTimer = 0; ro.set(show(r)); }
-        }
-        ro.set(show(total()));
-        ctx.loop(draw);
-        return ctx.figure(cv, 'A perceptron computing by hand. Edge thickness and dot speed show the size of each signal <b>weight × input</b>; red pushes toward "yes", blue toward "no".', [...xs, ...ws, bs], ro);
-      }
-
-      /* ------------------------------------------------------------------ */
-      /* Interactive A: perceptron trainer                                    */
-      /* ------------------------------------------------------------------ */
-      function perceptronTrainer() {
-        const W = 720, H = 400;
-        const [cv, g] = ctx.canvas(W, H);
-        cv.style.touchAction = 'none'; cv.style.cursor = 'crosshair';
-        const plot = { x: 30, y: 20, w: 360, h: 360 };
-        const RANGE = 1.2;
-        const toPx = (x, y) => ({ x: plot.x + (x + RANGE) / (2 * RANGE) * plot.w, y: plot.y + (RANGE - y) / (2 * RANGE) * plot.h });
-        const fromPx = (px, py) => ({ x: (px - plot.x) / plot.w * 2 * RANGE - RANGE, y: RANGE - (py - plot.y) / plot.h * 2 * RANGE });
-        const S = { pts: [], w1: 0, w2: 0, b: 0, i: 0, errs: 0, epoch: 0, hist: [], training: false, converged: false, placing: 1, lr: 0.1, speed: 8, acc: 0, flash: 0, flashIdx: -1, msg: 'Press ▶ Train to start.', updates: 0 };
-
-        function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
-        function resetWeights() {
-          // reject a degenerate starting w: with ‖w‖ ≈ 0 the boundary line is numerically undefined
-          S.w1 = 0; S.w2 = 0;
-          for (let k = 0; k < 20 && S.w1 * S.w1 + S.w2 * S.w2 < 1e-4; k++) { S.w1 = ctx.rand(-0.5, 0.5); S.w2 = ctx.rand(-0.5, 0.5); }
-          if (S.w1 * S.w1 + S.w2 * S.w2 < 1e-4) { S.w1 = 0.3; S.w2 = -0.2; }
-          S.b = 0;
-          S.i = 0; S.errs = 0; S.epoch = 0; S.hist = []; S.converged = false; S.updates = 0;
-          S.flash = 0; S.flashIdx = -1; S.acc = 0;
-          S.msg = 'Weights reset to small random values. Press ▶ Train.';
-        }
-        /* On non-separable data the rule never stops updating, so the weights random-walk forever.
-           They cannot reach infinity at any realistic speed, but guard anyway: the perceptron's
-           decision is sign(w·x + b), so dividing w1, w2 and b by the same positive number leaves
-           every prediction and the drawn line exactly unchanged — it only keeps the printout legible. */
-        function guardWeights() {
-          if (!isFinite(S.w1) || !isFinite(S.w2) || !isFinite(S.b)) {
-            S.training = false; resetWeights();
-            S.msg = 'The numbers overflowed, so the weights were reset. Try a smaller learning rate.';
-            return;
-          }
-          const n = Math.hypot(S.w1, S.w2);
-          if (n > 1e3) { const k = 1e3 / n; S.w1 *= k; S.w2 *= k; S.b *= k; }
-        }
-        function loadPreset(name) {
-          S.pts = [];
-          if (name === 'separable') {
-            for (let k = 0; k < 12; k++) {
-              S.pts.push({ x: 0.45 + ctx.rand(-0.3, 0.3), y: 0.4 + ctx.rand(-0.3, 0.3), c: 1 });
-              S.pts.push({ x: -0.45 + ctx.rand(-0.3, 0.3), y: -0.4 + ctx.rand(-0.3, 0.3), c: -1 });
-            }
-          } else if (name === 'xor') {
-            const cs = [[0.55, 0.55, 1], [-0.55, -0.55, 1], [0.55, -0.55, -1], [-0.55, 0.55, -1]];
-            for (const [cx, cy, c] of cs) for (let k = 0; k < 6; k++) S.pts.push({ x: cx + ctx.rand(-0.22, 0.22), y: cy + ctx.rand(-0.22, 0.22), c });
-          }
-          shuffle(S.pts);
-          S.training = false; resetWeights(); updateBtns();
-        }
-        function predict(q) { return (S.w1 * q.x + S.w2 * q.y + S.b) > 0 ? 1 : -1; }
-        function step() {
-          if (!S.pts.length) { S.msg = 'Click on the plot to place some points first.'; S.training = false; return; }
-          if (S.i >= S.pts.length) S.i = 0;
-          const q = S.pts[S.i], pred = predict(q);
-          if (pred !== q.c) {
-            S.w1 += S.lr * q.c * q.x; S.w2 += S.lr * q.c * q.y; S.b += S.lr * q.c;
-            guardWeights();
-            S.errs++; S.updates++; S.flash = 1; S.flashIdx = S.i;
-            S.msg = 'Point ' + (S.i + 1) + ': predicted ' + (pred > 0 ? 'red' : 'blue') + ', truth ' + (q.c > 0 ? 'red' : 'blue') + ' → nudge w ' + (q.c > 0 ? 'toward' : 'away from') + ' it (η = ' + f2(S.lr) + ').';
-          } else {
-            S.msg = 'Point ' + (S.i + 1) + ': correct. No change.';
-          }
-          S.i++;
-          if (S.i >= S.pts.length) {
-            S.epoch++; S.hist.push(S.errs); if (S.hist.length > 60) S.hist.shift();
-            if (S.errs === 0) { S.converged = true; S.training = false; S.msg = 'Pass ' + S.epoch + ': zero mistakes. Converged — every point is on the right side.'; updateBtns(); }
-            S.errs = 0; S.i = 0;
-          }
-        }
-        // Sutherland–Hodgman clip of polygon by half-plane sign·(a·x + b·y + c) ≥ 0
-        function clipHalf(poly, a, b, c, sign) {
-          const out = [];
-          for (let i = 0; i < poly.length; i++) {
-            const P = poly[i], Q = poly[(i + 1) % poly.length];
-            const fp = sign * (a * P.x + b * P.y + c), fq = sign * (a * Q.x + b * Q.y + c);
-            if (fp >= 0) out.push(P);
-            if ((fp >= 0) !== (fq >= 0)) { const t = fp / (fp - fq); out.push({ x: P.x + (Q.x - P.x) * t, y: P.y + (Q.y - P.y) * t }); }
-          }
-          return out;
-        }
-        function fillPoly(poly, color) {
-          if (poly.length < 3) return;
-          g.beginPath();
-          poly.forEach((q, i) => { const s = toPx(q.x, q.y); if (i === 0) g.moveTo(s.x, s.y); else g.lineTo(s.x, s.y); });
-          g.closePath(); g.fillStyle = color; g.fill();
-        }
-        /* Word-wrap with a hard line budget. Without the budget a long status message could run
-           down through the legend and the sparkline underneath it. */
-        function wrap(text, x, y, maxW, lh, maxLines) {
-          const words = String(text).split(' '), lines = [];
-          let line = '';
-          for (const w of words) {
-            const test = line ? line + ' ' + w : w;
-            if (g.measureText(test).width > maxW && line) { lines.push(line); line = w; } else line = test;
-          }
-          if (line) lines.push(line);
-          if (maxLines && lines.length > maxLines) {
-            lines.length = maxLines;
-            lines[maxLines - 1] = lines[maxLines - 1].replace(/\s*\S*$/, '') + '…';
-          }
-          lines.forEach((L, i) => g.fillText(L, x, y + i * lh));
-          return y + lines.length * lh;
-        }
-        function draw(t) {
-          g.clearRect(0, 0, W, H);
-          // plot background + grid
-          g.fillStyle = '#0f1520'; g.fillRect(plot.x, plot.y, plot.w, plot.h);
-          g.strokeStyle = C.line; g.lineWidth = 1;
-          for (let v = -1; v <= 1; v += 0.5) {
-            const a = toPx(v, 0), b = toPx(0, v);
-            g.globalAlpha = v === 0 ? 0.9 : 0.35;
-            g.beginPath(); g.moveTo(a.x, plot.y); g.lineTo(a.x, plot.y + plot.h); g.stroke();
-            g.beginPath(); g.moveTo(plot.x, b.y); g.lineTo(plot.x + plot.w, b.y); g.stroke();
-          }
-          g.globalAlpha = 1;
-          const sq = [{ x: -RANGE, y: -RANGE }, { x: RANGE, y: -RANGE }, { x: RANGE, y: RANGE }, { x: -RANGE, y: RANGE }];
-          const hasLine = S.w1 * S.w1 + S.w2 * S.w2 > 1e-6;
-          if (hasLine) {
-            fillPoly(clipHalf(sq, S.w1, S.w2, S.b, 1), 'rgba(251,113,133,0.13)');
-            fillPoly(clipHalf(sq, S.w1, S.w2, S.b, -1), 'rgba(124,156,255,0.13)');
-            /* The boundary line w1·x1 + w2·x2 + b = 0, found by intersecting it with the two edges
-               of the visible square that it must cross. Always dividing by the LARGER of |w1|, |w2|
-               keeps this well conditioned — the old form divided by ‖w‖², which blows up to
-               astronomical pixel coordinates when the weights are small. */
-            const seg = [];
-            if (Math.abs(S.w2) >= Math.abs(S.w1)) {
-              for (const x1 of [-RANGE, RANGE]) seg.push({ x: x1, y: -(S.w1 * x1 + S.b) / S.w2 });
-            } else {
-              for (const x2 of [-RANGE, RANGE]) seg.push({ x: -(S.w2 * x2 + S.b) / S.w1, y: x2 });
-            }
-            if (seg.every(q => isFinite(q.x) && isFinite(q.y) && Math.abs(q.x) < 1e4 && Math.abs(q.y) < 1e4)) {
-              const a = toPx(seg[0].x, seg[0].y), b = toPx(seg[1].x, seg[1].y);
-              g.save(); g.beginPath(); g.rect(plot.x, plot.y, plot.w, plot.h); g.clip();
-              g.strokeStyle = C.text; g.lineWidth = 2.5; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke();
-              g.restore();
-            }
-          }
-          // points
-          let wrong = 0;
-          S.pts.forEach((q, k) => {
-            const s = toPx(q.x, q.y);
-            const mis = hasLine ? predict(q) !== q.c : true;
-            if (mis) wrong++;
-            g.beginPath(); g.arc(s.x, s.y, 7, 0, Math.PI * 2); g.fillStyle = q.c > 0 ? C.danger : C.accent; g.fill();
-            g.lineWidth = 1.5; g.strokeStyle = '#0a0e16'; g.stroke();
-            if (mis) { g.beginPath(); g.arc(s.x, s.y, 11, 0, Math.PI * 2); g.strokeStyle = C.warn; g.lineWidth = 2; g.stroke(); }
-            if (k === S.i && (S.training || S.updates > 0) && !S.converged) {
-              g.beginPath(); g.arc(s.x, s.y, 14 + 2 * Math.sin(t * 6), 0, Math.PI * 2); g.strokeStyle = C.text; g.lineWidth = 1.5; g.globalAlpha = 0.8; g.stroke(); g.globalAlpha = 1;
-            }
-            if (k === S.flashIdx && S.flash > 0) {
-              g.beginPath(); g.arc(s.x, s.y, 12 + (1 - S.flash) * 22, 0, Math.PI * 2); g.strokeStyle = C.warn; g.lineWidth = 3; g.globalAlpha = S.flash; g.stroke(); g.globalAlpha = 1;
-            }
-          });
-          g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(plot.x, plot.y, plot.w, plot.h);
-          g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'left';
-          g.fillText('x1 →', plot.x + plot.w - 34, plot.y + plot.h - 6); g.fillText('x2 ↑', plot.x + 4, plot.y + 14);
-          if (!S.pts.length) { g.fillStyle = C.text; g.textAlign = 'center'; g.fillText('Click here to place points', plot.x + plot.w / 2, plot.y + plot.h / 2); }
-
-          // right panel. Every block below has a fixed budget so nothing can overrun the next one.
-          const rx = 410, rw = 300;
-          g.textAlign = 'left'; g.font = MONO; g.fillStyle = C.muted;
-          g.fillText('on a mistake:  w ← w + η·y·x   (y = ±1)', rx, 34);
-          g.fillStyle = C.text;
-          g.fillText('w1 = ' + f2(S.w1) + '   w2 = ' + f2(S.w2) + '   b = ' + f2(S.b), rx, 56);
-          g.fillStyle = C.muted;
-          g.fillText('line: ' + f2(S.w1) + '·x1 ' + sgn(S.w2) + ' ' + f2(Math.abs(S.w2)) + '·x2 ' + sgn(S.b) + ' ' + f2(Math.abs(S.b)) + ' = 0', rx, 76);
-          // `big` keeps this line inside the panel even after half an hour of continuous training
-          g.fillText('pass ' + big(S.epoch) + ' · ' + big(S.updates) + ' updates · ' + wrong + '/' + S.pts.length + ' wrong', rx, 96);
-          g.font = FONT; g.fillStyle = S.converged ? C.green : C.text;
-          const y = wrap(S.msg, rx, 120, rw - 6, 18, 3);
-          if (!S.converged && S.epoch >= 15 && S.hist.length >= 12 && S.hist.slice(-12).every(e => e > 0)) {
-            g.fillStyle = C.warn; wrap('Not converging — the mistake count just bounces. No straight line can split these points.', rx, y + 6, rw - 6, 18, 2);
-          }
-          // legend
-          const ly = 216;
-          g.font = FONT;
-          g.beginPath(); g.arc(rx + 6, ly, 6, 0, Math.PI * 2); g.fillStyle = C.danger; g.fill(); g.fillStyle = C.muted; g.fillText('class +1 ("yes")', rx + 18, ly + 4);
-          g.beginPath(); g.arc(rx + 136, ly, 6, 0, Math.PI * 2); g.fillStyle = C.accent; g.fill(); g.fillStyle = C.muted; g.fillText('class −1 ("no")', rx + 148, ly + 4);
-          g.beginPath(); g.arc(rx + 6, ly + 22, 8, 0, Math.PI * 2); g.strokeStyle = C.warn; g.lineWidth = 2; g.stroke(); g.fillStyle = C.muted; g.fillText('currently misclassified', rx + 18, ly + 26);
-          g.beginPath(); g.arc(rx + 6, ly + 44, 8, 0, Math.PI * 2); g.strokeStyle = C.text; g.lineWidth = 1.5; g.stroke(); g.fillText('next example to check', rx + 18, ly + 48);
-          // mistakes-per-pass sparkline
-          const bx = rx, by = 276, bw = rw, bh = 100;
-          g.fillStyle = '#0f1520'; g.fillRect(bx, by, bw, bh);
-          g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(bx, by, bw, bh);
-          g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'left';
-          g.fillText(S.hist.length ? 'mistakes per pass (last ' + S.hist.length + ')' : 'mistakes per pass — no full pass yet', bx + 6, by + 14);
-          if (S.hist.length) {
-            const mx = Math.max(1, ...S.hist);
-            const bwid = (bw - 12) / Math.max(20, S.hist.length);
-            S.hist.forEach((e, k) => {
-              // a perfect pass is the point of the whole demo, so give zero a visible green stub
-              const hh = e === 0 ? 3 : (bh - 26) * e / mx;
-              g.fillStyle = e === 0 ? C.green : C.warn;
-              g.fillRect(bx + 6 + k * bwid, by + bh - 5 - hh, Math.max(1.5, bwid - 1), hh);
-            });
-            g.fillStyle = C.muted; g.textAlign = 'right'; g.fillText('max ' + mx, bx + bw - 6, by + 14); g.textAlign = 'left';
-          }
-        }
-        const ro = ctx.readout();   // declared before the loop that reads it, not after
-        let roTimer = 0;
-        ctx.loop((dt, t) => {
-          // at most 50 examples per frame, so the main thread is never blocked
-          if (S.training) { S.acc += dt * S.speed; let guard = 0; while (S.acc >= 1 && S.training && guard++ < 50) { S.acc -= 1; step(); } }
-          if (!S.training) S.acc = 0;
-          S.flash = Math.max(0, S.flash - dt * 1.8);
-          draw(t);
-          roTimer += dt;
-          if (roTimer > 0.12) {
-            roTimer = 0;
-            ro.set({ w1: f2(S.w1), w2: f2(S.w2), b: f2(S.b), pass: S.epoch, 'mistakes (last pass)': S.hist.length ? S.hist[S.hist.length - 1] : '–', status: S.converged ? 'converged ✓' : S.training ? 'training…' : 'paused' });
-          }
-        });
-        cv.addEventListener('pointerdown', (ev) => {
-          ev.preventDefault();
-          const m = cv.pos(ev);
-          if (m.x < plot.x || m.x > plot.x + plot.w || m.y < plot.y || m.y > plot.y + plot.h) return;
-          for (let k = 0; k < S.pts.length; k++) {
-            const s = toPx(S.pts[k].x, S.pts[k].y);
-            if (Math.hypot(s.x - m.x, s.y - m.y) < 10) { S.pts.splice(k, 1); S.i = 0; S.errs = 0; S.converged = false; S.flashIdx = -1; S.msg = 'Point removed.'; return; }
-          }
-          if (S.pts.length >= 120) { S.msg = '120 points is plenty — click a point to remove one first.'; return; }
-          const d = fromPx(m.x, m.y);
-          S.pts.push({ x: d.x, y: d.y, c: S.placing });
-          S.converged = false; S.msg = 'Added a ' + (S.placing > 0 ? 'red' : 'blue') + ' point. Press ▶ Train (click it again to remove it).';
-        });
-
-        const presetSel = ctx.select({ label: 'preset', options: [{ value: 'separable', label: 'Linearly separable' }, { value: 'xor', label: 'XOR (not separable)' }, { value: 'empty', label: 'Empty — draw your own' }], value: 'separable', onChange: loadPreset });
-        const placeBtn = ctx.button('', () => { S.placing = -S.placing; updateBtns(); });
-        const trainBtn = ctx.button('', () => { if (!S.pts.length) { S.msg = 'Place some points first.'; return; } S.training = !S.training; if (S.training) S.converged = false; updateBtns(); }, 'primary');
-        const stepBtn = ctx.button('Step one example', () => { S.training = false; step(); updateBtns(); });
-        const resetBtn = ctx.button('Reset weights', () => { S.training = false; resetWeights(); updateBtns(); });
-        const clearBtn = ctx.button('Clear points', () => { S.pts = []; S.training = false; resetWeights(); S.msg = 'Cleared. Click on the plot to place points.'; updateBtns(); });
-        const lrSl = ctx.slider({ label: 'learning rate η', min: 0.02, max: 1, step: 0.02, value: 0.1, fmt: f2, onChange: (v) => { S.lr = v; } });
-        const spSl = ctx.slider({ label: 'examples per second', min: 1, max: 120, step: 1, value: 8, onChange: (v) => { S.speed = v; } });
-        function updateBtns() {
-          placeBtn.textContent = 'Placing: ' + (S.placing > 0 ? '● red (+1)' : '● blue (−1)');
-          placeBtn.style.color = S.placing > 0 ? C.danger : C.accent;
-          trainBtn.textContent = S.training ? '⏸ Pause' : '▶ Train perceptron';
-        }
-        loadPreset('separable');
-        return ctx.figure(cv, 'The perceptron learning rule, one example at a time. The white line is <code class="inline">w1·x1 + w2·x2 + b = 0</code>; the red side predicts +1, the blue side −1. Yellow rings mark points currently on the wrong side. This plot labels the two classes +1 and −1, so the update rule reads <code class="inline">w ← w + η·y·x</code> on a mistake — the same algorithm as the 0/1 version above.', [presetSel, trainBtn, stepBtn, placeBtn, resetBtn, clearBtn, lrSl, spSl], ro);
-      }
-
-      /* ------------------------------------------------------------------ */
-      /* Static diagram: AI ⊃ ML ⊃ DL ⊃ LLMs                                  */
-      /* ------------------------------------------------------------------ */
-      function nestedCircles() {
-        const W = 720, H = 320;
-        const [cv, g] = ctx.canvas(W, H);
-        const rings = [
-          { r: 145, cx: 200, cy: 160, color: C.muted, name: 'Artificial intelligence', year: 'term coined 1956', sub: 'Any technique that makes a machine do something that looks intelligent, including hand-written rules: expert systems, classic chess engines, route planners.' },
-          { r: 105, cx: 225, cy: 175, color: C.accent, name: 'Machine learning', year: 'term coined 1959', sub: 'Programs whose behaviour is fitted to data instead of written by hand: the perceptron, credit scorecards, spam filters.' },
-          { r: 68, cx: 250, cy: 190, color: C.green, name: 'Deep learning', year: 'took off 2012', sub: 'Machine learning with many-layered neural networks that learn their own features: image recognition, speech, translation.' },
-          { r: 34, cx: 270, cy: 200, color: C.warn, name: 'Large language models', year: '2018 →', sub: 'Deep networks trained to predict the next word on most of the internet: Claude, GPT, Gemini.' },
-        ];
-        g.clearRect(0, 0, W, H);
-        rings.forEach((r) => {
-          g.beginPath(); g.arc(r.cx, r.cy, r.r, 0, Math.PI * 2);
-          g.fillStyle = r.color; g.globalAlpha = 0.10; g.fill(); g.globalAlpha = 1;
-          g.strokeStyle = r.color; g.lineWidth = 2; g.stroke();
-        });
-        const labelX = 395;
-        rings.forEach((r, i) => {
-          const ly = 34 + i * 72;
-          // leader line from label to the top-right rim of the circle
-          const ang = -Math.PI / 4 + i * 0.12;
-          const ex = r.cx + Math.cos(ang) * r.r, ey = r.cy + Math.sin(ang) * r.r;
-          g.strokeStyle = r.color; g.lineWidth = 1; g.globalAlpha = 0.7;
-          g.beginPath(); g.moveTo(labelX - 8, ly + 4); g.lineTo(ex, ey); g.stroke(); g.globalAlpha = 1;
-          g.beginPath(); g.arc(ex, ey, 3.5, 0, Math.PI * 2); g.fillStyle = r.color; g.fill();
-          g.textAlign = 'left'; g.fillStyle = r.color; g.font = 'bold 14px Inter, system-ui, sans-serif';
-          g.fillText(r.name, labelX, ly + 8);
-          // measure the name in the font it was actually drawn in, before switching to MONO
-          const nameW = g.measureText(r.name).width;
-          g.fillStyle = C.muted; g.font = MONO; g.fillText(r.year, labelX + nameW + 12, ly + 8);
-          g.font = '12px Inter, system-ui, sans-serif'; g.fillStyle = C.text; g.globalAlpha = 0.85;
-          const words = r.sub.split(' '); let line = '', yy = ly + 26;
-          for (const w of words) { const t = line ? line + ' ' + w : w; if (g.measureText(t).width > 310 && line) { g.fillText(line, labelX, yy); yy += 15; line = w; } else line = t; }
-          if (line) g.fillText(line, labelX, yy);
-          g.globalAlpha = 1;
-        });
-        g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'center';
-        g.fillText('each circle sits inside the previous one', 200, H - 6);
-        return ctx.figure(cv, 'The three terms the news uses interchangeably. Claude is an AI, built with machine learning, of the deep-learning kind.');
-      }
-
-      /* ================================================================== */
-      /* Prose                                                              */
-      /* ================================================================== */
+      /* ---------- STRAIGHT INTO IT. No preamble. ---------- */
       root.append(
-        p(`Imagine it is 1998 and your boss asks you to build a spam filter. You start writing rules. If the subject line contains "FREE", block it. If the whole message is in capitals, block it. If it mentions a lottery you never entered, block it. Two weeks later the spammers write "F R E E", and your rulebook is out of date. You add rules. They adapt. You are in an arms race you will lose, because every rule is a fact you had to know in advance and write down by hand.`),
-        p(`Now think about how a two-year-old learns the word "dog". Nobody hands the child a rulebook ("four legs, fur, barks; but not a cat, and not a wolf"). The child sees a labrador and hears "dog". She points at a cat and says "dog" and is gently corrected. She points at a poodle and is praised. After a few dozen examples and a few dozen mistakes she can recognise a dog she has never seen, of a breed she has never seen, from an angle she has never seen. The rules were never written down. They were <b>learned from examples and mistakes</b>.`),
-        p(`That shift is what this chapter is about. Instead of writing the rules, we write a machine that <em>finds</em> the rules from labelled examples. So what, mechanically, does that machine look like? What does it actually do when it "learns"? The surprising answer is that the first such machine, built in 1958, already contains almost every idea we still use, including inside the model you are reading this on.`),
-
-        section('Two ways to make a computer do something',
-          p(`There are exactly two ways to get a computer to tell spam from real mail. The first is to write down the rules yourself. The second is to write a program that <em>finds</em> the rules from examples. The first is ordinary programming. The second is <em>machine learning</em>. Everything in this course, up to and including the model you chat with, is the second kind.`),
-          ctx.table(['', 'Hand-written rules', 'Learned from examples'], [
-            ['Who writes the logic', 'A human expert', 'The algorithm, from data'],
-            ['What you need', 'Someone who can articulate every rule', 'Lots of examples with the right answer attached'],
-            ['When the world changes', 'A human rewrites the rules', 'Retrain on fresh examples'],
-            ['Where it fails', 'Rules too many or too subtle to write down (faces, speech, "is this a dog?")', 'Data that is scarce, biased, or mislabelled'],
-          ]),
-          p(`Notice what learning from examples requires: a supply of examples that come with the right answer attached (this email is spam, that one is not), and a procedure that turns the machine's mistakes into adjustments. Those two things, labelled examples and a way to adjust from mistakes, are the whole of it. Let's build the smallest possible machine that has both.`),
-        ),
-
-        section('The perceptron: a neuron you can compute on a napkin',
-          p(`In 1958 Frank Rosenblatt, a psychologist at Cornell, built a machine he called the <em>perceptron</em>. It was inspired by a cartoon version of a brain cell: a neuron receives signals from many neighbours, some exciting it and some inhibiting it, and fires if the total excitement crosses a threshold. Rosenblatt's version is arithmetic you can do by hand:`),
-          ol([
-            `Describe the thing you are looking at with a few numbers: x<sub>1</sub>, x<sub>2</sub>, x<sub>3</sub>.`,
-            `Multiply each number by a <em>weight</em>: w<sub>1</sub>, w<sub>2</sub>, w<sub>3</sub>. A big positive weight means "this clue strongly suggests yes"; a negative weight means "this clue suggests no".`,
-            `Add the products up, then add one more number, the <em>bias</em> b, which sets how easily the neuron says yes when there is no evidence either way.`,
-            `If the total is above zero, output 1 ("yes"). Otherwise output 0 ("no").`,
-          ]),
-          ctx.code('output = 1  if  (w1·x1 + w2·x2 + w3·x3 + b) > 0\n         0  otherwise'),
-          p(`That is the whole machine. Let's run it on an email. Describe every email with three numbers: how many currency symbols it contains, whether the sender is unknown (1) or in your address book (0), and how many exclamation marks it has. An email arrives with three dollar signs, from a stranger, with two exclamation marks: x = (3, 1, 2).`),
-          p(`Say the weights are w = (0.8, 1.5, 0.4) and the bias is b = −2. The weighted sum is 0.8×3 + 1.5×1 + 0.4×2 = 2.4 + 1.5 + 0.8 = 4.7. Add the bias: 4.7 − 2 = 2.7. That is above zero, so the perceptron outputs 1: spam. Now a note from a friend with one exclamation mark, x = (0, 0, 1). The sum is 0 + 0 + 0.4 − 2 = −1.6. Below zero: not spam.`),
-          p(`Read the weights as a statement of what matters. Being from a stranger counts most (1.5), dollar signs count a lot (0.8), exclamation marks count a little (0.4), and the bias of −2 says: unless the evidence adds up to more than 2, assume the email is fine. Every decision this machine makes is completely explained by those four numbers.`),
-          callout('tryit', 'Try it: run the neuron yourself', `Drag the sliders. Watch the weighted sum inside the neuron and the flowing signals on each wire. <b>Try:</b> (1) Set x<sub>1</sub> and x<sub>2</sub> to 0, so the only evidence is exclamation marks from someone you know. Work out on paper how many it takes to trip the filter — 0.4 × x<sub>3</sub> has to beat the bias of 2 — then drag x<sub>3</sub> and check you were right. (2) Push w<sub>2</sub> negative: now a stranger counts <i>against</i> spam, and the wire turns blue. (3) Set all three inputs to 0 and move only the bias: with no evidence at all, the bias alone decides. <b>Notice:</b> the neuron never sees the email, only the three numbers someone chose to measure.`),
-          neuronCalculator(),
-        ),
-
-        section('The words people use',
-          p(`You have now seen every object the field talks about, so here are their names. Learn these six and most AI news becomes readable.`),
-          ul([
-            `<b>Model</b>: the machine that turns inputs into a prediction. Here it is the perceptron: a formula with adjustable knobs.`,
-            `<b>Parameters</b>, also called <b>weights</b>: the knobs. w<sub>1</sub>, w<sub>2</sub>, w<sub>3</sub> and b. "Learning" means setting them. This model has four; a modern language model has hundreds of billions.`,
-            `<b>Features</b>: the numbers you describe an input with, x<sub>1</sub>, x<sub>2</sub>, x<sub>3</sub>. Someone has to decide what to measure. For decades this was the hard, human part of the job; deep learning's big trick, which you will meet in chapter 4, is learning the features too.`,
-            `<b>Label</b>: the right answer attached to a training example. Spam or not spam. Dog or not dog.`,
-            `<b>Prediction</b>: the model's output for an input. The perceptron's 1 or 0.`,
-            `<b>Training data</b>: the pile of (features, label) pairs the model learns from. Its size and quality decide almost everything about how good the model gets.`,
-          ]),
-        ),
-
-        section('How the perceptron learns',
-          p(`Rosenblatt's real contribution was not the neuron. Weighted sums with a threshold had been described by Warren McCulloch and Walter Pitts in 1943. What was new was a procedure for setting the weights <em>automatically</em>, from examples, plus a proof that it works.`),
-          p(`The procedure is almost embarrassingly simple. Show the perceptron one training example. If it gets the label right, do nothing. If it gets it wrong, nudge the weights a little: if it said no but the answer was yes, add a small multiple of the input to the weights, so that this input scores higher next time. If it said yes but the answer was no, subtract a small multiple of the input. Nudge the bias the same way. Move to the next example. Keep cycling through all the examples until you get through a whole pass without a single mistake.`),
-          ctx.code('repeat until a whole pass makes no mistakes:\n    for each training example (x, y):    # y is the true label, 1 or 0\n        ŷ = 1 if (w·x + b) > 0 else 0    # ŷ ("y-hat") is the prediction\n        w ← w + η · (y − ŷ) · x          # η ("eta") is the learning rate, e.g. 0.1\n        b ← b + η · (y − ŷ)'),
-          p(`Look at the term (y − ŷ). If the prediction is right it is 0 and nothing moves. If the answer was 1 and we said 0, it is +1 and the weights move <i>toward</i> the input. If the answer was 0 and we said 1, it is −1 and they move <i>away</i>. The <em>learning rate</em> η controls how big each nudge is. This is the ancestor of every training algorithm in use today: <b>compare the prediction to the truth, and move the parameters a little in the direction that would have made the mistake smaller.</b>`),
-          p(`One notational wrinkle, because you will meet both versions and they look different. Written with labels 0 and 1, the update is η·(y − ŷ)·x, as above. Most textbooks instead call the two classes +1 and −1, and then the rule collapses to something even shorter: when you are right, do nothing; when you are wrong, w ← w + η·y·x. That is why the interactive below prints a shorter rule than the code you just read. It is the same algorithm wearing different labels.`),
-          p(`Let's run it on our two emails, starting from all-zero weights with η = 0.1. The spam email (3, 1, 2) scores 0, which is not above zero, so we predict 0. Wrong. The weights become (0.3, 0.1, 0.2) and the bias 0.1. The friend's email (0, 0, 1) now scores 0.2 + 0.1 = 0.3: we predict spam. Wrong the other way. The weights become (0.3, 0.1, 0.1) and the bias 0. Second pass: the spam email scores 1.2, correct; the friend's email scores 0.1, still wrongly spam, so the weights become (0.3, 0.1, 0.0) and the bias −0.1. Third pass: 0.9 and −0.1. Both correct. Three mistakes, and the machine has written its own spam rule.`),
-          callout('key', 'The convergence guarantee, and its catch', `In 1962 Albert Novikoff proved that if <em>any</em> setting of the weights can separate the examples perfectly, this procedure will find one after a finite number of mistakes, no matter where it starts. That "if" is the catch. The interactive below lets you feel exactly where it bites.`),
-          callout('tryit', 'Try it: watch a perceptron learn', `<b>1.</b> Load the <b>Linearly separable</b> preset and press ▶ Train. The white ring shows which example is being checked; when it is on the wrong side it flashes yellow and the line jumps. Watch the mistakes-per-pass bars fall to a flat green zero: <em>converged</em>. <b>2.</b> Add your own points by clicking (toggle the colour with the "Placing" button, click a point again to delete it). Drop a red point deep in blue territory and train again — watch one stubborn example drag the whole line. <b>3.</b> Load <b>XOR</b>, push <i>examples per second</i> up to 120 and press ▶ Train. The mistake count never reaches zero; it bounces forever, because the line fixes one corner and breaks another. <b>4.</b> Now drag η from 0.02 to 1.0. The jumps get bigger but the story does not change — and if you started the weights from exactly zero it would not change <i>at all</i>, because the perceptron's answer depends only on the direction of w, never on its length.`),
-          perceptronTrainer(),
-        ),
-
-        section('The wall: what one neuron cannot learn',
-          p(`Look at what the perceptron actually draws. With two features, the weighted sum w<sub>1</sub>·x<sub>1</sub> + w<sub>2</sub>·x<sub>2</sub> + b = 0 is the equation of a straight line; the perceptron says yes on one side and no on the other. Learning just moves the line around. With three features it is a flat plane; with a thousand it is a "hyperplane", but it is always flat. A dataset that some straight line can split perfectly is called <em>linearly separable</em>, and that is exactly the class of problems a single neuron can learn.`),
-          p(`Now consider the simplest problem that isn't: XOR, "exclusive or". Two inputs, and the answer is yes when exactly one of them is on. Yes at (0, 1) and (1, 0); no at (0, 0) and (1, 1). Draw those four points and try to separate the yeses from the noes with one straight line. You cannot; the yes points sit on opposite corners. The XOR preset above shows the learning rule thrashing forever: every fix breaks something else.`),
-          p(`That sounds like a toy. It isn't. Almost every interesting question ("is this a face?", "is this sentence sarcastic?") has an XOR-shaped structure somewhere inside it: a clue that means yes in one context and no in another. A single straight cut cannot express "it depends".`),
-          callout('history', '1969: Minsky, Papert, and the first AI winter', `Rosenblatt's perceptron made headlines in 1958; the <i>New York Times</i> reported the Navy's expectation that it would soon "walk, talk, see, write, reproduce itself and be conscious of its existence". In 1969 Marvin Minsky and Seymour Papert published <i>Perceptrons</i>, a careful mathematical book showing what a single-layer perceptron cannot compute, with XOR as the famous example. They noted that stacking layers might help, but nobody knew how to train stacked layers. Funding for neural-network research collapsed for over a decade, a period now called the first <em>AI winter</em>. The fix, back-propagation through multiple layers, is the subject of the next chapter. It took until 1986 to become widely known.`),
-        ),
-
-        section('Where single neurons still earn their keep',
-          callout('example', 'Credit scoring', `When a bank decides whether to lend to you, a common tool is a <em>scorecard</em>: points for income, points for years at your address, points off for a recent missed payment, add them up, approve above a threshold. That is a perceptron with statistically fitted weights. The modern version, <em>logistic regression</em>, is the same weighted sum with a smooth curve instead of a hard threshold so it outputs a probability instead of a yes/no. It is still the most widely deployed machine-learning model in finance, partly because a regulator can read the weights and see why you were refused.`),
-          callout('example', 'Spam filters', `The spam filters of the early 2000s, popularised by Paul Graham's 2002 essay "A Plan for Spam", counted words and combined the evidence with learned weights. Word counts as features, a flat boundary as the model, retraining as spammers adapted. Gmail's early filter worked this way; today's uses deep networks, but the features-weights-threshold skeleton is the same.`),
-          callout('example', 'Early optical character recognition', `Rosenblatt's physical Mark I Perceptron (1960) used a 20×20 grid of photocells as its 400 features and learned to tell letters apart. Reading handwritten digits on bank cheques reliably needed multi-layer networks, which arrived in the 1990s (chapter 4); by the late 1990s such systems were reading a sizeable share of all cheques in the United States.`),
-        ),
-
-        section('AI, machine learning, deep learning: nested, not synonyms',
-          p(`One more piece of vocabulary, because these three terms are used interchangeably in the news and they should not be. <b>Artificial intelligence</b> is the broad goal: machines doing things that would need intelligence if a person did them. A 1980s chess program with hand-written evaluation rules is AI without any learning. <b>Machine learning</b> is the subset where the behaviour is fitted to data rather than written by hand: the perceptron, credit scorecards, spam filters. <b>Deep learning</b> is the subset of machine learning that uses neural networks with many layers stacked on top of each other, so that the features themselves are learned rather than chosen by a person. Large language models are deep learning.`),
-          nestedCircles(),
-        ),
-
-        section('Why this matters for modern AI',
-          p(`It is tempting to think a chatbot has nothing to do with a four-weight spam detector. It has everything to do with it. Inside a large language model, the basic operation, repeated billions of times for every word it produces, is exactly the one you just did on a napkin: multiply inputs by weights, add them up, add a bias, pass the result through a squashing function. The features are no longer counted by hand; they are learned. The weights are not four; they are around 10<sup>11</sup> to 10<sup>12</sup>. The learning rule is not Rosenblatt's nudge but its smooth descendant, <em>gradient descent</em>, which we build in the next chapter. But "model", "parameters", "training data", "label" and "prediction" mean precisely what they meant on this page, and every headline about AI can be translated into those five words.`),
-          p(`Keep one picture from this chapter: <b>learning is the act of turning mistakes into small adjustments of numbers.</b> Everything else is scale.`),
-        ),
-
-        ctx.quiz([
-          { q: 'A perceptron has weights (2, −1) and bias −1. The input is (1, 2). What does it output?', options: ['1 ("yes"): the sum is positive', '0 ("no"): the sum is 2·1 + (−1)·2 − 1 = −1', 'It depends on the learning rate', 'It cannot decide without training data'], answer: 1, explain: 'Weighted sum: 2×1 + (−1)×2 = 0, plus the bias −1 gives −1. Not above zero, so the output is 0. The learning rate only matters while training, never when predicting.' },
-          { q: 'Which of these is a <i>parameter</i> of the spam perceptron?', options: ['The number of training emails', 'The weight on "sender unknown"', 'The label "spam"', 'The number of exclamation marks in an email'], answer: 1, explain: 'Parameters are the numbers the model adjusts while learning: the weights and bias. The exclamation-mark count is a feature (an input); "spam" is a label; the dataset size is neither.' },
-          { q: 'Why does the perceptron never converge on XOR?', options: ['There are too few training examples', 'The learning rate is too high', 'No single straight line separates the two classes', 'The bias starts at zero'], answer: 2, explain: 'A single neuron always draws a flat boundary. XOR puts the "yes" points on opposite corners, so no straight line can separate them, and the rule keeps fixing one mistake by creating another.' },
-          { q: 'In the perceptron learning rule, what happens to the weights when the prediction is already correct?', options: ['They move toward the input', 'They move away from the input', 'Nothing changes', 'They are reset to zero'], answer: 2, explain: 'The update is η·(y − ŷ)·x. When the prediction matches the label, (y − ŷ) = 0, so the weights are untouched. Learning happens only on mistakes.' },
-          { q: 'Which statement about the three nested terms is right?', options: ['"Deep learning" and "AI" mean the same thing', 'Deep learning is a subset of machine learning that uses many-layered neural networks', 'Machine learning is any program that contains if-statements', 'AI is a subset of machine learning'], answer: 1, explain: 'AI is the broad goal; machine learning is the subset that fits behaviour to data; deep learning is the subset of that which uses deep neural networks. Large language models sit in the innermost circle.' },
-        ]),
-
-        section('Go deeper',
-          ul([
-            `<a href="https://www.youtube.com/watch?v=aircAruvnKk" target="_blank" rel="noopener">3Blue1Brown, "But what is a neural network?"</a>: the best 20-minute visual introduction; it starts exactly where this chapter ends.`,
-            `<a href="https://karpathy.ai/zero-to-hero.html" target="_blank" rel="noopener">Andrej Karpathy, "Neural Networks: Zero to Hero"</a>: build everything in this course in Python, from a single gradient to a small GPT.`,
-            `<a href="https://playground.tensorflow.org" target="_blank" rel="noopener">TensorFlow Playground</a>: a bigger cousin of the trainer above; try the XOR dataset with zero hidden layers and then with one.`,
-            `<a href="https://doi.org/10.1037/h0042519" target="_blank" rel="noopener">Rosenblatt (1958), "The perceptron: a probabilistic model for information storage and organization in the brain"</a>: the original paper, in <i>Psychological Review</i>.`,
-            `<a href="https://mitpress.mit.edu/9780262630221/perceptrons/" target="_blank" rel="noopener">Minsky &amp; Papert (1969), <i>Perceptrons</i></a>: the book that ended the first neural-network boom; the 1988 edition has a candid new preface.`,
-          ]),
-        ),
+        ctx.callout('tryit', '🖐 Do this first, read after',
+          `Four dots. <b>Red dots must end up on the red side of the line, blue dots on the blue side.</b>
+           Drag the two white handles to move the line. Try to score 4 out of 4.<br>
+           Start on <b>puzzle 1</b>. When you get it, switch to puzzle 2, then puzzle 3.`),
+        buildLinePuzzle(ctx),
+        ctx.p(`If you are reading this before playing, go back and play. It takes twenty seconds and the rest of the chapter will not land otherwise.`),
       );
+
+      /* ---------- what just happened ---------- */
+      root.append(ctx.section('What you just were',
+        ctx.p(`You were a <em>neuron</em>. Not a metaphor for one, the actual thing. An artificial neuron has exactly one move available to it: <b>draw a straight line and call one side "yes" and the other side "no"</b>. That is its entire repertoire.`),
+        ctx.p(`Puzzles 1 and 2 fell over easily. Puzzle 3 did not, and it is worth being precise about why: <b>it is not hard, it is impossible.</b> The two red dots sit in opposite corners with the blue dots in the other two, so any straight line you draw strands somebody on the wrong side. You cannot win, and neither can any machine that only draws one line.`),
+        ctx.callout('key', '🔑 The one idea in this chapter',
+          `One neuron equals one straight line. Some problems cannot be split with one straight line. That single sentence explains a machine built in 1958, why the field collapsed in 1969, and why the word "deep" appears in "deep learning".`),
+      ));
+
+      /* ---------- now the machine does it ---------- */
+      root.append(ctx.section('Now let the machine find the line',
+        ctx.p(`You moved the line by feel. A machine has no feel, so it uses a rule so simple you could do it on paper: <b>look at one dot; if you got it wrong, shove the line a little bit toward getting it right; repeat.</b> Nothing cleverer than that.`),
+        ctx.callout('tryit', '🖐 Try this',
+          `Press <b>Train</b> and watch the line stagger toward an answer on puzzle 1. Then switch to <b>puzzle 3</b> and press Train again. Leave it running. Watch the mistake counter at the bottom: it drops, rises, and never reaches zero. It is not thinking. It is stuck in a loop, redoing the same moves forever.`),
+        buildTrainer(ctx),
+        ctx.p(`That flailing is exactly what your own program printed in the terminal. The machine is not broken and it is not slow. It is looking for something that does not exist.`),
+      ));
+
+      /* ---------- proof ---------- */
+      root.append(ctx.section('Proof that it is impossible, not just difficult',
+        ctx.p(`Maybe the machine is just bad at searching? Settle it by trying <b>every line there is</b>. Below, the computer sweeps through thousands of lines at every angle and position, and tallies how many get all four dots right.`),
+        ctx.callout('tryit', '🖐 Try this',
+          `Run it on puzzle 1, then on puzzle 3. Compare the two counters at the end.`),
+        buildBruteForce(ctx),
+        ctx.p(`Thousands of lines work for puzzle 1. <b>Zero</b> work for puzzle 3. That is not the machine giving up early. There is no answer of that shape anywhere.`),
+        ctx.callout('history', '📜 The book that froze the field',
+          `In 1969 Marvin Minsky and Seymour Papert published <i>Perceptrons</i>, proving exactly this on paper. Frank Rosenblatt's perceptron, built in 1958 and breathlessly covered in the press, could never learn XOR. Funding dried up and neural-network research went cold for over a decade, a period now called the first <em>AI winter</em>. The irony is that the fix was already understood in principle. Nobody yet knew how to train it.`),
+      ));
+
+      /* ---------- the fix ---------- */
+      root.append(ctx.section('The fix: stop using one line',
+        ctx.p(`If one line cannot do it, use two. Two lines carve the square into a <b>stripe</b>, and the stripe can hold both red dots while excluding both blue ones.`),
+        ctx.callout('tryit', '🖐 Try this',
+          `Drag the slider from 1 line to 2 lines and watch the impossible puzzle become possible.`),
+        buildTwoLines(ctx),
+        ctx.p(`Each line is one neuron. To combine them you need a third neuron that watches the first two and answers "am I between them?". That stack is a <em>network</em>, and the middle row is a <em>hidden layer</em>. Add more layers and you can cut out any shape at all, which is where the "deep" in deep learning comes from.`),
+        ctx.callout('key', '🔑 So why did this take until the 2010s?',
+          `Nobody doubted more layers were more powerful. The problem was <b>training</b> them: with a hidden layer, it is no longer obvious which weight to blame for a mistake. The answer, <em>backpropagation</em>, is chapter 2. It needed the maths to be popularised in 1986, then twenty more years of faster chips and bigger datasets before it paid off.`),
+      ));
+
+      /* ---------- inside the neuron ---------- */
+      root.append(ctx.section('What the neuron is actually doing with numbers',
+        ctx.p(`"Draw a line" is the picture. Here is the arithmetic underneath it, and it is smaller than you would expect. Each input gets multiplied by a <em>weight</em>, the results are added up, a <em>bias</em> is added, and if the total clears zero the neuron fires.`),
+        ctx.callout('tryit', '🖐 Try this',
+          `Move the weight sliders and watch the line in the previous demos rotate. Learning <b>is</b> the search for these three numbers. There is nothing else in there.`),
+        buildNeuronAnatomy(ctx),
+        ctx.p(`Those three numbers are the neuron's <em>parameters</em>. Training means adjusting them until the answers come out right. A model you talk to today is this same arrangement with a few hundred billion parameters instead of three.`),
+      ));
+
+      /* ---------- rules vs learning ---------- */
+      root.append(ctx.section('Why bother learning at all?',
+        ctx.p(`You could just write the rules yourself. For decades that is what people did, and for some jobs it is still correct. The split is about whether you can <b>state</b> the rule.`),
+        ctx.cards([
+          { title: 'Write the rules by hand', body: 'You know the rule and can say it out loud. Tax calculations, traffic lights, chess legality. Precise, checkable, and it never surprises you. Useless when you cannot articulate the rule.' },
+          { title: 'Learn from examples', body: 'You can recognise the answer but not describe how. Faces, spam, handwriting, whether a sentence sounds natural. You supply examples instead of instructions, and the machine finds the pattern.' },
+        ]),
+        ctx.p(`Nobody can write down the rule for "this photo contains a cat", yet you can label ten thousand photos in an afternoon. That trade, <b>examples instead of instructions</b>, is the entire bet of machine learning.`),
+        ctx.callout('example', '🌍 Where single neurons still earn their keep',
+          `This is not just history. A credit-scoring model, a hospital triage flag, or an A/B test winner is often one line drawn through data, because a single neuron is fast, cheap, and you can read off exactly why it decided what it decided. When regulators demand an explanation, one line beats a billion parameters.`),
+      ));
+
+      /* ---------- nesting ---------- */
+      root.append(ctx.section('Three words people mix up',
+        ctx.callout('tryit', '🖐 Try this', `Hover or tap each ring.`),
+        buildNesting(ctx),
+      ));
+
+      /* ---------- quiz ---------- */
+      root.append(ctx.quiz([
+        {
+          q: 'Why could you not solve puzzle 3 by dragging the line more carefully?',
+          options: [
+            'The handles were not sensitive enough',
+            'The two red dots sit in opposite corners, so no straight line can separate them from the blue ones',
+            'You needed to train it for more steps first',
+            'The puzzle had a bug in it',
+          ],
+          answer: 1,
+          explain: 'It is a geometric fact, not a matter of effort or precision. The brute-force demo tried thousands of lines and none of them worked.',
+        },
+        {
+          q: 'What does a single artificial neuron actually compute?',
+          options: [
+            'It memorises every example it has seen',
+            'It multiplies each input by a weight, adds them up with a bias, and fires if the total clears zero',
+            'It compares the input to a database of known answers',
+            'It simulates the chemistry of a biological brain cell',
+          ],
+          answer: 1,
+          explain: 'Multiply, add, compare to a threshold. That is the whole operation, and geometrically it draws one straight boundary.',
+        },
+        {
+          q: 'In the demo, what fixed the impossible puzzle?',
+          options: [
+            'A faster computer',
+            'More training steps',
+            'A second line, which needs a second neuron',
+            'Removing one of the dots',
+          ],
+          answer: 2,
+          explain: 'Two lines fence off a stripe that one line cannot. Stacking neurons like this is what "deep" means.',
+        },
+        {
+          q: 'When is writing rules by hand still the better choice?',
+          options: [
+            'When you have millions of examples available',
+            'When you can state the rule precisely and need to explain every decision',
+            'Whenever the data contains numbers',
+            'It never is; learned models are always better',
+          ],
+          answer: 1,
+          explain: 'If you can articulate the rule, writing it is exact, cheap and auditable. Learning is for the cases where you recognise the answer but cannot describe the rule.',
+        },
+        {
+          q: 'What caused the first AI winter?',
+          options: [
+            'Computers became too expensive to run',
+            'A 1969 proof that a single-layer perceptron could not learn XOR, which drained confidence and funding',
+            'Researchers ran out of data to train on',
+            'A better technology replaced neural networks entirely',
+          ],
+          answer: 1,
+          explain: 'Minsky and Papert made the limitation rigorous. The multi-layer fix existed in principle, but nobody could train it yet, so the field stalled for over a decade.',
+        },
+      ]));
+
+      root.append(ctx.section('Go deeper',
+        ctx.ul([
+          `<a href="https://www.youtube.com/watch?v=aircAruvnKk" target="_blank" rel="noopener">3Blue1Brown, "But what is a neural network?"</a>: nineteen minutes, and the best visual introduction that exists. Watch it before chapter 2.`,
+          `<a href="https://playground.tensorflow.org/" target="_blank" rel="noopener">TensorFlow Playground</a>: the same idea as the demos above, with more layers to play with. Set it to the spiral dataset and try to beat it.`,
+          `<a href="https://news.cornell.edu/stories/2019/09/professors-perceptron-paved-way-ai-60-years-too-soon" target="_blank" rel="noopener">Cornell on Rosenblatt's perceptron</a>: the 1958 machine, the hype, and the backlash.`,
+        ]),
+      ));
     },
   });
+
+  /* ==================================================================
+     Shared drawing helpers for the square-with-four-dots demos
+     ================================================================== */
+  function makeBoard(cv, g, C, pad) {
+    pad = pad || 54;
+    const W = cv.W, H = cv.H;
+    const size = Math.min(W, H) - pad * 2;
+    const x0 = (W - size) / 2, y0 = (H - size) / 2;
+    // data coords run -0.35 .. 1.35 so the dots sit inside with margin
+    const LO = -0.35, HI = 1.35;
+    const sx = (x) => x0 + (x - LO) / (HI - LO) * size;
+    const sy = (y) => y0 + size - (y - LO) / (HI - LO) * size;
+    const ix = (px) => LO + (px - x0) / size * (HI - LO);
+    const iy = (py) => LO + (y0 + size - py) / size * (HI - LO);
+    return { W, H, size, x0, y0, sx, sy, ix, iy };
+  }
+
+  function drawFrame(g, b, C) {
+    g.clearRect(0, 0, b.W, b.H);
+    g.fillStyle = C.bg; g.fillRect(0, 0, b.W, b.H);
+    g.strokeStyle = 'rgba(148,163,184,0.18)'; g.lineWidth = 1;
+    g.strokeRect(b.x0, b.y0, b.size, b.size);
+  }
+
+  function drawDots(g, b, labels, C, big) {
+    for (let i = 0; i < PTS.length; i++) {
+      const p = PTS[i], X = b.sx(p[0]), Y = b.sy(p[1]);
+      g.fillStyle = labels[i] ? C.danger : C.accent;
+      g.beginPath(); g.arc(X, Y, big ? 13 : 10, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = 'rgba(10,14,22,0.85)'; g.lineWidth = 2; g.stroke();
+      g.fillStyle = '#0a0e16';
+      g.font = '700 12px Inter, system-ui, sans-serif';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(labels[i] ? '1' : '0', X, Y);
+    }
+    // axis hints
+    g.fillStyle = C.muted; g.font = '11px Inter, system-ui, sans-serif';
+    g.textAlign = 'center';
+    g.fillText('switch A off', b.sx(0), b.sy(-0.28));
+    g.fillText('switch A on', b.sx(1), b.sy(-0.28));
+    g.save();
+    g.translate(b.sx(-0.24), b.sy(0.5)); g.rotate(-Math.PI / 2);
+    g.fillText('switch B  off → on', 0, 0);
+    g.restore();
+  }
+
+  /* classify with the line through point A in direction (A→B); positive side = "1" */
+  function classify(px, py, ax, ay, bx, by, flip) {
+    const s = (bx - ax) * (py - ay) - (by - ay) * (px - ax);
+    return (flip ? -s : s) > 0 ? 1 : 0;
+  }
+
+  /* shade the two half-planes */
+  function shadeSides(g, b, ax, ay, bx, by, flip, C) {
+    const step = 9;
+    for (let X = b.x0; X < b.x0 + b.size; X += step) {
+      for (let Y = b.y0; Y < b.y0 + b.size; Y += step) {
+        const on = classify(b.ix(X + step / 2), b.iy(Y + step / 2), ax, ay, bx, by, flip);
+        g.fillStyle = on ? 'rgba(251,113,133,0.13)' : 'rgba(124,156,255,0.13)';
+        g.fillRect(X, Y, step, step);
+      }
+    }
+  }
+
+  function drawLineThrough(g, b, ax, ay, bx, by, color, width) {
+    let dx = bx - ax, dy = by - ay;
+    const len = Math.hypot(dx, dy) || 1;
+    dx /= len; dy /= len;
+    const far = 4;
+    g.strokeStyle = color; g.lineWidth = width || 3;
+    g.beginPath();
+    g.moveTo(b.sx(ax - dx * far), b.sy(ay - dy * far));
+    g.lineTo(b.sx(ax + dx * far), b.sy(ay + dy * far));
+    g.stroke();
+  }
+
+  function scoreOf(labels, fn) {
+    let n = 0;
+    for (let i = 0; i < PTS.length; i++) if (fn(PTS[i][0], PTS[i][1]) === labels[i]) n++;
+    return n;
+  }
+
+  /* ==================================================================
+     1 — DRAG THE LINE YOURSELF
+     ================================================================== */
+  function buildLinePuzzle(ctx) {
+    const C = ctx.colors;
+    const [cv, g] = ctx.canvas(640, 480);
+    const b = makeBoard(cv, g, C);
+    let puzzle = 'AND', flip = false;
+    let A = { x: 0.9, y: -0.2 }, B = { x: -0.2, y: 0.9 };
+    let drag = null, solved = false, tries = 0, hintTimer = 0;
+    const readout = ctx.readout();
+
+    const sel = ctx.select({
+      label: 'puzzle',
+      options: [
+        { value: 'AND', label: '1 · both switches on' },
+        { value: 'OR', label: '2 · either switch on' },
+        { value: 'XOR', label: '3 · exactly one switch on' },
+      ],
+      value: 'AND',
+      onChange: (v) => { puzzle = v; solved = false; tries = 0; hintTimer = 0; },
+    });
+
+    function handleAt(p) {
+      const da = Math.hypot(b.sx(A.x) - p.x, b.sy(A.y) - p.y);
+      const db = Math.hypot(b.sx(B.x) - p.x, b.sy(B.y) - p.y);
+      if (da < 30 && da <= db) return 'A';
+      if (db < 30) return 'B';
+      return null;
+    }
+    cv.addEventListener('pointerdown', (e) => { drag = handleAt(cv.pos(e)); if (drag) tries++; });
+    cv.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const p = cv.pos(e);
+      const t = { x: Math.max(-0.5, Math.min(1.5, b.ix(p.x))), y: Math.max(-0.5, Math.min(1.5, b.iy(p.y))) };
+      const other = drag === 'A' ? B : A;
+      if (Math.hypot(t.x - other.x, t.y - other.y) < 0.25) return;  // never collapse the line
+      if (drag === 'A') A = t; else B = t;
+    });
+    const stop = () => { drag = null; };
+    cv.addEventListener('pointerup', stop);
+    cv.addEventListener('pointercancel', stop);
+    cv.addEventListener('pointerleave', stop);
+
+    ctx.loop((dt) => {
+      const labels = PUZZLES[puzzle].labels;
+      drawFrame(g, b, C);
+      shadeSides(g, b, A.x, A.y, B.x, B.y, flip, C);
+      drawLineThrough(g, b, A.x, A.y, B.x, B.y, C.text, 3);
+      drawDots(g, b, labels, C, true);
+
+      // handles
+      for (const [hp, nm] of [[A, 'A'], [B, 'B']]) {
+        g.fillStyle = '#fff';
+        g.beginPath(); g.arc(b.sx(hp.x), b.sy(hp.y), 9, 0, Math.PI * 2); g.fill();
+        g.strokeStyle = C.line; g.lineWidth = 2; g.stroke();
+      }
+
+      const score = scoreOf(labels, (x, y) => classify(x, y, A.x, A.y, B.x, B.y, flip));
+      if (score === 4) solved = true;
+      if (puzzle === 'XOR' && !solved) hintTimer += dt;
+
+      // big score
+      g.textAlign = 'left'; g.textBaseline = 'top';
+      g.font = '700 26px Inter, system-ui, sans-serif';
+      g.fillStyle = score === 4 ? C.green : C.text;
+      g.fillText(score + ' / 4', 16, 14);
+      g.font = '12px Inter, system-ui, sans-serif';
+      g.fillStyle = C.muted;
+      g.fillText(PUZZLES[puzzle].blurb, 16, 46);
+
+      if (score === 4) {
+        g.font = '700 15px Inter, system-ui, sans-serif'; g.fillStyle = C.green;
+        g.textAlign = 'right';
+        g.fillText('solved — try the next puzzle', b.W - 16, 18);
+      } else if (puzzle === 'XOR' && hintTimer > 14) {
+        g.font = '600 13px Inter, system-ui, sans-serif'; g.fillStyle = C.warn;
+        g.textAlign = 'right';
+        g.fillText('still stuck? that is the lesson. keep reading.', b.W - 16, 20);
+      }
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+
+      readout.set({ 'correct': score + ' of 4', 'puzzle': puzzle === 'AND' ? '1' : puzzle === 'OR' ? '2' : '3' });
+    });
+
+    return ctx.figure(cv,
+      'Red dots want to be on the red side, blue on the blue side. Puzzles 1 and 2 are winnable. Puzzle 3 is not, and no amount of care will change that.',
+      [sel,
+       ctx.button('Swap which side is red', () => { flip = !flip; }),
+       ctx.button('Reset line', () => { A = { x: 0.9, y: -0.2 }; B = { x: -0.2, y: 0.9 }; solved = false; hintTimer = 0; })],
+      readout);
+  }
+
+  /* ==================================================================
+     2 — WATCH THE MACHINE LEARN (the 1958 rule)
+     ================================================================== */
+  function buildTrainer(ctx) {
+    const C = ctx.colors;
+    const [cv, g] = ctx.canvas(640, 480);
+    const b = makeBoard(cv, g, C);
+    let puzzle = 'AND';
+    let w1, w2, bias, cursor, pass, mistakes, lastMistakes, history, acc, running;
+
+    function reset() {
+      w1 = 0.4; w2 = -0.3; bias = 0.1;
+      cursor = 0; pass = 0; mistakes = 0; lastMistakes = null; history = []; acc = 0;
+    }
+    reset();
+    running = false;
+
+    const LR = 0.12;
+    function fire(x, y) { return (w1 * x + w2 * y + bias) > 0 ? 1 : 0; }
+
+    function step() {
+      const labels = PUZZLES[puzzle].labels;
+      const p = PTS[cursor], target = labels[cursor];
+      const out = fire(p[0], p[1]);
+      const err = target - out;
+      if (err !== 0) {
+        mistakes++;
+        w1 += LR * err * p[0];
+        w2 += LR * err * p[1];
+        bias += LR * err;
+      }
+      cursor++;
+      if (cursor >= PTS.length) {
+        cursor = 0; pass++;
+        lastMistakes = mistakes;
+        history.push(mistakes);
+        if (history.length > 60) history.shift();
+        mistakes = 0;
+      }
+    }
+
+    const speed = ctx.slider({ label: 'speed', min: 1, max: 30, step: 1, value: 8 });
+    const readout = ctx.readout();
+
+    ctx.loop((dt) => {
+      if (running) { acc += dt * speed.value; while (acc >= 1) { step(); acc -= 1; } }
+
+      const labels = PUZZLES[puzzle].labels;
+      drawFrame(g, b, C);
+      // the line w1*x + w2*y + bias = 0 as two far-apart points
+      const nx = w1, ny = w2, nn = Math.hypot(nx, ny) || 1e-6;
+      const px = -bias * nx / (nn * nn), py = -bias * ny / (nn * nn);   // closest point to origin
+      const dx = -ny / nn, dy = nx / nn;
+      const Ax = px, Ay = py, Bx = px + dx, By = py + dy;
+      const flip = classify(px + nx / nn * 0.1, py + ny / nn * 0.1, Ax, Ay, Bx, By, false) !== 1;
+      shadeSides(g, b, Ax, Ay, Bx, By, flip, C);
+      drawLineThrough(g, b, Ax, Ay, Bx, By, C.warn, 3);
+      drawDots(g, b, labels, C, true);
+
+      // highlight the dot currently being examined
+      const cp = PTS[cursor];
+      g.strokeStyle = C.green; g.lineWidth = 3;
+      g.beginPath(); g.arc(b.sx(cp[0]), b.sy(cp[1]), 19, 0, Math.PI * 2); g.stroke();
+
+      const score = scoreOf(labels, fire);
+      g.textAlign = 'left'; g.textBaseline = 'top';
+      g.font = '700 24px Inter, system-ui, sans-serif';
+      g.fillStyle = score === 4 ? C.green : C.text;
+      g.fillText(score + ' / 4', 16, 14);
+      g.font = '12px Inter, system-ui, sans-serif'; g.fillStyle = C.muted;
+      g.fillText('pass ' + pass + (lastMistakes == null ? '' : '  ·  mistakes last pass: ' + lastMistakes), 16, 44);
+
+      // mistake history bars
+      const bx0 = 16, by0 = b.H - 42;
+      g.fillStyle = C.muted; g.font = '10px Inter, system-ui, sans-serif';
+      g.fillText('mistakes per pass', bx0, by0 - 14);
+      history.forEach((m, i) => {
+        g.fillStyle = m === 0 ? C.green : C.danger;
+        g.fillRect(bx0 + i * 8, by0 + 26 - m * 6.5, 6, Math.max(2, m * 6.5));
+      });
+      if (score === 4) {
+        g.font = '700 14px Inter, system-ui, sans-serif'; g.fillStyle = C.green; g.textAlign = 'right';
+        g.fillText('found a line and stopped', b.W - 16, 18);
+      } else if (pass > 12) {
+        g.font = '700 13px Inter, system-ui, sans-serif'; g.fillStyle = C.warn; g.textAlign = 'right';
+        g.fillText('still going after ' + pass + ' passes…', b.W - 16, 18);
+      }
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+
+      readout.set({ 'correct': score + ' of 4', 'passes': pass, 'mistakes last pass': lastMistakes == null ? '—' : lastMistakes });
+    });
+
+    const playBtn = ctx.button('Train', () => {
+      running = !running;
+      playBtn.textContent = running ? 'Pause' : 'Train';
+    }, 'primary');
+
+    const sel = ctx.select({
+      label: 'puzzle',
+      options: [
+        { value: 'AND', label: '1 · both switches on' },
+        { value: 'OR', label: '2 · either switch on' },
+        { value: 'XOR', label: '3 · exactly one switch on' },
+      ],
+      value: 'AND',
+      onChange: (v) => { puzzle = v; reset(); },
+    });
+
+    return ctx.figure(cv,
+      'The green ring shows which dot the machine is looking at right now. Every time it gets one wrong it nudges the line. On puzzles 1 and 2 the mistake bars hit zero and it stops. On puzzle 3 they never do.',
+      [sel, playBtn, ctx.button('One step', () => step()), ctx.button('Reset', () => reset()), speed],
+      readout);
+  }
+
+  /* ==================================================================
+     3 — BRUTE FORCE: try every line there is
+     ================================================================== */
+  function buildBruteForce(ctx) {
+    const C = ctx.colors;
+    const [cv, g] = ctx.canvas(640, 460);
+    const b = makeBoard(cv, g, C, 62);
+    let puzzle = 'AND';
+    let angleI, offI, tried, worked, running, done, bestShown, trail;
+    const N_ANG = 90, N_OFF = 60;
+
+    function reset() {
+      angleI = 0; offI = 0; tried = 0; worked = 0; running = false; done = false; bestShown = null; trail = [];
+    }
+    reset();
+
+    function lineFor(ai, oi) {
+      const ang = ai / N_ANG * Math.PI;                 // 0..180 degrees covers every orientation
+      const off = -1.2 + oi / (N_OFF - 1) * 2.4;        // distance from centre
+      const nx = Math.cos(ang), ny = Math.sin(ang);
+      const cxp = 0.5 + nx * off, cyp = 0.5 + ny * off; // point on the line
+      return { ax: cxp, ay: cyp, bx: cxp - ny, by: cyp + nx };
+    }
+
+    function testOne() {
+      const labels = PUZZLES[puzzle].labels;
+      const L = lineFor(angleI, offI);
+      for (const flip of [false, true]) {
+        tried++;
+        const s = scoreOf(labels, (x, y) => classify(x, y, L.ax, L.ay, L.bx, L.by, flip));
+        if (s === 4) { worked++; if (!bestShown) bestShown = { L: L, flip: flip }; }
+      }
+      if (trail.length < 260 && angleI % 2 === 0) trail.push(L);
+      offI++;
+      if (offI >= N_OFF) { offI = 0; angleI++; }
+      if (angleI >= N_ANG) { running = false; done = true; }
+    }
+
+    const readout = ctx.readout();
+    ctx.loop(() => {
+      if (running) for (let i = 0; i < 40; i++) { if (!running) break; testOne(); }
+
+      const labels = PUZZLES[puzzle].labels;
+      drawFrame(g, b, C);
+      // faint trail of every line tried
+      g.strokeStyle = 'rgba(148,163,184,0.11)'; g.lineWidth = 1;
+      for (const L of trail) drawLineThrough(g, b, L.ax, L.ay, L.bx, L.by, 'rgba(148,163,184,0.11)', 1);
+      // current line
+      if (!done) {
+        const L = lineFor(angleI, offI);
+        drawLineThrough(g, b, L.ax, L.ay, L.bx, L.by, C.warn, 2);
+      }
+      // a winner, if one exists
+      if (bestShown) {
+        shadeSides(g, b, bestShown.L.ax, bestShown.L.ay, bestShown.L.bx, bestShown.L.by, bestShown.flip, C);
+        drawLineThrough(g, b, bestShown.L.ax, bestShown.L.ay, bestShown.L.bx, bestShown.L.by, C.green, 3);
+      }
+      drawDots(g, b, labels, C, true);
+
+      g.textAlign = 'left'; g.textBaseline = 'top';
+      g.font = '12px Inter, system-ui, sans-serif'; g.fillStyle = C.muted;
+      g.fillText('lines tried', 16, 14);
+      g.font = '700 22px JetBrains Mono, monospace'; g.fillStyle = C.text;
+      g.fillText(tried.toLocaleString(), 16, 30);
+      g.font = '12px Inter, system-ui, sans-serif'; g.fillStyle = C.muted;
+      g.fillText('lines that got all 4 right', 16, 62);
+      g.font = '700 22px JetBrains Mono, monospace';
+      g.fillStyle = worked > 0 ? C.green : C.danger;
+      g.fillText(worked.toLocaleString(), 16, 78);
+      if (done) {
+        g.font = '700 14px Inter, system-ui, sans-serif';
+        g.fillStyle = worked > 0 ? C.green : C.danger;
+        g.textAlign = 'right';
+        g.fillText(worked > 0 ? 'plenty of lines work here' : 'not one line works. ever.', b.W - 16, 18);
+      }
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      readout.set({ 'tried': tried.toLocaleString(), 'worked': worked.toLocaleString(), 'status': done ? 'finished' : running ? 'sweeping' : 'ready' });
+    });
+
+    const runBtn = ctx.button('Try every line', () => {
+      if (done) reset();
+      running = !running;
+      runBtn.textContent = running ? 'Pause' : (done ? 'Try every line' : 'Resume');
+    }, 'primary');
+
+    const sel = ctx.select({
+      label: 'puzzle',
+      options: [
+        { value: 'AND', label: '1 · both switches on' },
+        { value: 'OR', label: '2 · either switch on' },
+        { value: 'XOR', label: '3 · exactly one switch on' },
+      ],
+      value: 'AND',
+      onChange: (v) => { puzzle = v; reset(); runBtn.textContent = 'Try every line'; },
+    });
+
+    return ctx.figure(cv,
+      'Every orientation and position, both ways round. On puzzle 1 the winner counter climbs into the thousands. On puzzle 3 it stays on zero from the first line to the last.',
+      [sel, runBtn, ctx.button('Reset', () => { reset(); runBtn.textContent = 'Try every line'; })],
+      readout);
+  }
+
+  /* ==================================================================
+     4 — TWO LINES FIX IT
+     ================================================================== */
+  function buildTwoLines(ctx) {
+    const C = ctx.colors;
+    const [cv, g] = ctx.canvas(640, 460);
+    const b = makeBoard(cv, g, C);
+    const nLines = ctx.slider({ label: 'how many lines', min: 1, max: 2, step: 1, value: 1 });
+    // line 1: x + y = 0.5   (above it means "at least one switch on")
+    // line 2: x + y = 1.5   (below it means "not both on")
+    const L1 = { ax: 0.5, ay: 0.0, bx: 0.0, by: 0.5 };
+    const L2 = { ax: 1.5, ay: 0.0, bx: 0.0, by: 1.5 };
+    const readout = ctx.readout();
+
+    ctx.loop(() => {
+      const labels = PUZZLES.XOR.labels;
+      const two = nLines.value >= 2;
+      drawFrame(g, b, C);
+
+      const inside = (x, y) => {
+        const above1 = (x + y) > 0.5;
+        if (!two) return above1 ? 1 : 0;
+        const below2 = (x + y) < 1.5;
+        return (above1 && below2) ? 1 : 0;
+      };
+
+      const step = 9;
+      for (let X = b.x0; X < b.x0 + b.size; X += step) {
+        for (let Y = b.y0; Y < b.y0 + b.size; Y += step) {
+          const on = inside(b.ix(X + step / 2), b.iy(Y + step / 2));
+          g.fillStyle = on ? 'rgba(251,113,133,0.15)' : 'rgba(124,156,255,0.13)';
+          g.fillRect(X, Y, step, step);
+        }
+      }
+      drawLineThrough(g, b, L1.ax, L1.ay, L1.bx, L1.by, C.green, 3);
+      if (two) drawLineThrough(g, b, L2.ax, L2.ay, L2.bx, L2.by, C.purple, 3);
+      drawDots(g, b, labels, C, true);
+
+      const score = scoreOf(labels, inside);
+      g.textAlign = 'left'; g.textBaseline = 'top';
+      g.font = '700 26px Inter, system-ui, sans-serif';
+      g.fillStyle = score === 4 ? C.green : C.text;
+      g.fillText(score + ' / 4', 16, 14);
+      g.font = '12px Inter, system-ui, sans-serif'; g.fillStyle = C.muted;
+      g.fillText(two ? 'two lines make a stripe' : 'one line, the best it can do', 16, 46);
+      g.textAlign = 'right';
+      g.font = '600 12px Inter, system-ui, sans-serif';
+      g.fillStyle = C.green; g.fillText('line 1: at least one switch on', b.W - 16, 16);
+      if (two) { g.fillStyle = C.purple; g.fillText('line 2: not both switches on', b.W - 16, 34); }
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      readout.set({ 'lines': two ? 2 : 1, 'correct': score + ' of 4' });
+    });
+
+    return ctx.figure(cv,
+      'One line tops out at 3 of 4. Add a second and the red band between them holds exactly the two red dots. Each line is one neuron; a third neuron checks whether you are inside both.',
+      [nLines],
+      readout);
+  }
+
+  /* ==================================================================
+     5 — INSIDE THE NEURON
+     ================================================================== */
+  function buildNeuronAnatomy(ctx) {
+    const C = ctx.colors;
+    const [cv, g] = ctx.canvas(700, 300);
+    const x1 = ctx.slider({ label: 'input A', min: 0, max: 1, step: 1, value: 1 });
+    const x2 = ctx.slider({ label: 'input B', min: 0, max: 1, step: 1, value: 1 });
+    const w1 = ctx.slider({ label: 'weight on A', min: -1, max: 1, step: 0.05, value: 0.5, digits: 2 });
+    const w2 = ctx.slider({ label: 'weight on B', min: -1, max: 1, step: 0.05, value: 0.5, digits: 2 });
+    const bi = ctx.slider({ label: 'bias', min: -2, max: 1, step: 0.05, value: -0.75, digits: 2 });
+    const readout = ctx.readout();
+
+    ctx.loop(() => {
+      g.clearRect(0, 0, cv.W, cv.H);
+      g.fillStyle = C.bg; g.fillRect(0, 0, cv.W, cv.H);
+      const a = x1.value, bb = x2.value, wa = w1.value, wb = w2.value, bias = bi.value;
+      const sum = a * wa + bb * wb + bias;
+      const out = sum > 0 ? 1 : 0;
+
+      const cy = 150, nodeX = 430, outX = 610;
+      const inY = [95, 205];
+      const vals = [a, bb], ws = [wa, wb], names = ['A', 'B'];
+
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      for (let i = 0; i < 2; i++) {
+        // input circle
+        g.fillStyle = vals[i] ? C.accent : '#1b2436';
+        g.beginPath(); g.arc(110, inY[i], 26, 0, Math.PI * 2); g.fill();
+        g.strokeStyle = C.line; g.lineWidth = 2; g.stroke();
+        g.fillStyle = vals[i] ? '#0a0e16' : C.muted;
+        g.font = '700 18px Inter, system-ui, sans-serif';
+        g.fillText(String(vals[i]), 110, inY[i]);
+        g.fillStyle = C.muted; g.font = '12px Inter, system-ui, sans-serif';
+        g.fillText('input ' + names[i], 110, inY[i] - 44);
+
+        // wire, thickness and colour by weight
+        const wgt = ws[i];
+        g.strokeStyle = wgt >= 0 ? 'rgba(251,113,133,' + (0.25 + Math.abs(wgt) * 0.7) + ')'
+                                 : 'rgba(124,156,255,' + (0.25 + Math.abs(wgt) * 0.7) + ')';
+        g.lineWidth = 1 + Math.abs(wgt) * 9;
+        g.beginPath(); g.moveTo(136, inY[i]); g.lineTo(nodeX - 46, cy); g.stroke();
+
+        // weight label
+        const mx = (136 + nodeX - 46) / 2, my = (inY[i] + cy) / 2;
+        g.fillStyle = '#0f1520'; g.fillRect(mx - 30, my - 11, 60, 22);
+        g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(mx - 30, my - 11, 60, 22);
+        g.fillStyle = wgt >= 0 ? C.danger : C.accent;
+        g.font = '600 12px JetBrains Mono, monospace';
+        g.fillText((wgt >= 0 ? '+' : '') + wgt.toFixed(2), mx, my);
+      }
+
+      // the neuron
+      g.fillStyle = '#131c2e'; g.strokeStyle = out ? C.green : C.line; g.lineWidth = 3;
+      g.beginPath(); g.arc(nodeX, cy, 46, 0, Math.PI * 2); g.fill(); g.stroke();
+      g.fillStyle = C.text; g.font = '600 12px Inter, system-ui, sans-serif';
+      g.fillText('add it up', nodeX, cy - 14);
+      g.font = '700 19px JetBrains Mono, monospace';
+      g.fillStyle = sum > 0 ? C.green : C.danger;
+      g.fillText((sum >= 0 ? '+' : '') + sum.toFixed(2), nodeX, cy + 12);
+      g.fillStyle = C.muted; g.font = '11px Inter, system-ui, sans-serif';
+      g.fillText('bias ' + (bias >= 0 ? '+' : '') + bias.toFixed(2), nodeX, cy + 66);
+
+      // output
+      g.strokeStyle = out ? C.green : 'rgba(148,163,184,0.4)'; g.lineWidth = out ? 5 : 2;
+      g.beginPath(); g.moveTo(nodeX + 48, cy); g.lineTo(outX - 30, cy); g.stroke();
+      g.fillStyle = out ? C.green : '#1b2436';
+      g.beginPath(); g.arc(outX, cy, 28, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = C.line; g.lineWidth = 2; g.stroke();
+      g.fillStyle = out ? '#0a0e16' : C.muted;
+      g.font = '700 20px Inter, system-ui, sans-serif';
+      g.fillText(String(out), outX, cy);
+      g.fillStyle = C.muted; g.font = '12px Inter, system-ui, sans-serif';
+      g.fillText(out ? 'FIRES' : 'silent', outX, cy - 46);
+
+      // the sentence
+      g.textAlign = 'left';
+      g.font = '13px JetBrains Mono, monospace'; g.fillStyle = C.muted;
+      g.fillText('(' + a + ' × ' + wa.toFixed(2) + ') + (' + bb + ' × ' + wb.toFixed(2) + ') + ' + bias.toFixed(2)
+                 + '  =  ' + sum.toFixed(2) + '   ' + (sum > 0 ? '> 0, so fire' : '≤ 0, so stay quiet'), 24, cv.H - 26);
+      g.textAlign = 'center';
+
+      readout.set({ 'total': sum.toFixed(2), 'output': out });
+    });
+
+    return ctx.figure(cv,
+      'Thicker wire means a bigger weight; red pushes toward firing and blue pushes against it. The bias is how much evidence the neuron demands before it fires at all. Three numbers, and that is the whole neuron.',
+      [x1, x2, w1, w2, bi],
+      readout);
+  }
+
+  /* ==================================================================
+     6 — NESTED CIRCLES
+     ================================================================== */
+  function buildNesting(ctx) {
+    const C = ctx.colors;
+    const [cv, g] = ctx.canvas(700, 340);
+    const RINGS = [
+      { r: 158, color: C.accent, name: 'Artificial intelligence', since: 'the term was coined in 1956',
+        body: 'Any machine doing something we would call clever. Includes hand-written rules with no learning at all, like a chess engine or a tax calculator.' },
+      { r: 112, color: C.green, name: 'Machine learning', since: 'took hold from the 1980s',
+        body: 'The subset that learns from examples instead of being told the rules. Includes plenty of methods with no neurons anywhere, like decision trees.' },
+      { r: 62, color: C.pink, name: 'Deep learning', since: 'took over from 2012',
+        body: 'Machine learning using many stacked layers of neurons. This is the part that produced image recognition, translation, and the model you are talking to.' },
+    ];
+    let hover = 2;
+    const info = ctx.h('div', { style: { minHeight: '74px' } });
+
+    // One handler, wired to both events. Never synthesise a fake event to
+    // re-enter your own listener: it is easy to build one that re-triggers the
+    // handler that created it.
+    const pick = (e) => {
+      const p = cv.pos(e);
+      const d = Math.hypot(p.x - 210, p.y - 170);
+      hover = d <= RINGS[2].r ? 2 : d <= RINGS[1].r ? 1 : d <= RINGS[0].r ? 0 : hover;
+    };
+    cv.addEventListener('pointermove', pick);
+    cv.addEventListener('pointerdown', pick);
+
+    function paintInfo() {
+      const r = RINGS[hover];
+      info.innerHTML = '';
+      info.append(
+        ctx.h('div', { style: { color: r.color, fontWeight: '700', fontSize: '1.05rem' } }, r.name),
+        ctx.h('div', { style: { color: '#94a3b8', fontSize: '.8rem', marginBottom: '4px' } }, r.since),
+        ctx.h('div', { html: r.body }));
+    }
+
+    ctx.loop(() => {
+      g.clearRect(0, 0, cv.W, cv.H);
+      g.fillStyle = C.bg; g.fillRect(0, 0, cv.W, cv.H);
+      const cx = 210, cy = 170;
+      for (let i = 0; i < RINGS.length; i++) {
+        const r = RINGS[i], on = hover === i;
+        g.fillStyle = on ? r.color + '2e' : r.color + '14';
+        g.beginPath(); g.arc(cx, cy, r.r, 0, Math.PI * 2); g.fill();
+        g.strokeStyle = r.color; g.lineWidth = on ? 3 : 1.5;
+        g.stroke();
+      }
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.font = '600 12px Inter, system-ui, sans-serif';
+      g.fillStyle = RINGS[0].color; g.fillText('AI', cx, cy - 138);
+      g.fillStyle = RINGS[1].color; g.fillText('machine learning', cx, cy - 94);
+      g.fillStyle = RINGS[2].color; g.fillText('deep', cx, cy - 8); g.fillText('learning', cx, cy + 8);
+
+      // side text
+      g.textAlign = 'left';
+      const r = RINGS[hover];
+      g.fillStyle = r.color; g.font = '700 17px Inter, system-ui, sans-serif';
+      g.fillText(r.name, 410, 96);
+      g.fillStyle = C.muted; g.font = '12px Inter, system-ui, sans-serif';
+      g.fillText(r.since, 410, 118);
+      g.fillStyle = C.text; g.font = '13px Inter, system-ui, sans-serif';
+      wrap(g, r.body, 410, 148, 260, 19);
+      g.textAlign = 'center';
+      paintInfo();
+    });
+
+    function wrap(g, text, x, y, maxW, lh) {
+      const words = text.split(' ');
+      let line = '', yy = y;
+      for (const w of words) {
+        const test = line ? line + ' ' + w : w;
+        if (g.measureText(test).width > maxW && line) { g.fillText(line, x, yy); line = w; yy += lh; }
+        else line = test;
+      }
+      if (line) g.fillText(line, x, yy);
+    }
+
+    return ctx.figure(cv,
+      'Each one sits inside the last. Every deep-learning system is machine learning, and every machine-learning system is AI, but not the other way round.',
+      null, null);
+  }
 })();
