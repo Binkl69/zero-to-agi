@@ -158,3 +158,30 @@ sed -i -E 's/\?v=[0-9]+/?v=3/g' index.html
 
 There is no build step to do this automatically. If a change does not show up in a
 browser, this is almost always why; a hard reload (Ctrl+Shift+R) confirms it.
+
+## Rendering is part of the contract
+
+`node scripts/smoke.js` proves a chapter's code does not throw. It cannot prove the
+picture is right — its fake canvas swallows every drawing call — and a demo that
+renders nonsense passes it happily. Two more checks close that gap and both must be
+clean before a chapter ships:
+
+- **`node scripts/paint.js [id]`** — replays every chapter against a canvas that records
+  the real geometry of every paint, drives each interactive through slider extremes,
+  every button and every select option, and reports what a reader would notice:
+  labels printed on labels, lines drawn through labels, text running off the canvas,
+  and a chart drawing outside its own plot frame. No browser needed, so this is the
+  one to run while working.
+- **`node scripts/render-check.js [id] [--shots]`** — the same checks in real Chromium
+  against the real page, so text widths are measured rather than modelled. This is the
+  one that decides. `--shots` writes a PNG of every interactive; `node scripts/shot.js
+  <id> <figure-number> --slider=0:1` captures a single interactive in a chosen state.
+
+**Look at the picture.** A checker finds collisions, not nonsense. Before calling an
+interactive done, screenshot it in at least its start and end states and look at it.
+
+**Clip every plot.** Any drawing that depends on data must be wrapped in
+`g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip(); … g.restore()`, so that a
+coordinate the author did not anticipate cannot paint over the panel next door. Inset
+the data range by a dot radius so points sitting on the axis limits are not sliced in
+half by that clip.

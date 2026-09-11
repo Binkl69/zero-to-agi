@@ -599,133 +599,155 @@
       { x: 0, y: 0, lab: 0 }, { x: 0, y: 1, lab: 1 },
       { x: 1, y: 0, lab: 1 }, { x: 1, y: 1, lab: 0 },
     ];
-    /* neuron A fires when at least one is on; neuron B when both are */
+    /* neuron A fires when at least one switch is on; neuron B when both are */
     const A = (p) => (p.x + p.y > 0.5 ? 1 : 0);
     const B = (p) => (p.x + p.y > 1.5 ? 1 : 0);
-    let t = 0, playing = false, acc = 0;
+    let t = 0, playing = false;
 
-    const tSl = ctx.slider({ label: 'move into the new space', min: 0, max: 1, step: 0.01, value: 0, digits: 2, onChange: (v) => { t = v; playing = false; playBtn.textContent = '▶ Watch them move'; } });
+    const tSl = ctx.slider({ label: 'move into the new space', min: 0, max: 1, step: 0.01, value: 0, digits: 2, onChange: (v) => { t = v; stop(); } });
     const playBtn = ctx.button('▶ Watch them move', () => {
       playing = !playing;
       playBtn.textContent = playing ? '⏸ Pause' : '▶ Watch them move';
     }, 'primary');
-    const backBtn = ctx.button('Back to the start', () => { t = 0; tSl.value = 0; playing = false; playBtn.textContent = '▶ Watch them move'; });
+    function stop() { playing = false; playBtn.textContent = '▶ Watch them move'; }
+    const backBtn = ctx.button('Back to the start', () => { t = 0; tSl.value = 0; stop(); });
     const ro = ctx.readout();
 
     const ease = (u) => u * u * (3 - 2 * u);
 
+    /* Plot geometry. Everything below stays inside PLOT, and the drawing is
+       clipped to it as well, so no future edit here can spill into the text
+       panel on the right. */
+    const X0 = 56, Y0 = 58, SZ = 232;
+    const TX = 348, TW = 348;
+    /* the four dots sit at 0 and 1 exactly, so the data range is inset by a dot
+       radius: without it the clip above would slice every corner dot in half */
+    const PAD = 18, IN = SZ - PAD * 2;
+    const sx = (v) => X0 + PAD + v * IN;
+    const sy = (v) => Y0 + SZ - PAD - v * IN;
+
     ctx.loop((dt) => {
-      if (playing) { acc += dt; t = Math.min(1, t + dt * 0.45); tSl.value = +t.toFixed(2); if (t >= 1) { playing = false; playBtn.textContent = '▶ Watch them move'; } }
+      if (playing) { t = Math.min(1, t + dt * 0.45); tSl.value = +t.toFixed(2); if (t >= 1) stop(); }
       g.clearRect(0, 0, 720, 400);
       const u = ease(t);
+      const inOld = u < 0.5;
 
-      const PAD = 62, SZ = 250, X0 = 55, Y0 = 62;
-      const sx = (v) => X0 + v * SZ;
-      const sy = (v) => Y0 + SZ - v * SZ;
-
-      /* ---- the plot frame, labelled for whichever space we are in ---- */
+      /* ---- frame and axes ---- */
       g.strokeStyle = C.line; g.lineWidth = 1;
       g.strokeRect(X0, Y0, SZ, SZ);
-      g.font = 'bold ' + FONT;
-      g.fillStyle = u < 0.5 ? C.text : 'rgba(230,235,245,' + (1 - u * 1.6 > 0 ? 1 - u * 1.6 : 0) + ')';
-      if (u < 0.55) g.fillText('the original square — switch 1 and switch 2', X0, 40);
-      g.fillStyle = u > 0.45 ? C.accent2 || C.green : 'transparent';
-      if (u > 0.45) { g.fillStyle = C.green; g.fillText('the new space — what neuron A said, what neuron B said', X0, 40); }
+      g.font = 'bold ' + FONT; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+      g.fillStyle = inOld ? C.text : C.green;
+      g.fillText(inOld ? 'the original square' : 'the space A and B built', X0, 34);
 
       g.font = MONO; g.fillStyle = C.muted;
-      g.fillText(u < 0.5 ? 'switch 1  →' : 'what A said  →', X0, Y0 + SZ + 24);
-      g.save(); g.translate(X0 - 20, Y0 + SZ - 30); g.rotate(-Math.PI / 2);
-      g.fillText(u < 0.5 ? 'switch 2  →' : 'what B said  →', 0, 0); g.restore();
-      g.fillText('0', X0 - 14, Y0 + SZ + 4); g.fillText('1', X0 - 14, Y0 + 4);
-      g.fillText('0', X0 - 4, Y0 + SZ + 18); g.fillText('1', X0 + SZ - 6, Y0 + SZ + 18);
+      /* tick numbers sit just outside the box; the axis names sit a line below
+         them, so the two can never collide however long the names get */
+      g.textAlign = 'center';
+      g.fillText('0', sx(0), Y0 + SZ + 16); g.fillText('1', sx(1), Y0 + SZ + 16);
+      g.fillText(inOld ? 'switch 1' : 'what A said', X0 + SZ / 2, Y0 + SZ + 34);
+      g.textAlign = 'right';
+      g.fillText('0', X0 - 10, sy(0) + 4); g.fillText('1', X0 - 10, sy(1) + 4);
+      g.save(); g.translate(X0 - 26, Y0 + SZ / 2); g.rotate(-Math.PI / 2);
+      g.textAlign = 'center'; g.fillText(inOld ? 'switch 2' : 'what B said', 0, 0); g.restore();
+      g.textAlign = 'left';
 
-      /* ---- the two hidden neurons' lines, fading out as we leave their space ---- */
-      if (u < 0.75) {
-        const fade = 1 - u / 0.75;
-        [[0.5, C.warn, 'A'], [1.5, C.purple, 'B']].forEach(([c, col, name]) => {
-          g.strokeStyle = col; g.globalAlpha = fade * 0.9; g.lineWidth = 2;
+      /* ---- everything from here on is trapped inside the plot box ---- */
+      g.save();
+      g.beginPath(); g.rect(X0, Y0, SZ, SZ); g.clip();
+
+      /* the two hidden neurons' lines, fading out as we leave their space.
+         Each is drawn corner to corner WITHIN the unit square: A is the line
+         x + y = 0.5, B is x + y = 1.5. */
+      if (u < 0.78) {
+        const fade = 1 - u / 0.78;
+        [[0.5, C.warn, 'A', 0.30], [1.5, C.purple, 'B', 0.62]].forEach(([c, col, name, lx]) => {
+          g.globalAlpha = fade * 0.9;
+          g.strokeStyle = col; g.lineWidth = 2;
           g.beginPath();
-          g.moveTo(sx(-0.15), sy(c + 0.15));
-          g.lineTo(sx(c + 0.15), sy(-0.15));
+          g.moveTo(sx(Math.max(0, c - 1)), sy(Math.min(1, c)));
+          g.lineTo(sx(Math.min(1, c)), sy(Math.max(0, c - 1)));
           g.stroke();
           g.font = 'bold ' + MONO; g.fillStyle = col;
-          g.fillText(name, sx(c - 0.06), sy(-0.12));
+          g.fillText('neuron ' + name, sx(lx), sy(c - lx) - 8);
           g.globalAlpha = 1;
         });
       }
 
-      /* ---- the third neuron's line, fading IN, in the new space ---- */
+      /* the third neuron's line, fading in, in the new space: it separates
+         "A said yes but B said no" from everything else, which is the line
+         A − B = 0.5, from (0.5, 0) to (1, 0.5). */
       if (u > 0.55) {
         const fade = (u - 0.55) / 0.45;
-        g.strokeStyle = C.green; g.globalAlpha = fade; g.lineWidth = 3;
-        /* A − B > 0.5  →  the line A − B = 0.5 */
+        g.globalAlpha = fade;
+        g.strokeStyle = C.green; g.lineWidth = 3;
         g.beginPath();
-        g.moveTo(sx(0.5), sy(-0.2));
-        g.lineTo(sx(1.7), sy(1.0));
+        g.moveTo(sx(0.5), sy(0));
+        g.lineTo(sx(1), sy(0.5));
         g.stroke();
         g.font = 'bold ' + MONO; g.fillStyle = C.green;
-        g.fillText('the third neuron', sx(0.62), sy(-0.13));
+        g.fillText('the third neuron', sx(0.04), sy(0.80));
+        g.fillText('draws THIS line', sx(0.04), sy(0.80) + 16);
         g.globalAlpha = 1;
       }
 
-      /* ---- the four dots, travelling between the two spaces ---- */
+      /* the four dots, travelling between the two spaces */
       const seen = {};
       PTS.forEach((p) => {
-        const ax = A(p), by = B(p);
-        const px = p.x + (ax - p.x) * u;
-        const py = p.y + (by - p.y) * u;
+        const px = p.x + (A(p) - p.x) * u;
+        const py = p.y + (B(p) - p.y) * u;
         const key = px.toFixed(2) + ',' + py.toFixed(2);
-        const dup = seen[key]; seen[key] = (seen[key] || 0) + 1;
-        const off = dup ? 9 : 0;
+        const off = seen[key] ? 9 : 0;
+        seen[key] = 1;
         g.beginPath(); g.arc(sx(px) + off, sy(py) - off, 10, 0, 7);
         g.fillStyle = p.lab ? C.danger : C.accent;
         g.fill();
         g.strokeStyle = '#0a0e16'; g.lineWidth = 2; g.stroke();
       });
+      g.restore();
 
-      /* ---- the running commentary ---- */
-      const TX = 350;
+      /* ---- the running commentary, in its own column ---- */
       g.font = 'bold ' + FONT; g.fillStyle = C.text;
-      g.fillText('where is the third line?', TX, 40);
-      g.font = FONT; g.fillStyle = C.muted;
+      g.fillText('where is the third line?', TX, 34);
+      g.font = FONT;
       let msg, colour = C.muted;
       if (u < 0.1) {
-        msg = 'Right now you are looking at the original square. Neurons A and B have drawn their two lines. No third line is visible — and that is exactly the complaint, because a third line drawn HERE could not help. Any straight line in this square fails, which is what chapter 1 opened by proving.';
-      } else if (u < 0.75) {
-        msg = 'Watch the dots. They are not being rearranged for show — they are moving to new coordinates: how far right is "what A said", how far up is "what B said". The two hidden neurons are not decorations. They are building a new set of axes.';
+        msg = 'You are looking at the original square. Neurons A and B have drawn their two lines. No third line is visible — and that is exactly the complaint, because a third line drawn HERE could not help. Any straight line in this square fails.';
+      } else if (u < 0.78) {
+        msg = 'Watch the dots. They are not being shuffled for show: they are taking new coordinates. How far right is now "what A said". How far up is now "what B said". The two hidden neurons are building a new set of axes.';
       } else {
-        msg = 'And there it is. One pair of dots has landed on the SAME SPOT — three positions where there were four — because A and B answered identically for both. That fold is what makes the problem easy: in this new space a single straight line separates red from blue, and the third neuron draws it.';
+        msg = 'And there it is. One pair of dots has landed on the SAME SPOT, because A and B answered identically for both. That fold is what makes the problem easy: in this new space a single straight line separates red from blue, and the third neuron draws it.';
         colour = C.green;
       }
       g.fillStyle = colour;
-      wrapText(g, msg, TX, 64, 320, 18);
+      wrapText(g, msg, TX, 58, TW, 18);
 
       /* the truth table, filling in as we move */
-      const rows = PTS.map(p => ({ in: p.x + ',' + p.y, a: A(p), b: B(p), lab: p.lab }));
       g.font = 'bold ' + FONT; g.fillStyle = C.text;
-      g.fillText('what each neuron says', TX, 226);
+      g.fillText('what each neuron says', TX, 232);
       g.font = MONO; g.fillStyle = C.muted;
-      g.fillText('switches', TX, 250); g.fillText('A', TX + 84, 250); g.fillText('B', TX + 118, 250);
-      g.fillText('third says', TX + 158, 250); g.fillText('want', TX + 250, 250);
-      let yy = 272;
-      rows.forEach(r => {
-        const out = (r.a - r.b > 0.5) ? 1 : 0;
-        g.font = MONO; g.fillStyle = r.lab ? C.danger : C.accent;
-        g.fillText(r.in, TX, yy);
-        g.fillStyle = u > 0.2 ? C.warn : '#2a3444'; g.fillText(String(r.a), TX + 86, yy);
-        g.fillStyle = u > 0.2 ? C.purple : '#2a3444'; g.fillText(String(r.b), TX + 120, yy);
-        g.fillStyle = u > 0.8 ? C.green : '#2a3444'; g.fillText(u > 0.8 ? String(out) : '·', TX + 182, yy);
-        g.fillStyle = C.muted; g.fillText(String(r.lab), TX + 262, yy);
-        yy += 24;
+      const COL = [TX, TX + 86, TX + 122, TX + 170, TX + 270];
+      ['switches', 'A', 'B', 'third says', 'want'].forEach((s, i) => g.fillText(s, COL[i], 256));
+      g.strokeStyle = C.line; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(TX, 264); g.lineTo(TX + 316, 264); g.stroke();
+      let yy = 284;
+      PTS.forEach((p) => {
+        const a = A(p), b = B(p), out = (a - b > 0.5) ? 1 : 0;
+        g.font = MONO;
+        g.fillStyle = p.lab ? C.danger : C.accent; g.fillText(p.x + ',' + p.y, COL[0], yy);
+        g.fillStyle = u > 0.2 ? C.warn : '#2a3444'; g.fillText(String(a), COL[1], yy);
+        g.fillStyle = u > 0.2 ? C.purple : '#2a3444'; g.fillText(String(b), COL[2], yy);
+        g.fillStyle = u > 0.8 ? C.green : '#2a3444'; g.fillText(u > 0.8 ? String(out) : '·', COL[3], yy);
+        g.fillStyle = C.muted; g.fillText(String(p.lab), COL[4], yy);
+        yy += 22;
       });
       if (u > 0.8) {
         g.font = 'bold ' + FONT; g.fillStyle = C.green;
-        g.fillText('4 / 4 — and every line here is straight.', TX, yy + 16);
+        g.fillText('4 / 4 — with one straight line.', TX, yy + 16);
       }
 
       ro.set({
-        'looking at': u < 0.5 ? 'the original square' : 'the space A and B built',
-        'distinct positions': u > 0.9 ? '3, not 4' : '4',
+        'looking at': inOld ? 'the original square' : 'the space A and B built',
+        'distinct positions': String(new Set(PTS.map(p => (p.x + (A(p) - p.x) * u).toFixed(2) + ',' + (p.y + (B(p) - p.y) * u).toFixed(2))).size),
       });
     });
 
