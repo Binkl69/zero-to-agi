@@ -702,11 +702,11 @@
         ]),
         p(`All four do the same underlying thing: make it harder to fit noise without making it harder to fit signal. None are free — overdo weight decay or dropout and you are back to underfitting.`),
         callout('tryit', '🖐 Try this: catch the exact moment it turns',
-          `Press <b>▶ Play</b>. Training loss (blue) keeps falling — the model can always get better at its own homework. Validation loss (red) falls, then <b>turns upward</b>. That turn is memorisation beginning.<br>
+          `It is already running. Training loss (blue) keeps falling — the model can always get better at its own homework. Validation loss (red) falls, then <b>turns upward</b>. That turn is memorisation beginning.<br>
            <b>1.</b> Find the green dot: the best validation epoch, and where early stopping would have saved you.<br>
            <b>2.</b> Set training set size to its smallest and regularization to zero. The turn arrives early and steeply.<br>
            <b>3.</b> Set size to its largest and regularization to maximum. The turn may not arrive at all inside 60 epochs.<br>
-           <b>4.</b> Press <b>Replay</b> a few times at fixed settings: the curve jitters, the story never changes.`),
+           <b>4.</b> Press <b>↺ Replay</b> a few times at fixed settings: the curve jitters, the story never changes.`),
         earlyStopping(),
         p(`Notice that the blue line never betrays you. It falls forever. If training loss were all you watched, you would ship the model from the far right of that chart — the most-trained one, and the worst one.`),
       ));
