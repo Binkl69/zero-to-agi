@@ -1,12 +1,9 @@
-/* Zero → AGI · Chapter 12 · Inference, tools and agents
-   Sampling (softmax/temperature/top-k/top-p/greedy) and why temp=0 isn't bit-identical; the KV
-   cache, prefill vs decode, batching, speculative decoding, quantization, distillation, MoE
-   serving, and the resulting cost/latency economics; context windows and "lost in the middle";
-   prompting; RAG; tool use / function calling; the agent think-act-observe loop, coding agents,
-   computer use, MCP, long-horizon failure modes; multimodality & structured outputs; hallucination.
-   Interactives: (a) sampling playground over a hand-authored 12-token distribution, (b) KV-cache
-   & inference-cost calculator, (c) scripted agent-loop trace with a "no tools" hallucination
-   toggle, (d) a tiny in-browser TF-IDF RAG demo over 10 built-in documents. */
+/* Zero → AGI · Chapter 12 · Inference and agents: the model at work
+   DESIGN RULE: the reader changes a model's personality with a slider in the first ten seconds,
+   without touching a weight.
+   Interactives, in order: sampling playground (temperature, top-k, top-p); KV-cache memory
+   calculator; lost-in-the-middle recall curve; RAG retrieval with a deliberate miss; the
+   think-act-observe agent loop; and a cost/latency lab with prompt caching. */
 (function () {
   ZTA.registerChapter({
     id: '12-inference-and-agents',
@@ -393,10 +390,203 @@
           [q, b1, b2, b3]);
       }
 
+
+      function wrapLines(gc, text, maxW) {
+        const words = String(text).split(' '); const out = []; let line = '';
+        for (const w of words) {
+          const t = line ? line + ' ' + w : w;
+          if (line && gc.measureText(t).width > maxW) { out.push(line); line = w; } else line = t;
+        }
+        if (line) out.push(line);
+        return out;
+      }
+      function wrapText(gc, text, x, y, maxW, lh) {
+        wrapLines(gc, text, maxW).forEach((ln, i) => gc.fillText(ln, x, y + i * lh));
+      }
+
+      /* ================================================================ */
+      /* Interactive: lost in the middle                                   */
+      /* ================================================================ */
+      function lostInMiddle() {
+        const [cv, g] = ctx.canvas(720, 330);
+        let pos = 0.5, ctxLen = 30, model = 'typical';
+        /* U-shaped recall: strong at the edges, sagging in the middle, and the sag deepens
+           as the context grows. Shaped after the Liu et al. (2023) curves, not measured here. */
+        const MODELS = { typical: { edge: 0.94, dip: 0.55 }, strong: { edge: 0.97, dip: 0.78 } };
+        function recall(p, n) {
+          const m = MODELS[model];
+          const lenPenalty = ctx.clamp((n - 10) / 90, 0, 1);
+          const floor = m.dip + (1 - lenPenalty) * (m.edge - m.dip) * 0.55;
+          const u = Math.pow(Math.abs(p - 0.5) * 2, 1.7);       // 0 at middle, 1 at either edge
+          return ctx.clamp(floor + (m.edge - floor) * u, 0, 1);
+        }
+        const pSl = ctx.slider({ label: 'where the answer is buried', min: 0, max: 1, step: 0.01, value: 0.5, digits: 2, onChange: (v) => { pos = v; } });
+        const nSl = ctx.slider({ label: 'documents in the context', min: 5, max: 100, step: 1, value: 30, onChange: (v) => { ctxLen = v; } });
+        const mBtn = ctx.button('a typical model', () => {
+          model = model === 'typical' ? 'strong' : 'typical';
+          mBtn.textContent = model === 'typical' ? 'a typical model' : 'a stronger model';
+        }, 'primary');
+        const startBtn = ctx.button('put it first', () => { pos = 0; pSl.value = 0; });
+        const midBtn = ctx.button('put it in the middle', () => { pos = 0.5; pSl.value = 0.5; });
+        const endBtn = ctx.button('put it last', () => { pos = 1; pSl.value = 1; });
+        const ro = ctx.readout();
+
+        ctx.loop(() => {
+          g.clearRect(0, 0, 720, 330);
+          /* the context, drawn as a row of documents */
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('the model\'s context: ' + ctxLen + ' documents, one of which has the answer', 34, 26);
+          const BX = 34, BW = 650, BH = 38;
+          const cw = BW / ctxLen;
+          const hit = Math.min(ctxLen - 1, Math.round(pos * (ctxLen - 1)));
+          for (let i = 0; i < ctxLen; i++) {
+            g.fillStyle = i === hit ? C.green : '#161d2b';
+            g.fillRect(BX + i * cw, 40, Math.max(1, cw - 1), BH);
+          }
+          g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(BX, 40, BW, BH);
+          g.font = MONO; g.fillStyle = C.green;
+          g.fillText('▲ the answer is here', ctx.clamp(BX + hit * cw - 40, BX, BX + BW - 130), 94);
+
+          /* the recall curve */
+          const P = { x: 60, y: 126, w: 400, h: 150 };
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('how often the model finds it', P.x, P.y - 10);
+          g.strokeStyle = C.line; g.strokeRect(P.x, P.y, P.w, P.h);
+          const px = (v) => P.x + v * P.w;
+          const py = (v) => P.y + P.h - ctx.clamp((v - 0.4) / 0.62, 0, 1) * P.h;
+          g.font = MONO; g.fillStyle = C.muted;
+          [0.5, 0.75, 1].forEach(v => {
+            g.beginPath(); g.moveTo(P.x, py(v)); g.lineTo(P.x + P.w, py(v)); g.stroke();
+            g.fillText((v * 100).toFixed(0) + '%', P.x - 32, py(v) + 4);
+          });
+          g.strokeStyle = C.accent; g.lineWidth = 2.5; g.beginPath();
+          for (let i = 0; i <= 60; i++) { const v = i / 60; i ? g.lineTo(px(v), py(recall(v, ctxLen))) : g.moveTo(px(v), py(recall(v, ctxLen))); }
+          g.stroke();
+          const r0 = recall(pos, ctxLen);
+          g.fillStyle = r0 > 0.85 ? C.green : r0 > 0.65 ? C.warn : C.danger;
+          g.beginPath(); g.arc(px(pos), py(r0), 7, 0, 7); g.fill();
+          g.font = MONO; g.fillStyle = C.muted;
+          g.fillText('start', P.x, P.y + P.h + 18);
+          g.fillText('middle', P.x + P.w / 2 - 18, P.y + P.h + 18);
+          g.fillText('end', P.x + P.w - 22, P.y + P.h + 18);
+
+          const TX = 500;
+          g.font = FONT; g.fillStyle = C.muted; g.fillText('found, at this position', TX, 150);
+          g.font = 'bold 30px Inter, system-ui, sans-serif';
+          g.fillStyle = r0 > 0.85 ? C.green : r0 > 0.65 ? C.warn : C.danger;
+          g.fillText((r0 * 100).toFixed(0) + '%', TX, 186);
+          const best = Math.max(recall(0, ctxLen), recall(1, ctxLen));
+          g.font = MONO; g.fillStyle = C.muted;
+          g.fillText('at the edges: ' + (best * 100).toFixed(0) + '%', TX, 210);
+          g.font = FONT;
+          g.fillStyle = (best - r0) > 0.1 ? C.danger : C.muted;
+          wrapText(g, (best - r0) > 0.1
+            ? 'A ' + ((best - r0) * 100).toFixed(0) + '-point penalty for nothing but where the text sat.'
+            : 'Near an edge, where recall is reliable.', TX, 232, 190, 16);
+          g.font = FONT; g.fillStyle = C.muted;
+          wrapText(g, 'Doubling the window does not double how much of it gets used. Mostly it means more middle to get lost in — which is why retrieval systems put the best match first or last, not wherever it happened to rank.',
+            34, 300, 650, 17);
+          ro.set({ position: pos < 0.15 ? 'near the start' : pos > 0.85 ? 'near the end' : 'buried in the middle', documents: ctxLen, 'found': (r0 * 100).toFixed(0) + '%' });
+        });
+
+        return ctx.figure(cv,
+          'Liu and colleagues tested this in 2023: they placed the answer to a question at different points inside a long context and measured how often models found it. Accuracy was highest at the very start or the very end and sagged in the middle — a U-shaped curve, echoing how people recall a list best from its beginning and end. The curve here is shaped after their published results rather than measured, but the effect is real, robust, and the reason a huge advertised context window is not the same as a usable one.',
+          [pSl, nSl, startBtn, midBtn, endBtn, mBtn], ro);
+      }
+
+      /* ================================================================ */
+      /* Interactive: what a reply actually costs                          */
+      /* ================================================================ */
+      function costLab() {
+        const [cv, g] = ctx.canvas(720, 340);
+        let promptTok = 4000, outTok = 600, cacheHit = false, calls = 1000;
+        const IN_PRICE = 3.0, OUT_PRICE = 15.0;      // $ per million tokens, illustrative
+        const CACHE_READ = 0.1;                       // cached input costs ~10% of full price
+        const PREFILL_TPS = 12000, DECODE_TPS = 70;   // tokens/sec, illustrative
+
+        const pSl = ctx.slider({ label: 'prompt tokens', min: 200, max: 100000, step: 200, value: 4000, onChange: (v) => { promptTok = v; } });
+        const oSl = ctx.slider({ label: 'output tokens', min: 50, max: 4000, step: 50, value: 600, onChange: (v) => { outTok = v; } });
+        const cSl = ctx.slider({ label: 'calls per day', min: 1, max: 100000, step: 100, value: 1000, onChange: (v) => { calls = v; } });
+        const cacheBtn = ctx.button('prompt caching: off', () => {
+          cacheHit = !cacheHit;
+          cacheBtn.textContent = 'prompt caching: ' + (cacheHit ? 'on' : 'off');
+        }, 'primary');
+        const agentBtn = ctx.button('an agent turn (big prompt, small reply)', () => {
+          promptTok = 60000; pSl.value = 60000; outTok = 200; oSl.value = 200;
+        });
+        const ro = ctx.readout();
+
+        ctx.loop(() => {
+          g.clearRect(0, 0, 720, 340);
+          const inCost = promptTok / 1e6 * IN_PRICE * (cacheHit ? CACHE_READ : 1);
+          const outCost = outTok / 1e6 * OUT_PRICE;
+          const per = inCost + outCost;
+          const prefillS = promptTok / PREFILL_TPS * (cacheHit ? 0.05 : 1);
+          const decodeS = outTok / DECODE_TPS;
+
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('where the time goes, for one reply', 34, 26);
+          const TOT = prefillS + decodeS, BW = 620;
+          const pw = TOT ? prefillS / TOT * BW : 0;
+          g.fillStyle = C.accent; g.fillRect(34, 40, pw, 30);
+          g.fillStyle = C.purple; g.fillRect(34 + pw, 40, BW - pw, 30);
+          g.font = MONO; g.fillStyle = '#0a0e16';
+          if (pw > 80) g.fillText('prefill ' + prefillS.toFixed(2) + 's', 42, 60);
+          if (BW - pw > 90) g.fillText('decode ' + decodeS.toFixed(2) + 's', 42 + pw, 60);
+          g.fillStyle = C.muted;
+          g.fillText('prefill reads the whole prompt in one parallel pass; decode emits one token at a time', 34, 88);
+          g.font = 'bold 16px Inter, system-ui, sans-serif'; g.fillStyle = C.text;
+          g.fillText('total ' + TOT.toFixed(2) + ' s  —  ' + (decodeS / Math.max(1e-6, TOT) * 100).toFixed(0) + '% of it spent one token at a time', 34, 112);
+
+          /* cost breakdown */
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('what it costs', 34, 150);
+          const bar = (lab, v, col, y, note) => {
+            g.font = MONO; g.fillStyle = C.muted; g.fillText(lab, 34, y + 12);
+            g.fillStyle = C.line; g.fillRect(200, y, 300, 16);
+            g.fillStyle = col; g.fillRect(200, y, ctx.clamp(v / Math.max(per, 1e-9), 0, 1) * 300, 16);
+            g.font = 'bold ' + MONO; g.fillStyle = col;
+            g.fillText('$' + v.toFixed(5), 512, y + 13);
+            if (note) { g.font = MONO; g.fillStyle = C.muted; g.fillText(note, 596, y + 13); }
+            return y + 30;
+          };
+          let y = 162;
+          y = bar('input tokens', inCost, C.accent, y, cacheHit ? '(cached)' : '');
+          y = bar('output tokens', outCost, C.purple, y, '5× the rate');
+          g.strokeStyle = C.line; g.beginPath(); g.moveTo(34, y + 2); g.lineTo(686, y + 2); g.stroke();
+          g.font = MONO; g.fillStyle = C.muted; g.fillText('per reply', 34, y + 26);
+          g.font = 'bold 18px Inter, system-ui, sans-serif'; g.fillStyle = C.text;
+          g.fillText('$' + per.toFixed(4), 200, y + 28);
+          g.font = MONO; g.fillStyle = C.muted; g.fillText('× ' + calls.toLocaleString() + ' calls/day', 300, y + 26);
+          g.font = 'bold 20px Inter, system-ui, sans-serif'; g.fillStyle = C.green;
+          g.fillText('$' + (per * calls).toFixed(2) + ' / day', 470, y + 28);
+
+          g.font = FONT; g.fillStyle = C.muted;
+          wrapText(g, cacheHit
+            ? 'Prompt caching reuses the KV cache for a prefix you send repeatedly — a system prompt, a shared document — so the expensive prefill is paid once and later calls pay a fraction.'
+            : 'Output tokens cost several times more than input tokens, because decode is sequential and prefill is not. That single asymmetry drives most of the cost of running an assistant.',
+            34, y + 56, 650, 17);
+          ro.set({ 'per reply': '$' + per.toFixed(4), 'per day': '$' + (per * calls).toFixed(2), latency: TOT.toFixed(2) + 's', caching: cacheHit ? 'on' : 'off' });
+        });
+
+        return ctx.figure(cv,
+          'Illustrative rates, in the shape providers actually bill: a few dollars per million input tokens and several times that for output, because decode is sequential while prefill is one parallel pass. Press <b>an agent turn</b> to see the regime that surprises people — an agent resends its whole growing transcript every step, so its prompts are enormous and its replies tiny, and without prompt caching it pays full price for the same prefix over and over. Real prices change every few months; the shape does not.',
+          [pSl, oSl, cSl, cacheBtn, agentBtn], ro);
+      }
+
       /* ================================================================ */
       /* Layout                                                             */
       /* ================================================================ */
       root.append(
+        callout('tryit', '🖐 Do this first — make the model say the wrong thing',
+          `The bars are a model's next-word distribution after <b>"The capital of Australia is"</b>. Canberra is correct. Sydney is the answer most people would guess.<br>
+           <b>1.</b> At the defaults, press <b>Sample 20×</b>. Canberra wins nearly every time.<br>
+           <b>2.</b> Now raise <b>temperature</b> and sample again. Somewhere around 1.3 Sydney starts winning — <b>the model has not changed at all</b>, only how you are drawing from it.<br>
+           <b>3.</b> Set temperature back and pull <b>top-k</b> down to 1. Now it is frozen on one answer forever, however high you push the temperature afterwards.<br>
+           <b>4.</b> That is the entire difference between a model that feels creative and one that feels reliable, and it is a dial, not a retraining run.`),
+        samplingPlayground(),
+        p(`Nothing about the weights moved. You changed how a token is drawn from a fixed list of probabilities, and got a different personality.`),
+
         p(`Every previous chapter was about producing one thing: a set of weights. This chapter is about the other 99% of what you experience as "AI" — the moment those frozen weights are handed a question and have to produce an answer, in real time, on real hardware, for millions of people at once, sometimes wired up to run code with no one watching.`),
         p(`That handing-over is called <em>inference</em>, to distinguish it from training. Nothing learns; not one weight changes. And yet almost everything that makes one model feel different from another day to day — how random it feels, how it handles a huge codebase, how fast and cheap it is, whether it can use a calendar, whether it lies to you confidently — is decided here, not during training.`),
         p(`This chapter follows one query all the way through: from a list of probabilities over every possible next word, to a chatbot's reply, to an agent that reads a failing test, edits the file, reruns it, and reports back that it's fixed.`),
@@ -406,14 +596,14 @@
           p(`<em>Temperature</em> is a dial applied before that: divide every logit by T before taking softmax. T = 1 leaves the raw distribution alone. T below 1 sharpens it, making the favourite token even more dominant; T above 1 flattens it, giving weaker candidates a real chance. T = 0 is the limit of that process — always the single highest-probability token, no randomness at all. That is <em>greedy decoding</em>.`),
           p(`Try three round logits: 2.0, 1.0 and 0.0. At T = 1, softmax gives them 66.5%, 24.5% and 9.0%. Halve the temperature (equivalent to doubling the logits, to 4, 2, 0) and the split sharpens to 86.7% / 11.7% / 1.6%. Double it (halving the logits to 1, 0.5, 0) and it flattens to 50.6% / 30.7% / 18.6%. Same three logits, three different personalities.`),
           p(`Two more controls trim the distribution before a token is drawn. <em>Top-k</em> keeps only the k highest-probability tokens and renormalizes; k = 1 is identical to greedy. <em>Top-p</em> (nucleus sampling) instead keeps the smallest set whose probabilities add to at least p — one token when the model is confident, dozens when it is unsure. Both exist to stop pure temperature sampling from occasionally drawing nonsense out of a long, low-probability tail.`),
-          callout('tryit', 'Try it: make Sydney win', `The bars below are a real model’s (hand-authored, but shaped like one) actual next-word distribution after "The capital of Australia is". <b>1.</b> At the defaults, watch how confidently "Canberra" dominates. <b>2.</b> Push temperature to 1.5–2.0: "Sydney" — the classic wrong answer — climbs to a real share of the mass. Press <b>Sample 20×</b> a few times and watch it occasionally win outright. <b>3.</b> Pull temperature back to 1 and instead lower top-p to 0.6 or top-k to 2: notice the tail (Perth, actually, known…) disappears even though Sydney is still very much alive. <b>4.</b> Set temperature to 0: every sample is Canberra, every time, and P(Sydney) reads 0%. This is the mechanical answer to "why does it sometimes say the wrong city": nothing is broken, a real probability was drawn.`),
-          samplingPlayground(),
-          p(`One wrinkle: temperature 0 is <i>not</i> a guarantee of bit-identical output across machines. Floating-point addition is not associative — (a + b) + c can differ from a + (b + c) in its last decimal place — and a GPU sums each layer's millions of terms in whatever order its threads finish, which depends on batch size and hardware. Usually invisible, but when two logits sit closer than that rounding error, the "top" token flips, and one flip early on cascades into a different reply. Greedy decoding is deterministic <i>for one program on one machine with one fixed batch</i> — not a property of the model itself.`),
+          p(`One wrinkle: temperature 0 is <i>not</i> a guarantee of bit-identical output across machines. Floating-point addition is not associative — (a + b) + c can differ from a + (b + c) in its last decimal place — and a GPU sums each layer's millions of terms in whatever order its threads finish, which depends on batch size and hardware.`),
+          p(` Usually invisible, but when two logits sit closer than that rounding error, the "top" token flips, and one flip early on cascades into a different reply. Greedy decoding is deterministic <i>for one program on one machine with one fixed batch</i> — not a property of the model itself.`),
         ),
 
         section('Serving a model: the KV cache and the price of a long context',
           p(`Generating a reply happens in two phases. <em>Prefill</em> reads your whole prompt at once — every token processed in one big, parallel matrix multiplication — so a long prompt is "digested" almost instantly. <em>Decode</em> is what follows: the reply is produced one token at a time, each new token depending on every token before it, so the same computation repeats, single-file, for as long as the reply runs. Decode, not prefill, is why a long answer visibly takes time.`),
-          p(`Naively, producing token 500 would mean recomputing attention over all 499 tokens before it from scratch — and token 501 over 500, redoing nearly all of the same work every step. The <em>KV cache</em> avoids that: every layer stores the Key and Value vectors it computes for each token, once, and reuses them for every later step; decode then only computes one new token's own Key/Value pair. That reuse is what makes generation feel roughly linear in speed — but the cache is memory, and it grows with every token kept around.`),
+          p(`Naively, producing token 500 would mean recomputing attention over all 499 tokens before it from scratch — and token 501 over 500, redoing nearly all of the same work every step.`),
+          p(` The <em>KV cache</em> avoids that: every layer stores the Key and Value vectors it computes for each token, once, and reuses them for every later step; decode then only computes one new token's own Key/Value pair. That reuse is what makes generation feel roughly linear in speed — but the cache is memory, and it grows with every token kept around.`),
           p(`Its size is roughly <code class="inline">2 × layers × d<sub>model</sub> × tokens × batch × bytes-per-value</code> (2 for Key and Value). A 7B-shaped model — 32 layers, d<sub>model</sub> = 4096, fp16 — at 8,000 tokens: 2×32×4096×8000×1×2 ≈ 4.2 billion bytes, about <b>4 GB</b> of cache. Stretch to 128,000 tokens (16× longer) and the cache grows 16× too, to roughly <b>67 GB</b> — most of an H100's 80 GB, before the model's own ~14 GB of weights even load. Long context is a standing memory bill, multiplied by every concurrent conversation.`),
           p(`Several tricks push that bill down:`),
           ul([
@@ -429,11 +619,19 @@
 
         section('Context windows and the "lost in the middle" effect',
           p(`The <em>context window</em> is the maximum number of tokens — prompt, reply, instructions, everything — the model attends to at once; anything outside it doesn't exist to the model. Frontier models in 2026 advertise windows from 128,000 tokens to well over a million, but a bigger window is not the same as using every part of it equally well.`),
-          p(`Liu et al. tested this in 2023 ("Lost in the Middle"): they placed the answer to a question at different positions inside a long context and measured how often models found it. Accuracy was highest with the answer at the very start or end, and dropped noticeably in the middle — a U-shaped curve, echoing how humans recall a list best from its beginning and end. Doubling the window doesn't double how much of it gets reliably used; mostly it means more middle to get lost in.`),
+          p(`Liu et al. tested this in 2023 ("Lost in the Middle"): they placed the answer to a question at different positions inside a long context and measured how often models found it. Accuracy was highest with the answer at the very start or end, and dropped noticeably in the middle — a U-shaped curve, echoing how humans recall a list best from its beginning and end.`),
+          p(` Doubling the window doesn't double how much of it gets reliably used; mostly it means more middle to get lost in.`),
+          callout('tryit', '🖐 Try this — bury the answer and watch recall fall',
+            `<b>1.</b> Press <b>put it first</b>, then <b>put it last</b>. Both are found reliably.<br>
+             <b>2.</b> Press <b>put it in the middle</b> and read the drop. <b>Nothing changed except where the text sat.</b><br>
+             <b>3.</b> Now drag <b>documents in the context</b> from 5 up to 100 with the answer still in the middle, and watch the penalty deepen.<br>
+             <b>4.</b> This is why a retrieval system puts its best match first or last, rather than wherever it happened to rank.`),
+          lostInMiddle(),
         ),
 
         section('Prompting: instructions without touching a weight',
-          p(`Everything fed to the model before it generates is the <em>prompt</em>, and shaping it changes behaviour enormously with no retraining. A <em>system prompt</em> sets persistent instructions and persona up front ("You are a concise, technical reviewer…"). <em>Few-shot prompting</em> shows two or three worked examples before asking for a new one — pattern-matching a format the model already knows. <em>Chain-of-thought</em> prompting just asks it to reason step by step first; since each token is conditioned on everything written so far, those intermediate steps give the model more of its own reasoning to build the final answer on, which measurably helps multi-step problems.`),
+          p(`Everything fed to the model before it generates is the <em>prompt</em>, and shaping it changes behaviour enormously with no retraining. A <em>system prompt</em> sets persistent instructions and persona up front ("You are a concise, technical reviewer…"). <em>Few-shot prompting</em> shows two or three worked examples before asking for a new one — pattern-matching a format the model already knows.`),
+          p(` <em>Chain-of-thought</em> prompting just asks it to reason step by step first; since each token is conditioned on everything written so far, those intermediate steps give the model more of its own reasoning to build the final answer on, which measurably helps multi-step problems.`),
         ),
 
         section('Retrieval-augmented generation: giving a frozen model fresh facts',
@@ -444,13 +642,16 @@
         ),
 
         section('Tool use: letting the model ask for something real',
-          p(`<em>Function calling</em> (tool use) lets a model do more than talk. Instead of a normal reply, it emits a structured request — typically JSON naming a tool and its arguments, e.g. <code class="inline">{"tool": "get_weather", "args": {"city": "Canberra"}}</code>. The model was trained to produce this shape when a tool would help; it never executes anything itself. A surrounding <em>harness</em> parses the call, actually runs the function (hits an API, reads a file), and feeds the result back in as ordinary tokens in the context. The model keeps generating, now conditioned on real information it couldn't have had beforehand — that loop is the entire foundation of every agent.`),
+          p(`<em>Function calling</em> (tool use) lets a model do more than talk. Instead of a normal reply, it emits a structured request — typically JSON naming a tool and its arguments, e.g. <code class="inline">{"tool": "get_weather", "args": {"city": "Canberra"}}</code>. The model was trained to produce this shape when a tool would help; <b>it never executes anything itself</b>.`),
+          p(` A surrounding <em>harness</em> parses the call, actually runs the function (hits an API, reads a file), and feeds the result back in as ordinary tokens in the context. The model keeps generating, now conditioned on real information it couldn't have had beforehand — that loop is the entire foundation of every agent.`),
         ),
 
         section('Agents: think, act, observe, repeat',
-          p(`An <em>agent</em> is a model wrapped in a loop: <b>think</b> (reason about what to do next), <b>act</b> (emit a tool call), <b>observe</b> (read the result back into context), repeat until the task is done or a limit is hit. Nothing about the model differs from chapter 11; the harness now keeps handing it the consequences of its own actions, turning a system that predicts one reply at a time into one that can edit sixteen files, run the tests, read the failure, and try again — unsupervised.`),
+          p(`An <em>agent</em> is a model wrapped in a loop: <b>think</b> (reason about what to do next), <b>act</b> (emit a tool call), <b>observe</b> (read the result back into context), repeat until the task is done or a limit is hit.`),
+          p(` Nothing about the model differs from chapter 11; the harness now keeps handing it the consequences of its own actions, turning a system that predicts one reply at a time into one that can edit sixteen files, run the tests, read the failure, and try again — unsupervised.`),
           p(`Coding agents (Claude Code, Cursor) run exactly this loop over a codebase: read, patch, test, read the output, repeat. <em>Computer use</em> runs the same loop over a whole screen — shown a screenshot, the model emits a click or keystroke as its "tool call" and observes the resulting screenshot, operating software that was never given an API. For a long time every framework wired models to tools its own bespoke way; <em>MCP, the Model Context Protocol</em> (below), standardises that connection.`),
-          p(`Long runs fail in characteristic ways. Errors <em>compound</em>: a small misreading at step 3 becomes a wrong assumption at step 30, and the model rarely notices, trusting its own earlier reasoning almost as much as a fresh tool result. Context <em>bloats</em>: every thought, call and result stays in the transcript, pushing the original instructions toward the "lost in the middle" zone. Both push toward real <em>memory</em> — a persistent store outside the window — and toward <em>multi-agent</em> designs, where a manager delegates narrow sub-tasks to fresh, small-context sub-agents instead of one context growing without bound.`),
+          p(`Long runs fail in characteristic ways. Errors <em>compound</em>: a small misreading at step 3 becomes a wrong assumption at step 30, and the model rarely notices, trusting its own earlier reasoning almost as much as a fresh tool result.`),
+          p(` Context <em>bloats</em>: every thought, call and result stays in the transcript, pushing the original instructions toward the "lost in the middle" zone. Both push toward real <em>memory</em> — a persistent store outside the window — and toward <em>multi-agent</em> designs, where a manager delegates narrow sub-tasks to fresh, small-context sub-agents instead of one context growing without bound.`),
           callout('tryit', 'Try it: pull the plug on tools', `Press <b>Step</b> to watch the agent work through fixing a bug, one turn at a time, with the token count climbing on a small illustrative context window. Then click <b>Tools: ON</b> to turn it off and press <b>Step</b> again: same task, same confident tone — but every claim about the file, the fix, and the test result past step one is simply invented. Nothing in the model's <i>language</i> tells you which mode you're in; only the presence of a real read/run does.`),
           agentSimulator(),
         ),
@@ -460,12 +661,20 @@
         callout('example', 'Where this is already running', `Perplexity and ChatGPT's browsing mode are RAG: search first, answer grounded in what was found, citations included. Siri and Alexa's weather answers are function calling: a structured request to a weather service, the result read back as words. Claude Code and Cursor run the full agent loop over a real repository — reading, editing, testing, repeating — and Anthropic's computer-use demos run the identical loop over a screenshot instead of a file tree, filling out forms and navigating apps with no dedicated API at all.`),
 
         section('Beyond text: multimodality and structured output',
-          p(`The same next-token machinery generalises past words. An image is cut into a grid of small square <em>patches</em> (commonly 16×16 pixels), each embedded into a vector exactly like a word token — the model attends across patches and words identically, as one long mixed sequence. Audio is typically chopped into short time windows and mapped onto a learned vocabulary of audio "tokens", or transcribed to text first. Same trick that made language models general in the first place: turn whatever the input is into a sequence of vectors, and let the transformer do what it already does.`),
+          p(`The same next-token machinery generalises past words. An image is cut into a grid of small square <em>patches</em> (commonly 16×16 pixels), each embedded into a vector exactly like a word token — the model attends across patches and words identically, as one long mixed sequence.`),
+          p(` Audio is typically chopped into short time windows and mapped onto a learned vocabulary of audio "tokens", or transcribed to text first. Same trick that made language models general in the first place: turn whatever the input is into a sequence of vectors, and let the transformer do what it already does.`),
           p(`<em>Structured output</em> forces a reply into a strict format — JSON matching a schema, say — not by asking politely but by constraining the sampler: at each step, only tokens that keep the output validly formed are allowed into the softmax at all. That is what lets an agent's tool calls, and a developer's API responses, be parsed programmatically instead of hoping the model got the punctuation right.`),
         ),
 
         section('The economics: tokens per second, dollars per million, and caching',
-          p(`Every property above has a price. Providers bill per token — dollars per million input and output tokens, output usually costlier since decode is slower than prefill — and speed is quoted in tokens per second. <em>Prompt caching</em> reuses the KV cache for a prefix sent repeatedly (a system prompt, a shared document), so the expensive prefill is paid once and later calls reusing it pay only a fraction. Quantization, speculative decoding, MoE and caching all exist for the same reason: inference runs trillions of times a day, and that is where the compute bill lands.`),
+          p(`Every property above has a price. Providers bill per token — dollars per million input and output tokens, output usually costlier since decode is slower than prefill — and speed is quoted in tokens per second. <em>Prompt caching</em> reuses the KV cache for a prefix sent repeatedly (a system prompt, a shared document), so the expensive prefill is paid once and later calls reusing it pay only a fraction.`),
+          p(` Quantization, speculative decoding, MoE and caching all exist for the same reason: inference runs trillions of times a day, and that is where the compute bill lands.`),
+          callout('tryit', '🖐 Try this — price a product before you build it',
+            `<b>1.</b> Read the time bar. Even on a 4,000-token prompt, most of the wall clock is <b>decode</b>, emitted one token at a time.<br>
+             <b>2.</b> Press <b>an agent turn</b>: a 60,000-token prompt and a 200-token reply. An agent resends its whole growing transcript every single step, so this is the shape that actually dominates an agent's bill.<br>
+             <b>3.</b> Now turn <b>prompt caching on</b> and watch both the cost and the prefill time collapse. That one feature is the difference between an agent being viable and not.<br>
+             <b>4.</b> Set <b>calls per day</b> to something like your own product and read the daily figure.`),
+          costLab(),
         ),
 
         section('Hallucination: confident, fluent, and sometimes false',
