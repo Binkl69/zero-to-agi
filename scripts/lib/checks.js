@@ -60,7 +60,22 @@ function checkFrame(ops, W, H) {
     const b = visibleBox(op);
     if (!b) continue;
     op.vis = b;
-    if (op.kind === 'text' && op.alpha >= VISIBLE) texts.push({ op, b, backedBy: -1 });
+    if (op.kind === 'text' && op.alpha >= VISIBLE) {
+      texts.push({ op, b, backedBy: -1 });
+      /* A label the reader can read is a claim the course is making. These
+         spellings are never a claim anyone meant to make. */
+      const bad = op.str.match(/NaN|Infinity|undefined|\bnull\b|\[object Object\]/);
+      /* chapter 5 legitimately writes "symptom: shoots to NaN" in its prose, so
+         only short, value-shaped labels count — and [object Object] never is */
+      if (bad && (op.str.trim().split(/\s+/).length <= 3 || bad[0] === '[object Object]')) {
+        add('bad-value', 'a label reads ' + JSON.stringify(op.str.slice(0, 60)) + ' — ' + bad[0] + ' reached the screen');
+      }
+      /* A label mostly eaten by a clip is a label nobody can read. */
+      if (op.clip && area(op.box) > 0 && area(b) / area(op.box) < 0.6) {
+        add('clipped-text', JSON.stringify(op.str.slice(0, 46)) + ' is '
+          + r0(100 - 100 * area(b) / area(op.box)) + '% cut off by the clip region around it');
+      }
+    }
     if (op.kind === 'frame' && area(b) > 9000) frames.push(b);
     /* an opaque block hides what is under it: labels on badges and bars are
        normal, and without this every one of them would be reported */

@@ -1,4 +1,14 @@
 {
+  "name": "zero-to-agi",
+  "private": true,
+  "description": "An interactive course from first principles to the frontier. Static site, no build step.",
+  "scripts": {
+    "test": "node scripts/smoke.js && node scripts/paint.js",
+    "smoke": "node scripts/smoke.js",
+    "paint": "node scripts/paint.js",
+    "render": "node scripts/render-check.js",
+    "shots": "node scripts/render-check.js --shots"
+  },
   "devDependencies": {
     "playwright-core": "^1.63.0"
   }
