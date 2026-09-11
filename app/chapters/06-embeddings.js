@@ -102,12 +102,35 @@
     const a2 = topAxis(X2);
     return { mean, a1, a2 };
   }
-  const PROJ = pca2(WORDS.map(w => w.v));
+  /* Which words PCA is fitted to is not a detail — it decides what the picture
+     can show. Fitted to all 36 words, the two directions of greatest spread are
+     "what kind of thing is this" and "city or country", and gender lands in a
+     third direction the screen does not have: king and queen then print on the
+     same pixel and the analogy this chapter is built on becomes invisible. The
+     famous word2vec figures are drawn from a handful of related words for
+     exactly this reason, so the map lets the reader choose the family and
+     refits. That choice is the lesson, not a workaround. */
+  const FAMILIES = {
+    people: { label: 'people & royalty', has: (w) => w.c === 'people' },
+    place: { label: 'countries & capitals', has: (w) => w.c === 'place' },
+    things: { label: 'animals, food & vehicles', has: (w) => w.c === 'animal' || w.c === 'food' || w.c === 'vehicle' },
+    all: { label: 'all 36 words at once', has: () => true },
+  };
+  let PROJ = null;
   function project(v) {
     const c = v.map((x, i) => x - PROJ.mean[i]);
     return { x: dot(c, PROJ.a1), y: dot(c, PROJ.a2) };
   }
-  WORDS.forEach(w => { const p = project(w.v); w.px = p.x; w.py = p.y; });
+  function refit(fam) {
+    const sub = WORDS.filter(FAMILIES[fam].has);
+    PROJ = pca2(sub.map(w => w.v));
+    /* scale so the fitted family fills a comparable area whichever one it is */
+    let m = 0;
+    for (const w of sub) { const p = project(w.v); m = Math.max(m, Math.abs(p.x), Math.abs(p.y)); }
+    const k = m > 1e-9 ? 1 / m : 1;
+    WORDS.forEach(w => { const p = project(w.v); w.px = p.x * k; w.py = p.y * k; });
+  }
+  refit('people');
 
   ZTA.registerChapter({
     id: '06-embeddings',
@@ -280,15 +303,40 @@
 
     const readout = ctx.readout();
     const PRESETS = [
-      { label: 'king − man + woman', a: 'king', b: 'man', c: 'woman' },
-      { label: 'Paris − France + Italy', a: 'Paris', b: 'France', c: 'Italy' },
-      { label: 'prince − boy + girl', a: 'prince', b: 'boy', c: 'girl' },
-      { label: 'Tokyo − Japan + Germany', a: 'Tokyo', b: 'Japan', c: 'Germany' },
+      { label: 'king − man + woman', a: 'king', b: 'man', c: 'woman', fam: 'people' },
+      { label: 'Paris − France + Italy', a: 'Paris', b: 'France', c: 'Italy', fam: 'place' },
+      { label: 'prince − boy + girl', a: 'prince', b: 'boy', c: 'girl', fam: 'people' },
+      { label: 'Tokyo − Japan + Germany', a: 'Tokyo', b: 'Japan', c: 'Germany', fam: 'place' },
     ];
+    let fam = 'people';
+    const famSel = ctx.select({
+      label: 'fit the map to',
+      options: Object.keys(FAMILIES).map(k => ({ value: k, label: FAMILIES[k].label })),
+      value: 'people',
+      onChange: (v) => { fam = v; refit(fam); compute(); fitView(); },
+    });
+    const shown = () => WORDS.filter(w => FAMILIES[fam].has(w)
+      || (result && (w === result.a || w === result.b || w === result.c || w === result.best)));
+    /* Refitting changes the units of the whole map, so the view has to be
+       refitted too or the cloud ends up squashed into a corner of the canvas.
+       The analogy's own result point is included, so it can never land off the
+       top of the picture. */
+    function fitView() {
+      const pts = shown().map(w => ({ x: w.px, y: w.py }));
+      if (result) pts.push({ x: result.px, y: result.py });
+      if (!pts.length) return;
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      for (const p of pts) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+      const sxSpan = Math.max(1e-6, x1 - x0), sySpan = Math.max(1e-6, y1 - y0);
+      scale = Math.max(40, Math.min(600, Math.min((W - 220) / sxSpan, (H - 150) / sySpan)));
+      ox = W / 2 - (x0 + x1) / 2 * scale;
+      oy = H / 2 + (y0 + y1) / 2 * scale;
+    }
     const names = WORDS.map(w => w.w).sort();
-    const selA = ctx.select({ label: 'A', options: names, value: 'king', onChange: () => compute() });
-    const selB = ctx.select({ label: '− B', options: names, value: 'man', onChange: () => compute() });
-    const selC = ctx.select({ label: '+ C', options: names, value: 'woman', onChange: () => compute() });
+    const recompute = () => { compute(); ensureVisible(); };
+    const selA = ctx.select({ label: 'A', options: names, value: 'king', onChange: recompute });
+    const selB = ctx.select({ label: '− B', options: names, value: 'man', onChange: recompute });
+    const selC = ctx.select({ label: '+ C', options: names, value: 'woman', onChange: recompute });
     const presetSel = ctx.select({
       label: 'preset analogy',
       options: PRESETS.map((p, i) => ({ value: String(i), label: p.label })),
@@ -296,7 +344,8 @@
       onChange: (v) => {
         const p = PRESETS[+v] || PRESETS[0];
         setSel(selA, p.a); setSel(selB, p.b); setSel(selC, p.c);
-        compute();
+        if (p.fam && p.fam !== fam) { fam = p.fam; setSel(famSel, fam); refit(fam); }
+        compute(); fitView();
       },
     });
     function setSel(wrap, val) {
@@ -325,6 +374,15 @@
       });
     }
 
+    /* Changing A, B or C can put the result outside a view the reader panned to.
+       Refit only when something actually fell off the picture, so deliberate
+       panning and zooming survive. */
+    function ensureVisible() {
+      const pts = shown().map(w => toScreen(w.px, w.py));
+      if (result) pts.push(toScreen(result.px, result.py));
+      if (pts.some(p => p.x < 16 || p.x > W - 16 || p.y < 16 || p.y > H - 16)) fitView();
+    }
+
     function nearestTo(word, k) {
       return WORDS.filter(w => w !== word)
         .map(w => ({ w, s: cosine(word.v, w.v) }))
@@ -345,7 +403,7 @@
       }
       // hover detection
       let found = null, bestD = 18;
-      for (const w of WORDS) {
+      for (const w of shown()) {
         const s = toScreen(w.px, w.py);
         const d = Math.hypot(s.x - p.x, s.y - p.y);
         if (d < bestD) { bestD = d; found = w; }
@@ -370,6 +428,7 @@
       g.strokeStyle = 'rgba(148,163,184,0.12)'; g.lineWidth = 1;
       g.beginPath(); g.moveTo(0, oy); g.lineTo(W, oy); g.moveTo(ox, 0); g.lineTo(ox, H); g.stroke();
 
+      const place = labelPlacer();
       // arithmetic arrows
       if (result) {
         anim = Math.min(1, anim + 0.03);
@@ -383,8 +442,8 @@
         const origin = toScreen(0, 0);
         const stepB = { x: pa.x - (pb.x - origin.x), y: pa.y - (pb.y - origin.y) };
         const t1 = Math.min(1, anim * 2), t2 = Math.max(0, anim * 2 - 1);
-        arrow(g, pa.x, pa.y, pa.x + (stepB.x - pa.x) * t1, pa.y + (stepB.y - pa.y) * t1, C.danger, '− ' + result.b.w);
-        if (t2 > 0) arrow(g, stepB.x, stepB.y, stepB.x + (pr.x - stepB.x) * t2, stepB.y + (pr.y - stepB.y) * t2, C.green, '+ ' + result.c.w);
+        arrow(g, pa.x, pa.y, pa.x + (stepB.x - pa.x) * t1, pa.y + (stepB.y - pa.y) * t1, C.danger, '− ' + result.b.w, place);
+        if (t2 > 0) arrow(g, stepB.x, stepB.y, stepB.x + (pr.x - stepB.x) * t2, stepB.y + (pr.y - stepB.y) * t2, C.green, '+ ' + result.c.w, place);
         if (anim >= 1 && result.best) {
           const pbest = toScreen(result.best.px, result.best.py);
           g.strokeStyle = C.warn; g.lineWidth = 2; g.setLineDash([4, 4]);
@@ -404,23 +463,39 @@
           g.strokeStyle = 'rgba(56,217,169,' + Math.max(0.12, n.s * 0.55) + ')';
           g.lineWidth = 1 + Math.max(0, n.s) * 2;
           g.beginPath(); g.moveTo(hs.x, hs.y); g.lineTo(ns.x, ns.y); g.stroke();
+          place.avoid(hs.x, hs.y, ns.x, ns.y);
         }
       }
 
       // words
-      g.font = '12px Inter, system-ui, sans-serif';
       g.textAlign = 'center'; g.textBaseline = 'middle';
-      for (const w of WORDS) {
+      const vis = shown().filter(w => { const s = toScreen(w.px, w.py); return s.x > -40 && s.x < W + 40 && s.y > -20 && s.y < H + 20; });
+      /* dots first, so no label is ever painted under one */
+      for (const w of vis) {
         const s = toScreen(w.px, w.py);
-        if (s.x < -60 || s.x > W + 60 || s.y < -30 || s.y > H + 30) continue;
-        const isHot = hovered === w;
-        const isRes = result && result.best === w && anim >= 1;
-        const col = CAT_COLOR[w.c] || C.muted;
-        g.fillStyle = col;
+        const isHot = hovered === w, isRes = result && result.best === w && anim >= 1;
+        g.fillStyle = CAT_COLOR[w.c] || C.muted;
         g.beginPath(); g.arc(s.x, s.y, isHot || isRes ? 5 : 3, 0, Math.PI * 2); g.fill();
-        g.fillStyle = isHot || isRes ? '#ffffff' : 'rgba(230,235,245,0.72)';
+      }
+      /* then labels, the important ones first so they win the good positions */
+      const order = vis.slice().sort((a, b) => rank(b) - rank(a));
+      function rank(w) {
+        if (hovered === w) return 4;
+        if (result && (w === result.best || w === result.a || w === result.b || w === result.c)) return 3;
+        return FAMILIES[fam].has(w) ? 1 : 0;
+      }
+      for (const w of order) {
+        const s = toScreen(w.px, w.py);
+        const isHot = hovered === w, isRes = result && result.best === w && anim >= 1;
         g.font = (isHot || isRes ? '600 13px' : '12px') + ' Inter, system-ui, sans-serif';
-        g.fillText(w.w, s.x, s.y - 12);
+        place(g, w.w, s.x, s.y, (lx, ly, far) => {
+          if (far) {
+            g.strokeStyle = 'rgba(148,163,184,0.35)'; g.lineWidth = 1;
+            g.beginPath(); g.moveTo(s.x, s.y); g.lineTo(lx, ly + (ly > s.y ? -7 : 7)); g.stroke();
+          }
+          g.fillStyle = isHot || isRes ? '#ffffff' : 'rgba(230,235,245,0.78)';
+          g.fillText(w.w, lx, ly);
+        });
       }
 
       // hover panel
@@ -457,19 +532,60 @@
 
     ctx.loop(draw);
     compute();
+    fitView();
 
     return ctx.figure(cv,
-      'A hand-built 10-dimensional embedding space, projected to 2-D with PCA computed in your browser. Colours mark categories for your benefit only; the model of this space has no idea they exist. The analogy result excludes the three input words, which is how the original word2vec evaluations were scored.',
-      [presetSel, selA, selB, selC,
-       ctx.button('Run arithmetic', () => compute(), 'primary'),
-       ctx.button('Reset view', () => { scale = 150; ox = W / 2; oy = H / 2; })],
+      'A hand-built 10-dimensional embedding space, projected to 2-D with PCA computed in your browser. <b>Change what the map is fitted to and watch the whole picture reorganise.</b> PCA keeps the two directions along which the chosen words spread out most and throws the other eight away, so fitting it to all 36 words buries gender entirely — king and queen land on the same pixel — while fitting it to the people puts gender on an axis and the classic analogy becomes something you can see. Nothing about the vectors changed. Colours mark categories for your benefit only; the space itself has no idea they exist. The analogy excludes the three input words, which is how the original word2vec evaluations were scored.',
+      [famSel, presetSel, selA, selB, selC,
+       ctx.button('Run arithmetic', () => recompute(), 'primary'),
+       ctx.button('Reset view', () => fitView())],
       readout);
   }
 
-  function arrow(g, x1, y1, x2, y2, color, label) {
+  /* Place a label near its dot without ever printing it on a label already
+     placed. The dot stays at the true position — only the annotation moves, and
+     a leader line is drawn when it has to move far. Two words at the same point
+     still look like one point, which is the honest picture. */
+  function segCrossesBox(a, b, r) {
+    let t0 = 0, t1 = 1;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const p = [-dx, dx, -dy, dy], q = [a.x - r.x0, r.x1 - a.x, a.y - r.y0, r.y1 - a.y];
+    for (let i = 0; i < 4; i++) {
+      if (p[i] === 0) { if (q[i] < 0) return false; continue; }
+      const t = q[i] / p[i];
+      if (p[i] < 0) { if (t > t1) return false; if (t > t0) t0 = t; }
+      else { if (t < t0) return false; if (t < t1) t1 = t; }
+    }
+    return t1 > t0;
+  }
+  function labelPlacer() {
+    const placed = [], lines = [];
+    function place(g, text, x, y, draw) {
+      const w = g.measureText(text).width, hh = 13;
+      const OFFS = [[0, -12], [0, 15], [0, -25], [0, 28], [w / 2 + 10, 1], [-w / 2 - 10, 1],
+      [0, -38], [0, 41], [w / 2 + 10, -14], [-w / 2 - 10, -14], [w / 2 + 10, 16], [-w / 2 - 10, 16],
+      [w / 2 + 10, -28], [-w / 2 - 10, -28], [w / 2 + 10, 30], [-w / 2 - 10, 30]];
+      for (const [dx, dy] of OFFS) {
+        const b = { x0: x + dx - w / 2 - 1, y0: y + dy - hh / 2, x1: x + dx + w / 2 + 1, y1: y + dy + hh / 2 };
+        if (placed.some(p => p.x0 < b.x1 && b.x0 < p.x1 && p.y0 < b.y1 && b.y0 < p.y1)) continue;
+        if (lines.some(L => segCrossesBox(L[0], L[1], b))) continue;
+        placed.push(b);
+        draw(x + dx, y + dy, Math.hypot(dx, dy) > 20);
+        return true;
+      }
+      return false;   /* nowhere free: better an unlabelled dot than a smear */
+    }
+    /* Lines registered here are avoided as well as other labels, so an arrow
+       drawn across the map never ends up striking through a word. */
+    place.avoid = (x1, y1, x2, y2) => { lines.push([{ x: x1, y: y1 }, { x: x2, y: y2 }]); };
+    return place;
+  }
+
+  function arrow(g, x1, y1, x2, y2, color, label, place) {
     if (!isFinite(x1) || !isFinite(x2)) return;
     g.strokeStyle = color; g.fillStyle = color; g.lineWidth = 2;
     g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
+    if (place) place.avoid(x1, y1, x2, y2);
     const a = Math.atan2(y2 - y1, x2 - x1), len = Math.hypot(x2 - x1, y2 - y1);
     if (len > 8) {
       g.beginPath();
@@ -480,7 +596,17 @@
       if (label) {
         g.font = '600 11px Inter, system-ui, sans-serif';
         g.textAlign = 'center'; g.textBaseline = 'middle';
-        g.fillText(label, (x1 + x2) / 2, (y1 + y2) / 2 - 10);
+        const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+        const put = (lx, ly) => { g.fillStyle = color; g.fillText(label, lx, ly); };
+        /* Offset the label clear of its OWN arrow, perpendicular to it: the
+           exact distance at which an axis-aligned box of this size stops
+           touching a line at this angle. Straight up would work for a flat
+           arrow and sit right on top of a steep one. */
+        const lw = g.measureText(label).width;
+        const d = Math.abs(Math.sin(a)) * (lw / 2) + Math.abs(Math.cos(a)) * 7 + 5;
+        const up = Math.cos(a) > 0 ? -1 : 1;
+        const ax = mx + -Math.sin(a) * d * up, ay = my + Math.cos(a) * d * up;
+        if (place) place(g, label, ax, ay, put); else put(ax, ay);
       }
     }
   }
@@ -541,10 +667,20 @@
       const sa = toS(a), sb = toS(b);
       arrow(g, cx, cy, sa.x, sa.y, C.accent, '');
       arrow(g, cx, cy, sb.x, sb.y, C.green, '');
+      /* "Make them identical" puts b exactly on a, which is the point of that
+         button — so say so, rather than stacking two letters on one pixel. */
+      const coincide = Math.hypot(sa.x - sb.x, sa.y - sb.y) < 9;
       g.fillStyle = C.accent; g.beginPath(); g.arc(sa.x, sa.y, 7, 0, Math.PI * 2); g.fill();
-      g.fillStyle = C.green;  g.beginPath(); g.arc(sb.x, sb.y, 7, 0, Math.PI * 2); g.fill();
+      if (!coincide) { g.fillStyle = C.green; g.beginPath(); g.arc(sb.x, sb.y, 7, 0, Math.PI * 2); g.fill(); }
       g.font = '600 13px Inter, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillStyle = '#0b0f17'; g.fillText('a', sa.x, sa.y); g.fillText('b', sb.x, sb.y);
+      g.fillStyle = '#0b0f17'; g.fillText('a', sa.x, sa.y);
+      if (!coincide) g.fillText('b', sb.x, sb.y);
+      else {
+        g.font = '600 12px Inter, system-ui, sans-serif';
+        g.fillStyle = C.green; g.textAlign = 'left';
+        g.fillText('b is exactly on top of a', sa.x + 14, sa.y - 14);
+        g.textAlign = 'center';
+      }
 
       const cs = cosine([a.x, a.y], [b.x, b.y]);
       const deg = Math.acos(Math.max(-1, Math.min(1, cs))) * 180 / Math.PI;
@@ -685,15 +821,31 @@
       const sy = (y) => H - 30 - (y - minY) / Math.max(1e-6, maxY - minY) * (H - 60);
 
       g.font = '11px Inter, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      /* Words converge on top of each other as training succeeds — that is the
+         point of the demo — so the dots stay where the maths puts them and only
+         the labels step aside. The grouped words get first pick of the free
+         positions, since they are the ones the reader is told to watch. */
+      const pts = [];
       for (let i = 0; i < V; i++) {
-        const w = vocab[i], grp = GROUP[w];
         const x = sx(Win[i][0]), y = sy(Win[i][1]);
         if (!isFinite(x) || !isFinite(y)) continue;
-        g.fillStyle = grp ? GC[grp] : 'rgba(148,163,184,0.55)';
-        g.beginPath(); g.arc(x, y, grp ? 4 : 2.5, 0, Math.PI * 2); g.fill();
-        g.font = (grp ? '600 12px' : '10px') + ' Inter, system-ui, sans-serif';
-        g.fillStyle = grp ? GC[grp] : 'rgba(148,163,184,0.5)';
-        g.fillText(w, x, y - 11);
+        pts.push({ w: vocab[i], grp: GROUP[vocab[i]], x, y });
+      }
+      for (const p of pts) {
+        g.fillStyle = p.grp ? GC[p.grp] : 'rgba(148,163,184,0.55)';
+        g.beginPath(); g.arc(p.x, p.y, p.grp ? 4 : 2.5, 0, Math.PI * 2); g.fill();
+      }
+      const place = labelPlacer();
+      for (const p of pts.slice().sort((a, b) => (b.grp ? 1 : 0) - (a.grp ? 1 : 0))) {
+        g.font = (p.grp ? '600 12px' : '10px') + ' Inter, system-ui, sans-serif';
+        place(g, p.w, p.x, p.y, (lx, ly, far) => {
+          if (far) {
+            g.strokeStyle = 'rgba(148,163,184,0.3)'; g.lineWidth = 1;
+            g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(lx, ly + (ly > p.y ? -7 : 7)); g.stroke();
+          }
+          g.fillStyle = p.grp ? GC[p.grp] : 'rgba(148,163,184,0.5)';
+          g.fillText(p.w, lx, ly);
+        });
       }
 
       // loss curve panel
@@ -857,7 +1009,7 @@
 
   /* ---------- Interactive: the distributional hypothesis ---------- */
   function buildTesguino(ctx) {
-    const [cv, g] = ctx.canvas(720, 350);
+    const [cv, g] = ctx.canvas(720, 390);
     const C = ctx.colors;
     const FONT = '13px Inter, system-ui, sans-serif';
     const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
@@ -1008,7 +1160,7 @@
 
   /* ---------- Interactive: one word, two meanings, resolved by context ---------- */
   function buildContextBank(ctx) {
-    const [cv, g] = ctx.canvas(720, 360);
+    const [cv, g] = ctx.canvas(720, 396);
     const C = ctx.colors;
     const FONT = '13px Inter, system-ui, sans-serif';
     const MONO = '12px "JetBrains Mono", ui-monospace, monospace';

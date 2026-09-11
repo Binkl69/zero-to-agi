@@ -33,6 +33,11 @@ const arg = (n, d) => { const m = a.find(x => x.startsWith('--' + n + '=')); ret
       el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }));
     });
   }, [figIdx, sl]);
+  const se = arg('select', '');
+  if (se) await page.evaluate(([i, spec]) => {
+    const ss = document.querySelectorAll('.figure')[i - 1].querySelectorAll('select');
+    spec.split(',').forEach(pair => { const [k, v] = pair.split(':'); const el = ss[+k]; if (!el) return; el.selectedIndex = +v; el.dispatchEvent(new Event('change', { bubbles: true })); });
+  }, [figIdx, se]);
   const ck = arg('click', '');
   if (ck) for (const c of ck.split(',')) await page.evaluate(([i, j]) => { const b = document.querySelectorAll('.figure')[i - 1].querySelectorAll('button')[+j]; if (b) b.click(); }, [figIdx, c]);
   await page.waitForTimeout(parseInt(arg('wait', '700'), 10));

@@ -65,6 +65,15 @@ function checkFrame(ops, W, H) {
     /* an opaque block hides what is under it: labels on badges and bars are
        normal, and without this every one of them would be reported */
     if ((op.kind === 'rect' || op.kind === 'shape') && op.alpha >= 0.85) blocks.push({ b, seq: op.seq });
+    /* A solid marker is a backing too: a letter printed in the middle of its own
+       dot is the normal way to label a point, and the line arriving at that dot
+       is behind the marker, not across the letter. Inscribe a box in the circle
+       so only text genuinely inside the disc counts as covered. */
+    if (op.kind === 'dot' && op.alpha >= 0.85) {
+      const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2, r = Math.min(b.x1 - b.x0, b.y1 - b.y0) / 2;
+      const k = r * 0.72;
+      blocks.push({ b: { x0: cx - k, y0: cy - k, x1: cx + k, y1: cy + k }, seq: op.seq });
+    }
     /* a dot or a block off the canvas is a coordinate error. Long lines are
        excluded on purpose: drawing a boundary right across and letting the
        canvas edge trim it is a normal idiom, and where such a line leaves its
@@ -106,9 +115,15 @@ function checkFrame(ops, W, H) {
       const ov = overlapArea(a, b);
       if (!ov) continue;
       const frac = ov / Math.min(area(a), area(b));
-      if (frac < OVERLAP_FRAC) continue;
+      const i2 = intersect(a, b);
+      /* Two labels side by side on the same line collide visibly long before
+         either is 35% covered, so a narrow but full-height intrusion counts
+         too — that is the commonest collision of the lot. */
+      const sameLine = (i2.y1 - i2.y0) > 0.45 * Math.min(a.y1 - a.y0, b.y1 - b.y0);
+      if (frac < OVERLAP_FRAC && !(sameLine && (i2.x1 - i2.x0) > 3)) continue;
       add('text-overlap', JSON.stringify(A.op.str.slice(0, 34)) + ' and ' + JSON.stringify(B.op.str.slice(0, 34))
-        + ' overlap by ' + r0(100 * frac) + '% near (' + r0(a.x0) + ',' + r0(a.y0) + ')');
+        + (frac >= OVERLAP_FRAC ? ' overlap by ' + r0(100 * frac) + '%' : ' collide by ' + r0(i2.x1 - i2.x0) + 'px on the same line')
+        + ' near (' + r0(a.x0) + ',' + r0(a.y0) + ')');
     }
   }
 
