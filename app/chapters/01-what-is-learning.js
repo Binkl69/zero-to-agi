@@ -93,6 +93,44 @@
         ctx.p(`That flailing is exactly what your own program printed in the terminal. The machine is not broken and it is not slow. It is looking for something that does not exist.`),
       ));
 
+      /* ---------- maths beat 2: the rule the machine uses to learn ---------- */
+      root.append(ctx.section('How the machine actually uses those numbers',
+        ctx.p(`Earlier you wrote down how a neuron <b>decides</b>. That is only half of it, and it is the half that does not learn. A pocket calculator can decide. The other half is the rule that <b>changes</b> the numbers when the decision comes out wrong — and it is three lines long.`),
+        ctx.p(`Watch the readout under the trainer while it runs. <b>w₁</b>, <b>w₂</b> and <b>b</b> are the three numbers from the previous section, and they are moving. This is what is moving them.`),
+        ctx.decoder([
+          { sym: 'w', name: 'w', says: 'One of the numbers the machine is allowed to change. There are three here: w₁, w₂ and b.', points: 'the w₁, w₂ and b readouts under the trainer.' },
+          { sym: '←', name: 'becomes', says: 'Not "equals". <b>Replace the old value with this new one.</b> It is an instruction, carried out over and over — a few hundred times a second in the demo you just ran.', points: 'the numbers ticking over as it trains.' },
+          { sym: 'w', name: 'w again', says: 'The value it had a moment ago. Every step builds on the last one; nothing starts fresh.' },
+          '+',
+          { sym: '&eta;', name: 'eta — the learning rate', says: 'How big a shove to give. In this demo it is fixed at <b>0.12</b>: small enough not to overshoot, big enough to get somewhere. Chapter 3 is largely about what happens when you get this number wrong.', points: 'nothing visible — it is the one number you cannot see moving, because it never moves.' },
+          '(',
+          { sym: 'y', name: 'y — the truth', says: 'What the answer <i>should</i> have been for the dot it is looking at right now. 1 or 0.', points: 'the colour of the dot.' },
+          '&minus;',
+          { sym: 'ŷ', name: 'y-hat — the guess', says: 'What the neuron actually said. The little hat means "estimated", and you will see it on every prediction in this course from here on.', points: 'which side of the line that dot currently falls on.' },
+          ')',
+          { sym: 'x', name: 'x — the input', says: 'The measurement itself. This is the clever part: the correction is <b>scaled by the input</b>, so an input that pushed hard toward the wrong answer gets corrected hard, and an input that was near zero barely moves at all.', points: 'how far the dot sits from the origin.' },
+        ], {
+          title: 'w ← w + η (y − ŷ) x',
+          hint: 'Click any symbol. This is the entire learning algorithm — every one of these is something you watched happen.',
+          plain: '"Take what you had. If the truth and the guess disagree, nudge each number a little, in the direction that would have helped, by an amount proportional to how much that input was to blame."',
+        }),
+        ctx.callout('key', '🔑 The bit worth sitting with: (y − ŷ)',
+          `That bracket can only be three things. <b>y − ŷ = 0</b> when the guess was right — and then the whole correction is zero, so <b>nothing changes at all</b>.
+           <b>+1</b> when it said no and should have said yes. <b>−1</b> the other way.<br>
+           So the machine <b>only ever learns from its mistakes</b>. When it is right it does not even pat itself on the back; it does nothing. You can watch this directly: the "last error" line in the readout shows <code class="inline">0 — no change</code> most of the time, and the numbers freeze.<br>
+           The whole of modern AI is a more sophisticated answer to the question buried in that bracket: <b>how wrong were we, and which direction is less wrong?</b>`),
+        ctx.p(`Three things in that rule carry forward without ever changing meaning, so they are worth naming now.`),
+        ctx.ul([
+          `<b>η, the learning rate.</b> Fixed at 0.12 here, and the single most fiddly number in all of machine learning. Chapter 2 lets you set it too high and watch a model explode.`,
+          `<b>ŷ, the prediction.</b> The hat notation is universal. <em>y</em> is truth, <em>ŷ</em> is what the model said.`,
+          `<b>(y − ŷ), the error.</b> Chapter 2 replaces this crude "am I wrong, yes or no" with a smooth number that says <i>how</i> wrong and <i>in which direction</i> — and that one upgrade is what makes it possible to train more than one layer.`,
+        ]),
+        ctx.callout('example', '🌍 This exact rule, in 1958 hardware',
+          `Rosenblatt's Mark I Perceptron ran this update physically. The weights were <b>potentiometers</b> — little variable resistors — and the machine adjusted them with electric motors.
+           When it got an answer wrong, motors turned the dials. <code class="inline">w ← w + η(y − ŷ)x</code> was not a line of code; it was a shaft rotating.<br>
+           The formula you just decoded is old enough to have been implemented in brass and copper, and it is still, in a much-refined form, what is happening inside every model you use today.`),
+      ));
+
       /* ---------- proof ---------- */
       root.append(ctx.section('Proof that it is impossible, not just difficult',
         ctx.p(`Maybe the machine is just bad at searching? Settle it by trying <b>every line there is</b>. Below, the computer sweeps through thousands of lines at every angle and position, and tallies how many get all four dots right.`),
@@ -117,7 +155,7 @@
 
       /* ---------- inside the neuron ---------- */
       root.append(ctx.section('What the neuron is actually doing with numbers',
-        ctx.p(`"Draw a line" is the picture. Here is the arithmetic underneath it, and it is smaller than you would expect. Each input gets multiplied by a <em>weight</em>, the results are added up, a <em>bias</em> is added, and if the total clears zero the neuron fires.`),
+        ctx.p(`You have now met both halves as formulas. Here they are as a machine you can take apart: the same weighted sum from the first maths beat, with the three numbers on sliders instead of on a readout.`),
         ctx.callout('tryit', '🖐 Try this',
           `Move the weight sliders and watch the line in the previous demos rotate. Learning <b>is</b> the search for these three numbers. There is nothing else in there.`),
         buildNeuronAnatomy(ctx),
@@ -672,6 +710,7 @@
     const b = makeBoard(cv, g, C);
     let puzzle = 'AND';
     let w1, w2, bias, cursor, pass, mistakes, lastMistakes, history, acc, running;
+    let lastErr = 0, lastDw1 = 0, lastDw2 = 0, lastDb = 0;   // the most recent correction, for the readout
 
     function reset() {
       w1 = 0.4; w2 = -0.3; bias = 0.1;
@@ -688,11 +727,13 @@
       const p = PTS[cursor], target = labels[cursor];
       const out = fire(p[0], p[1]);
       const err = target - out;
+      lastErr = err;
+      lastDw1 = LR * err * p[0]; lastDw2 = LR * err * p[1]; lastDb = LR * err;
       if (err !== 0) {
         mistakes++;
-        w1 += LR * err * p[0];
-        w2 += LR * err * p[1];
-        bias += LR * err;
+        w1 += lastDw1;
+        w2 += lastDw2;
+        bias += lastDb;
       }
       cursor++;
       if (cursor >= PTS.length) {
@@ -752,7 +793,13 @@
       }
       g.textAlign = 'center'; g.textBaseline = 'middle';
 
-      readout.set({ 'correct': score + ' of 4', 'passes': pass, 'mistakes last pass': lastMistakes == null ? '—' : lastMistakes });
+      readout.set({
+        'correct': score + ' of 4', 'passes': pass,
+        'mistakes last pass': lastMistakes == null ? '—' : lastMistakes,
+        'w₁': w1.toFixed(2), 'w₂': w2.toFixed(2), 'b': bias.toFixed(2),
+        'last error (y − ŷ)': lastErr === 0 ? '0 — no change' : (lastErr > 0 ? '+1' : '−1'),
+        'it just moved w₁ by': lastErr === 0 ? 'nothing' : lastDw1.toFixed(3),
+      });
     });
 
     const playBtn = ctx.button('Train', () => {

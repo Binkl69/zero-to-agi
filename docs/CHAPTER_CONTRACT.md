@@ -95,9 +95,14 @@ paragraph.
 - **Notation after the intuition.** The same rule, applied to maths. A symbol may only appear
   after the reader has already done the thing it describes, and its job is to *name that
   experience*, not to introduce it. **There is no standalone maths chapter and never will be** —
-  a wall of maths is where a reader quits. Instead every chapter carries **one maths beat**:
-  at most one interactive plus one short callout, 3–5 minutes, always attached to something
-  their hands already did. If a beat needs more room than that, it is in the wrong chapter.
+  a wall of maths is where a reader quits. Instead maths arrives in **beats**: a beat is at most
+  one decoder or interactive plus one short callout, 3–5 minutes, always attached to something
+  the reader's hands already did, and always placed immediately after that demo.
+  **One beat per distinct idea, not per chapter** — and beats must be spread apart, never
+  stacked. Two small beats in different halves of a chapter is more sprinkled than one big one,
+  which is the point; two beats back to back is a maths block wearing a disguise.
+  Most chapters need one. Chapter 1 needs two, because deciding and learning are different
+  ideas and a chapter about learning must write down the rule that learns.
   Prefer the statistical framing over the calculus framing wherever both are available.
   See `docs/ROADMAP.md` for which beat belongs to which chapter.
 - **A worked numeric example**, ideally as a live panel where they change the numbers.

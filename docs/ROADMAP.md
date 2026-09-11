@@ -38,7 +38,8 @@ Level 4 with a wall, or end at Level 4 with a clearly marked road to 6. This is 
 done the thing it describes, and its job is to *name that experience*, not to introduce it.
 
 - **No standalone maths chapter.** A maths block is where a reader quits.
-- **One maths beat per chapter**, 3–5 minutes, attached to something their hands already did.
+- **One beat per distinct idea, not per chapter**, 3–5 minutes each, attached to something their
+  hands already did, and spread apart rather than stacked.
 - **Maximum size:** one interactive plus one short callout. If it needs more, it is in the wrong
   chapter or it is not earning its place.
 - Every beat must be reachable by a reader who has done the preceding chapters and nothing else.
@@ -69,6 +70,7 @@ Sequenced so each depends only on earlier ones.
 | Ch | Beat | Names something already done |
 |---|---|---|
 | 01 | coordinates; a line as `w·x + b`; what a weight and a bias are | the line they dragged |
+| 01 | the learning rule `w ← w + η(y − ŷ)x`; η, ŷ, and why error zero means no change | the trainer staggering toward an answer |
 | 02 | derivative = slope; the chain rule = multiply along the chain | the fog demo; the reused ∂L/∂y |
 | 03 | expectation and average; variance; why `−log p` | the U-curve; the loss explorer |
 | 04 | summation notation `Σ`; indices over a grid | the nine filter cells they multiplied |
