@@ -35,6 +35,47 @@
         ctx.p(`If you are reading this before playing, go back and play. It takes twenty seconds and the rest of the chapter will not land otherwise.`),
       );
 
+      /* ---------- the same move, on something that matters ---------- */
+      root.append(ctx.section('Now do it where it counts',
+        ctx.p(`Two switches and a light is a laboratory. Here is the identical move — one line, two handles — on decisions people actually pay for.`),
+        ctx.callout('tryit', '🖐 Try this — and notice what you cannot do',
+          `<b>1.</b> Start on <b>spam</b>. Drag until you are happy, then press <b>Show the best line there is</b> — the demo brute-forces every line there is and tells you the true ceiling.<br>
+           <b>2.</b> That ceiling is <b>91.2%</b>, not 100%. Not because you drag badly: real data overlaps. Some real emails shout, some spam is polite.<br>
+           <b>3.</b> Now move the line so you catch <i>every</i> spam, and watch how many real emails you condemn to the junk folder. <b>There is no setting that zeroes both counts.</b><br>
+           <b>4.</b> Switch to <b>card fraud</b> and try properly. Its ceiling is <b>80.1%</b> — and guessing "genuine" every single time already scores 58.8%. Then read why.`),
+        buildRealData(ctx),
+        ctx.p(`Three lessons arrive at once, and none of them were visible in the toy.`),
+        ctx.p(`<b>Perfect is a property of toys.</b> Four dots split 4 out of 4. A hundred real ones do not — spam tops out at 91.2%, the tumours at 91.7% — and the interesting number stops being "did I win" and becomes "how close to the ceiling am I".`),
+        ctx.p(`<b>Not all mistakes are the same mistake.</b> Letting fraud through costs money. Freezing an honest customer's card at a petrol station costs a customer. The line you pick <i>is</i> that trade-off, and no amount of cleverness removes the choice — it is a business decision wearing a maths costume. Chapter 3 gives it names: precision and recall.`),
+        ctx.p(`<b>And the fraud one really is beyond a line</b>, for exactly the reason puzzle 3 was. Fraud lives at <i>both</i> extremes: tiny "card testing" payments to check a stolen number still works, and one large cash-out. Genuine spending sits in the middle.`),
+        ctx.p(`One line cannot cut both ends off a stick and leave the middle. That is XOR wearing a suit, and it costs real banks real money. Note the ceiling of 80.1% is not obviously terrible until you see that always guessing "genuine" already scores 58.8% — <b>a number can look respectable and still mean the model has learned almost nothing.</b> Chapter 3 makes that trap explicit.`),
+      ));
+
+      /* ---------- maths beat 1: notation for the line they just dragged ---------- */
+      root.append(ctx.section('What you have been doing, written down',
+        ctx.p(`You have now dragged a line perhaps thirty times. There is a standard way to write down what you were adjusting, and you have already built every piece of it by hand.`),
+        ctx.p(`Look at the panel on the right of the demo above, under <b>the line, as three numbers</b>. Those three numbers move as you drag. That is the whole formula, live.`),
+        ctx.decoder([
+          { sym: 'w<sub>1</sub>', name: 'w one', says: 'How much the <b>first</b> thing counts toward a yes. Big number, it matters a lot; near zero, the model has decided it is irrelevant; negative, it counts <i>against</i>.', points: 'the w₁ readout above. Rotate the line and watch it move.' },
+          { sym: 'x<sub>1</sub>', name: 'x one', says: 'The <b>first</b> measurement of the thing in front of you — how many links this particular email has.', points: 'the horizontal position of one dot.' },
+          '·',
+          { sym: 'w<sub>2</sub>', name: 'w two', says: 'Same idea for the second thing. In the spam example, how much SHOUTING counts.', points: 'the w₂ readout above.' },
+          { sym: 'x<sub>2</sub>', name: 'x two', says: 'The second measurement — how much of this email is capitals.', points: 'the vertical position of that same dot.' },
+          '+',
+          { sym: 'b', name: 'b, or "bias"', says: 'How suspicious the model is <b>before it looks at anything</b>. Drag the line further from the origin and this is what changes. It is the thumb on the scale.', points: 'the b readout above.' },
+          '>',
+          { sym: '0', name: 'zero', says: 'The finish line. Above it, the model says yes; below it, no. The line you were dragging is exactly the set of points where this sum comes out to zero — the border between the two verdicts.', points: 'the white line itself.' },
+        ], {
+          title: 'w₁x₁ + w₂x₂ + b > 0',
+          hint: 'Click any symbol. Every one of them is something you have already moved with your hands.',
+          plain: '"Weigh up each thing by how much it matters, add a standing level of suspicion, and if the total clears zero, say yes."',
+        }),
+        ctx.callout('key', '🔑 Two words worth keeping',
+          `A <em>weight</em> is how much one piece of evidence counts. A <em>bias</em> is how far the model leans before any evidence arrives.<br>
+           <b>These two words never change meaning again.</b> A frontier model has a trillion weights and biases. They are these ones, in unimaginable number, each still doing exactly this job — and the whole of training, in every chapter from here, is a search for good values for them.`),
+        ctx.p(`One thing worth noticing: the dot symbol is just multiplication, and the whole left-hand side is "multiply each measurement by its importance, then add everything up". You will meet that pattern so often it gets its own name in chapter 6 — the <em>dot product</em> — and it is already the single most common operation in all of AI.`),
+      ));
+
       /* ---------- what just happened ---------- */
       root.append(ctx.section('What you just were',
         ctx.p(`You were a <em>neuron</em>. Not a metaphor for one, the actual thing. An artificial neuron has exactly one move available to it: <b>draw a straight line and call one side "yes" and the other side "no"</b>. That is its entire repertoire.`),
@@ -173,6 +214,283 @@
   /* ==================================================================
      Shared drawing helpers for the square-with-four-dots demos
      ================================================================== */
+
+  function wrapLines(gc, text, maxW) {
+    const words = String(text).split(' '); const out = []; let line = '';
+    for (const w of words) {
+      const t = line ? line + ' ' + w : w;
+      if (line && gc.measureText(t).width > maxW) { out.push(line); line = w; } else line = t;
+    }
+    if (line) out.push(line);
+    return out;
+  }
+  function wrapText(gc, text, x, y, maxW, lh) {
+    wrapLines(gc, text, maxW).forEach((ln, i) => gc.fillText(ln, x, y + i * lh));
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Interactive: the same line, on decisions that actually matter.      */
+  /* Three real-shaped datasets. Two a line handles well. One it cannot, */
+  /* for a reason that happens in actual businesses rather than in a     */
+  /* logic puzzle.                                                       */
+  /* ------------------------------------------------------------------ */
+  function seeded(n) {
+    let a = n >>> 0;
+    return () => { a += 0x6D2B79F5; let t = a; t = Math.imul(t ^ (t >>> 15), 1 | t); t ^= t + Math.imul(t ^ (t >>> 7), 61 | t); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  function gaussPair(r) {
+    let u = 0, v = 0;
+    while (u === 0) u = r(); while (v === 0) v = r();
+    const m = Math.sqrt(-2 * Math.log(u));
+    return [m * Math.cos(2 * Math.PI * v), m * Math.sin(2 * Math.PI * v)];
+  }
+
+  const DATASETS = {
+    spam: {
+      label: 'Is this email spam?',
+      xName: 'links in the email', yName: 'SHOUTING (% capitals)',
+      xMax: 12, yMax: 60,
+      pos: 'spam', neg: 'real email',
+      build: () => {
+        const r = seeded(21), pts = [];
+        for (let i = 0; i < 70; i++) { const [a, b] = gaussPair(r); pts.push({ x: 2.2 + a * 1.9, y: 12 + b * 8, lab: 0 }); }
+        for (let i = 0; i < 55; i++) { const [a, b] = gaussPair(r); pts.push({ x: 5.6 + a * 2.4, y: 26 + b * 13, lab: 1 }); }
+        return pts;
+      },
+      note: 'A real filter uses hundreds of signals. Two is enough to see the shape of the problem.',
+    },
+    tumour: {
+      label: 'Is this tumour malignant?',
+      xName: 'size (mm)', yName: 'how irregular the edge is',
+      xMax: 40, yMax: 100,
+      pos: 'malignant', neg: 'benign',
+      build: () => {
+        const r = seeded(77), pts = [];
+        for (let i = 0; i < 62; i++) { const [a, b] = gaussPair(r); pts.push({ x: 13 + a * 4.0, y: 32 + b * 13, lab: 0 }); }
+        for (let i = 0; i < 58; i++) { const [a, b] = gaussPair(r); pts.push({ x: 22 + a * 6.0, y: 58 + b * 16, lab: 1 }); }
+        return pts;
+      },
+      note: 'This is close to the shape of the 1990s Wisconsin dataset, the problem a great many people learned this on.',
+    },
+    fraud: {
+      label: 'Is this card payment fraud?',
+      xName: 'amount (£)', yName: 'distance from home (km)',
+      xMax: 900, yMax: 120,
+      pos: 'fraud', neg: 'genuine',
+      build: () => {
+        const r = seeded(303), pts = [];
+        /* The second axis is deliberately uninformative here: it overlaps across all three
+           clusters, so it cannot rescue a line the way a tidy second feature would. The only
+           real signal is amount, and for fraud that signal is bimodal. Measured ceiling for
+           any straight line: 80.1%, against a 58.8% always-guess-genuine baseline. */
+        for (let i = 0; i < 80; i++) { const [a, b] = gaussPair(r); pts.push({ x: 340 + a * 115, y: 58 + b * 26, lab: 0 }); }
+        /* card testing: tiny amounts, checking a stolen number still works */
+        for (let i = 0; i < 30; i++) { const [a, b] = gaussPair(r); pts.push({ x: 22 + a * 14, y: 58 + b * 26, lab: 1 }); }
+        /* and the big-ticket cash-out at the other extreme */
+        for (let i = 0; i < 26; i++) { const [a, b] = gaussPair(r); pts.push({ x: 775 + a * 70, y: 58 + b * 26, lab: 1 }); }
+        return pts;
+      },
+      note: 'Fraud sits at BOTH extremes of amount. Distance from home does not separate them, so there is nothing for a line to grab.',
+    },
+  };
+
+  function buildRealData(ctx) {
+    const [cv, g] = ctx.canvas(720, 420);
+    const C = ctx.colors;
+    const FONT = '13px Inter, system-ui, sans-serif';
+    const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
+    let key = 'spam';
+    let pts = DATASETS[key].build();
+    /* the line, held as two draggable endpoints in plot space (0..1 on each axis) */
+    let A = { x: 0.12, y: 0.9 }, B = { x: 0.9, y: 0.12 };
+    let flip = false, drag = null, showBest = false;
+
+    const PAD = { l: 62, r: 300, t: 44, b: 58 };
+    const PW = () => 720 - PAD.l - PAD.r;
+    const PH = () => 420 - PAD.t - PAD.b;
+    const sx = (u) => PAD.l + u * PW();
+    const sy = (v) => PAD.t + (1 - v) * PH();
+    const ux = (px) => (px - PAD.l) / PW();
+    const uy = (py) => 1 - (py - PAD.t) / PH();
+    const norm = (p) => ({ u: p.x / DATASETS[key].xMax, v: p.y / DATASETS[key].yMax });
+
+    /* which side of the line a point falls on */
+    function side(u, v) {
+      const s = (B.x - A.x) * (v - A.y) - (B.y - A.y) * (u - A.x);
+      return flip ? s < 0 : s > 0;
+    }
+    function stats() {
+      let tp = 0, fp = 0, fn = 0, tn = 0;
+      for (const p of pts) {
+        const n = norm(p), said = side(n.u, n.v);
+        if (p.lab === 1 && said) tp++;
+        else if (p.lab === 0 && said) fp++;
+        else if (p.lab === 1 && !said) fn++;
+        else tn++;
+      }
+      return { tp, fp, fn, tn, acc: (tp + tn) / pts.length };
+    }
+    /* brute-force the best straight line, so "best possible" is measured, not asserted */
+    function bestLine() {
+      let best = null;
+      for (let ang = 0; ang < 180; ang += 2) {
+        const th = ang * Math.PI / 180, dx = Math.cos(th), dy = Math.sin(th);
+        for (let off = -0.6; off <= 1.6; off += 0.02) {
+          for (const fl of [false, true]) {
+            const a = { x: 0.5 + dx * -2 + (-dy) * (off - 0.5), y: 0.5 + dy * -2 + dx * (off - 0.5) };
+            const b = { x: 0.5 + dx * 2 + (-dy) * (off - 0.5), y: 0.5 + dy * 2 + dx * (off - 0.5) };
+            let ok = 0;
+            for (const p of pts) {
+              const n = norm(p);
+              let s = (b.x - a.x) * (n.v - a.y) - (b.y - a.y) * (n.u - a.x);
+              if (fl) s = -s;
+              if ((s > 0 ? 1 : 0) === p.lab) ok++;
+            }
+            if (!best || ok > best.ok) best = { ok, a, b, fl };
+          }
+        }
+      }
+      return best;
+    }
+    let cachedBest = null;
+    const getBest = () => { if (!cachedBest) cachedBest = bestLine(); return cachedBest; };
+
+    function pick(pos) {
+      const hits = [['A', A], ['B', B]];
+      let found = null, bd = 22 * 22;
+      for (const [k, pt] of hits) {
+        const dx = sx(pt.x) - pos.x, dy = sy(pt.y) - pos.y, d = dx * dx + dy * dy;
+        if (d < bd) { bd = d; found = k; }
+      }
+      return found;
+    }
+    cv.addEventListener('pointerdown', (e) => { e.preventDefault(); drag = pick(cv.pos(e)); showBest = false; });
+    cv.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const p = cv.pos(e);
+      const t = { x: ctx.clamp(ux(p.x), -0.35, 1.35), y: ctx.clamp(uy(p.y), -0.35, 1.35) };
+      if (drag === 'A') A = t; else B = t;
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => cv.addEventListener(t, () => { drag = null; }));
+
+    const sel = ctx.h('select', {}, Object.keys(DATASETS).map(k => ctx.h('option', { value: k }, DATASETS[k].label)));
+    sel.value = 'spam';
+    sel.addEventListener('change', () => {
+      key = sel.value; pts = DATASETS[key].build(); cachedBest = null; showBest = false;
+      A = { x: 0.12, y: 0.9 }; B = { x: 0.9, y: 0.12 }; flip = false;
+    });
+    const selWrap = ctx.h('div', { class: 'control' }, ctx.h('label', {}, 'the decision'), sel);
+    const flipBtn = ctx.button('Swap which side is which', () => { flip = !flip; showBest = false; });
+    const bestBtn = ctx.button('Show the best line there is', () => {
+      const bl = getBest(); A = bl.a; B = bl.b; flip = bl.fl; showBest = true;
+    }, 'primary');
+    const ro = ctx.readout();
+
+    ctx.loop(() => {
+      const D = DATASETS[key];
+      g.clearRect(0, 0, 720, 420);
+      const st = stats();
+
+      /* shaded verdict regions */
+      const STEP = 9;
+      for (let px = PAD.l; px < PAD.l + PW(); px += STEP) {
+        for (let py = PAD.t; py < PAD.t + PH(); py += STEP) {
+          const said = side(ux(px + STEP / 2), uy(py + STEP / 2));
+          g.fillStyle = said ? 'rgba(251,113,133,0.13)' : 'rgba(124,156,255,0.10)';
+          g.fillRect(px, py, STEP, STEP);
+        }
+      }
+      g.strokeStyle = C.line; g.lineWidth = 1;
+      g.strokeRect(PAD.l, PAD.t, PW(), PH());
+
+      /* axes */
+      g.font = MONO; g.fillStyle = C.muted;
+      g.fillText(D.xName + '  →', PAD.l, PAD.t + PH() + 34);
+      g.save(); g.translate(PAD.l - 40, PAD.t + PH()); g.rotate(-Math.PI / 2);
+      g.fillText(D.yName + '  →', 0, 0); g.restore();
+      g.fillText('0', PAD.l - 4, PAD.t + PH() + 16);
+      g.fillText(String(D.xMax), PAD.l + PW() - 14, PAD.t + PH() + 16);
+
+      /* the line */
+      const dx = B.x - A.x, dy = B.y - A.y, n = Math.hypot(dx, dy) || 1;
+      const ex = dx / n * 3, ey = dy / n * 3;
+      g.strokeStyle = showBest ? C.green : C.text; g.lineWidth = 2.5;
+      g.beginPath();
+      g.moveTo(sx(A.x - ex), sy(A.y - ey));
+      g.lineTo(sx(B.x + ex), sy(B.y + ey));
+      g.stroke();
+      [A, B].forEach(pt => {
+        g.beginPath(); g.arc(sx(pt.x), sy(pt.y), 8, 0, 7);
+        g.fillStyle = showBest ? C.green : '#fff'; g.fill();
+        g.strokeStyle = '#0a0e16'; g.lineWidth = 2; g.stroke();
+      });
+
+      /* the data */
+      pts.forEach(p => {
+        const nn = norm(p), said = side(nn.u, nn.v), right = (said ? 1 : 0) === p.lab;
+        g.beginPath(); g.arc(sx(nn.u), sy(nn.v), 4.2, 0, 7);
+        g.fillStyle = p.lab === 1 ? C.danger : C.accent;
+        g.globalAlpha = right ? 0.95 : 1; g.fill(); g.globalAlpha = 1;
+        if (!right) { g.strokeStyle = C.warn; g.lineWidth = 2; g.stroke(); }
+      });
+
+      /* --------- right-hand panel --------- */
+      const TX = 720 - PAD.r + 22;
+      g.font = 'bold 15px Inter, system-ui, sans-serif'; g.fillStyle = C.text;
+      g.fillText(D.label, TX, 34);
+
+      g.font = MONO; g.fillStyle = C.danger; g.fillText('● ' + D.pos, TX, 58);
+      g.fillStyle = C.accent; g.fillText('● ' + D.neg, TX + 120, 58);
+      g.fillStyle = C.warn; g.fillText('○ ringed = the line got it wrong', TX, 76);
+
+      /* accuracy */
+      g.font = FONT; g.fillStyle = C.muted; g.fillText('you are getting right', TX, 108);
+      g.font = 'bold 30px Inter, system-ui, sans-serif';
+      g.fillStyle = st.acc > 0.9 ? C.green : st.acc > 0.75 ? C.warn : C.danger;
+      g.fillText((st.acc * 100).toFixed(1) + '%', TX, 142);
+      g.font = MONO; g.fillStyle = C.muted;
+      g.fillText((st.tp + st.tn) + ' of ' + pts.length + ' decisions', TX, 162);
+
+      /* the two mistakes, which are not the same mistake */
+      g.font = FONT; g.fillStyle = C.text; g.fillText('and the mistakes it makes', TX, 194);
+      g.font = MONO;
+      g.fillStyle = C.danger;
+      g.fillText(st.fn + '  ' + D.pos + ' let through', TX, 216);
+      g.fillStyle = C.warn;
+      g.fillText(st.fp + '  ' + D.neg + ' wrongly flagged', TX, 234);
+
+      /* live weights — this is what the maths beat below points at */
+      const w1 = -(B.y - A.y), w2 = (B.x - A.x);
+      const b0 = -(w1 * A.x + w2 * A.y);
+      const sc = 1 / (Math.hypot(w1, w2) || 1);
+      const fw = flip ? -1 : 1;
+      g.font = 'bold ' + FONT; g.fillStyle = C.purple;
+      g.fillText('the line, as three numbers', TX, 270);
+      g.font = MONO; g.fillStyle = C.muted;
+      g.fillText('w₁ = ' + (w1 * sc * fw).toFixed(2) + '   (' + D.xName.split(' ')[0] + ')', TX, 292);
+      g.fillText('w₂ = ' + (w2 * sc * fw).toFixed(2) + '   (' + D.yName.split(' ')[0] + ')', TX, 310);
+      g.fillText('b  = ' + (b0 * sc * fw).toFixed(2) + '   (how suspicious by default)', TX, 328);
+
+      const bestOk = getBest().ok / pts.length;
+      g.font = FONT;
+      g.fillStyle = st.acc >= bestOk - 0.001 ? C.green : C.muted;
+      g.fillText('the best any straight line can do: ' + (bestOk * 100).toFixed(1) + '%', TX, 358);
+      g.font = '12px Inter, system-ui, sans-serif'; g.fillStyle = C.muted;
+      wrapText(g, D.note, TX, 380, 270, 15);
+
+      ro.set({
+        'getting right': (st.acc * 100).toFixed(1) + '%',
+        [D.pos + ' missed']: st.fn,
+        'false alarms': st.fp,
+        'ceiling for one line': (bestOk * 100).toFixed(1) + '%',
+      });
+    });
+
+    return ctx.figure(cv,
+      'The same two handles, the same one line — but now every dot is a real decision with a cost attached. Two things change. There is no 4 out of 4 any more: real data overlaps, so <b>even the best possible line still gets some wrong</b>, and the demo brute-forces every line there is to tell you exactly where that ceiling sits. And the two kinds of mistake stop being interchangeable — letting fraud through and freezing an honest customer\'s card are very different failures, and the line you choose decides the balance between them.',
+      [selWrap, flipBtn, bestBtn], ro);
+  }
+
   function makeBoard(cv, g, C, pad) {
     pad = pad || 54;
     const W = cv.W, H = cv.H;

@@ -177,3 +177,63 @@ table.tbl th { color: var(--muted); font-weight: 600; font-size: .8rem; text-tra
   .grid-2 { grid-template-columns: 1fr; }
   .hero h1 { font-size: 2.2rem; }
 }
+
+/* ---------- maths beats: the symbol decoder ----------
+   Notation after the intuition. Deliberately does not look like a maths textbook: no serif
+   italics, no dense stacking. It reads as a labelled diagram of a sentence. */
+.decoder {
+  border: 1px solid var(--line, #243044);
+  border-left: 3px solid #a78bfa;
+  border-radius: 10px;
+  background: rgba(167, 139, 250, .05);
+  padding: 16px 18px;
+  margin: 1.4em 0;
+}
+.decoder-title {
+  font-weight: 600;
+  font-size: .95rem;
+  color: #c4b5fd;
+  margin-bottom: 12px;
+}
+.decoder-formula {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 1.25rem;
+  line-height: 2;
+  margin-bottom: 6px;
+}
+.decoder-glue { color: var(--muted, #94a3b8); padding: 0 2px; }
+.decoder-sym {
+  font: inherit;
+  color: #e6ebf5;
+  background: rgba(167, 139, 250, .13);
+  border: 1px solid rgba(167, 139, 250, .35);
+  border-radius: 7px;
+  padding: 2px 9px;
+  cursor: pointer;
+  transition: background .12s, border-color .12s, transform .12s;
+}
+.decoder-sym:hover { background: rgba(167, 139, 250, .26); transform: translateY(-1px); }
+.decoder-sym.active { background: #a78bfa; border-color: #a78bfa; color: #0a0e16; font-weight: 600; }
+.decoder-panel {
+  min-height: 74px;
+  border-top: 1px dashed var(--line, #243044);
+  padding-top: 12px;
+  font-size: .92rem;
+}
+.decoder-hint { color: var(--muted, #94a3b8); font-style: italic; }
+.decoder-name { color: #c4b5fd; margin-bottom: 5px; }
+.decoder-says { color: var(--text, #e6ebf5); margin-bottom: 5px; }
+.decoder-points { color: #38d9a9; font-size: .88rem; }
+.decoder-plain {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line, #243044);
+  color: var(--muted, #94a3b8);
+  font-size: .9rem;
+}
+@media (max-width: 560px) {
+  .decoder-formula { font-size: 1.05rem; }
+}

@@ -164,6 +164,44 @@
         return h('div', { class: 'tabs' }, bar, panel);
       },
 
+      /* decoder: a formula whose every symbol is clickable.
+         parts: [{sym, name, says, points}] — sym is the symbol as written, name is what it is
+         called out loud, says is what it means in plain words, points is the thing in the demo
+         the reader has just used that it refers to. Plain strings are rendered as inert glue
+         (brackets, equals signs) so a formula reads naturally.
+         See docs/CHAPTER_CONTRACT.md: notation after the intuition, never before. */
+      decoder: (parts, opts) => {
+        const o = opts || {};
+        const box = h('div', { class: 'decoder' });
+        if (o.title) box.append(h('div', { class: 'decoder-title' }, o.title));
+        const row = h('div', { class: 'decoder-formula' });
+        const panel = h('div', { class: 'decoder-panel' });
+        const rest = () => {
+          panel.innerHTML = '';
+          panel.append(h('div', { class: 'decoder-hint', html: o.hint || 'Click any symbol above. Nothing here is new — it is all naming something you have already done.' }));
+        };
+        const chips = [];
+        parts.forEach((pt) => {
+          if (typeof pt === 'string') { row.append(h('span', { class: 'decoder-glue' }, pt)); return; }
+          const chip = h('button', { class: 'decoder-sym', html: pt.sym });
+          chips.push(chip);
+          chip.addEventListener('click', () => {
+            chips.forEach(c => c.classList.toggle('active', c === chip));
+            panel.innerHTML = '';
+            panel.append(
+              h('div', { class: 'decoder-name', html: '<b>' + pt.sym + '</b> &nbsp;is read as&nbsp; "' + pt.name + '"' }),
+              h('div', { class: 'decoder-says', html: pt.says }),
+              pt.points ? h('div', { class: 'decoder-points', html: '↪ ' + pt.points }) : null,
+            );
+          });
+          row.append(chip);
+        });
+        rest();
+        box.append(row, panel);
+        if (o.plain) box.append(h('div', { class: 'decoder-plain', html: '<b>Out loud:</b> ' + o.plain }));
+        return box;
+      },
+
       /* quiz: [{q, options:[..], answer: index, explain}] */
       quiz: (questions, title) => {
         const box = h('div', { class: 'quiz' }, h('h3', {}, title || 'Check your understanding'));

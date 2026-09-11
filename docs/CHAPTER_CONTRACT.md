@@ -92,6 +92,14 @@ paragraph.
 ### Still required, woven through
 
 - **Jargon after the experience.** Let them do the thing, then name it with `<em>` on first use.
+- **Notation after the intuition.** The same rule, applied to maths. A symbol may only appear
+  after the reader has already done the thing it describes, and its job is to *name that
+  experience*, not to introduce it. **There is no standalone maths chapter and never will be** —
+  a wall of maths is where a reader quits. Instead every chapter carries **one maths beat**:
+  at most one interactive plus one short callout, 3–5 minutes, always attached to something
+  their hands already did. If a beat needs more room than that, it is in the wrong chapter.
+  Prefer the statistical framing over the calculus framing wherever both are available.
+  See `docs/ROADMAP.md` for which beat belongs to which chapter.
 - **A worked numeric example**, ideally as a live panel where they change the numbers.
 - **`example` callouts**: where this shows up in products they already use.
 - **A `history` callout**: who, when, why it mattered.
