@@ -1,7 +1,8 @@
-/* Chapter 13 — Build it yourself: from one neuron to a tiny GPT.
-   Contains a hand-written character-level neural language model (embedding → tanh MLP → softmax)
-   with manual backprop that trains live in the browser, an autograd visualiser, and a
-   "loss at init" sanity checker. Plain JS, no libraries. */
+/* Zero → AGI · Chapter 13 · Build it yourself: the eight-lab ladder
+   DESIGN RULE: a real language model is training in the reader's browser before any prose runs.
+   Interactives, in order: the live char-level trainer; the autograd engine; tensor shape flow
+   through a tiny GPT (the crash everyone hits first); the initialisation checker; and a loss
+   doctor that asks the reader to diagnose five broken training runs. */
 (function () {
   /* ---------------- training corpora for the live demo ---------------- */
   const PROSE = `the sun came up over the little town. the baker lit her oven and the smell of warm bread drifted down the street. a small dog sat by the door and waited. the cat on the wall watched the dog and the dog watched the bread. children ran to school with books under their arms. the old clock in the square struck eight. the fisherman pushed his boat into the cold water and the gulls followed him out to sea.
@@ -611,6 +612,195 @@ for step in range(max_steps):
   /* =====================================================================
      Chapter registration
      ===================================================================== */
+
+  function wrapLines(gc, text, maxW) {
+    const words = String(text).split(' '); const out = []; let line = '';
+    for (const w of words) {
+      const t = line ? line + ' ' + w : w;
+      if (line && gc.measureText(t).width > maxW) { out.push(line); line = w; } else line = t;
+    }
+    if (line) out.push(line);
+    return out;
+  }
+  function wrapText(gc, text, x, y, maxW, lh) {
+    wrapLines(gc, text, maxW).forEach((ln, i) => gc.fillText(ln, x, y + i * lh));
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Interactive: read a broken loss curve and name the bug              */
+  /* ------------------------------------------------------------------ */
+  function buildLossDoctor(ctx) {
+    const [cv, g] = ctx.canvas(720, 360);
+    const C = ctx.colors;
+    const FONT = '13px Inter, system-ui, sans-serif';
+    const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
+    const V = 65, LN_V = Math.log(V);
+    const CASES = [
+      {
+        name: 'flat as a board',
+        curve: (t) => LN_V - 0.02 * t + 0.03 * Math.sin(t * 9),
+        causes: ['learning rate far too low, or the optimizer never sees the gradients', 'learning rate far too high', 'not enough training data', 'the model is too small'],
+        answer: 0,
+        why: 'A loss pinned at ln(V) means the weights are barely moving. The classic causes are a forgotten <code>optimizer.step()</code>, a missing <code>loss.backward()</code>, parameters never passed to the optimizer, or a learning rate some orders of magnitude too small. Check the gradient norms: if they are zero, it is wiring, not tuning.',
+      },
+      {
+        name: 'shoots to NaN',
+        curve: (t) => t < 0.25 ? LN_V - 1.6 * t : LN_V + Math.pow((t - 0.25) * 3.4, 2) * 4,
+        causes: ['learning rate too low', 'learning rate too high, or exploding gradients', 'the dataset is too small', 'wrong loss function'],
+        answer: 1,
+        why: 'The loss drops, then rockets. Each step is overshooting the valley and landing higher on the far side — chapter 2\'s failure mode, at full scale. Drop the learning rate by 3×, add gradient clipping, and check for a division by something that can be zero.',
+      },
+      {
+        name: 'starts far too high',
+        curve: (t) => 9.4 - 5.0 * t * t,
+        causes: ['the data is shuffled wrong', 'the final layer is initialised too confidently', 'the batch size is too small', 'the model needs more layers'],
+        answer: 1,
+        why: 'At step 0 a healthy model should sit at about ln(V) = ' + LN_V.toFixed(2) + ' for ' + V + ' classes, because it should be maximally unsure. Starting at 9 means the output layer is making confident wrong predictions at random initialisation. Scale its weights down — this is exactly what the initialisation checker below measures.',
+      },
+      {
+        name: 'train falls, validation rises',
+        curve: (t) => LN_V - 3.3 * Math.pow(t, 0.55),
+        curve2: (t) => LN_V - 2.6 * Math.pow(t, 0.5) + Math.max(0, (t - 0.42)) * 4.2,
+        causes: ['the learning rate is too high', 'overfitting — stop early, add data, or regularise', 'the gradients are vanishing', 'the tokenizer is broken'],
+        answer: 1,
+        why: 'Textbook overfitting, and exactly the curve you watched in chapter 3. The model is memorising the training set. Stop at the validation minimum, add more data, add weight decay or dropout, or make the model smaller.',
+      },
+      {
+        name: 'cannot memorise 32 examples',
+        curve: (t) => LN_V - 0.9 * Math.pow(t, 0.7),
+        causes: ['the model needs more training time', 'something is wired wrong: shifted targets, a bad mask, or a broken gradient path', 'the learning rate is too low', 'the batch size is too large'],
+        answer: 1,
+        why: 'This is the most valuable check in the list. Train on <b>one batch of 32</b> and the loss must go essentially to zero — memorising 32 examples takes no cleverness at all. If it plateaus, the bug is structural: targets shifted by one, a mask hiding the answer, or a tensor detached from the graph. No amount of tuning fixes it.',
+      },
+    ];
+    let idx = 0, picked = -1;
+
+    const nextBtn = ctx.button('Next symptom →', () => { idx = (idx + 1) % CASES.length; picked = -1; }, 'primary');
+    const opts = [0, 1, 2, 3].map(i => ctx.button('answer ' + (i + 1), () => { picked = i; }));
+    const ro = ctx.readout();
+
+    ctx.loop(() => {
+      g.clearRect(0, 0, 720, 360);
+      const c = CASES[idx];
+      const P = { x: 55, y: 44, w: 300, h: 170 };
+      g.font = 'bold ' + FONT; g.fillStyle = C.text;
+      g.fillText('symptom: ' + c.name, P.x, 28);
+      g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(P.x, P.y, P.w, P.h);
+      const px = (t) => P.x + t * P.w;
+      const py = (v) => P.y + P.h - ctx.clamp((v - 0) / 11, 0, 1) * P.h;
+      /* the ln(V) reference line every healthy run starts on */
+      g.setLineDash([4, 4]); g.strokeStyle = C.warn; g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(P.x, py(LN_V)); g.lineTo(P.x + P.w, py(LN_V)); g.stroke();
+      g.setLineDash([]);
+      g.font = MONO; g.fillStyle = C.warn;
+      g.fillText('ln(' + V + ') = ' + LN_V.toFixed(2) + '  ← a healthy start', P.x + 4, py(LN_V) - 6);
+
+      const draw = (fn, col) => {
+        g.strokeStyle = col; g.lineWidth = 2.5; g.beginPath();
+        for (let i = 0; i <= 100; i++) {
+          const t = i / 100; let v = fn(t);
+          if (!isFinite(v) || v > 11) v = 11;
+          i ? g.lineTo(px(t), py(v)) : g.moveTo(px(t), py(v));
+        }
+        g.stroke();
+      };
+      draw(c.curve, C.accent);
+      if (c.curve2) { draw(c.curve2, C.danger); }
+      g.font = MONO; g.fillStyle = C.accent; g.fillText('train', P.x + 8, P.y + P.h - 10);
+      if (c.curve2) { g.fillStyle = C.danger; g.fillText('validation', P.x + 8, P.y + P.h - 26); }
+      g.fillStyle = C.muted; g.fillText('steps →', P.x + P.w / 2 - 20, P.y + P.h + 18);
+
+      /* the options */
+      const TX = 385;
+      g.font = 'bold ' + FONT; g.fillStyle = C.text;
+      g.fillText('what is wrong?', TX, 28);
+      c.causes.forEach((txt, i) => {
+        const y = 44 + i * 44;
+        const right = i === c.answer, chosen = i === picked;
+        g.fillStyle = picked < 0 ? '#141b28' : right ? 'rgba(56,217,169,0.18)' : chosen ? 'rgba(251,113,133,0.18)' : '#141b28';
+        g.fillRect(TX, y, 300, 38);
+        g.strokeStyle = picked < 0 ? C.line : right ? C.green : chosen ? C.danger : C.line;
+        g.lineWidth = 1.5; g.strokeRect(TX, y, 300, 38);
+        g.font = MONO; g.fillStyle = C.muted; g.fillText(String(i + 1), TX + 8, y + 22);
+        g.font = FONT; g.fillStyle = picked < 0 ? C.muted : right ? C.green : C.text;
+        wrapLines(g, txt, 262).slice(0, 2).forEach((ln, j) => g.fillText(ln, TX + 26, y + 16 + j * 15));
+      });
+
+      if (picked >= 0) {
+        g.font = 'bold ' + FONT;
+        g.fillStyle = picked === c.answer ? C.green : C.warn;
+        g.fillText(picked === c.answer ? '✓ Correct.' : '✗ Not that one — here is what it actually is:', 55, 250);
+        g.font = FONT; g.fillStyle = C.muted;
+        wrapText(g, c.why.replace(/<[^>]+>/g, ''), 55, 272, 610, 17);
+      } else {
+        g.font = FONT; g.fillStyle = C.muted;
+        wrapText(g, 'Read the curve, then press one of the answer buttons. Every training run that fails, fails quietly — there is no stack trace for "the loss is flat", so the shape of the curve is most of the evidence you get.', 55, 250, 610, 17);
+      }
+      ro.set({ symptom: c.name, 'of': idx + 1 + ' / ' + CASES.length, answered: picked < 0 ? '—' : (picked === c.answer ? 'correct' : 'try again') });
+    });
+
+    return ctx.figure(cv,
+      'Five real failure modes, and the diagnosis each curve points to. The dashed yellow line is ln(V) — where a healthy run starts, because a model that knows nothing should be maximally unsure across V classes. Most debugging is reading how a curve departs from that line: pinned to it means nothing is updating, well above it means the output layer is over-confident at initialisation, and a validation curve peeling upward means memorisation.',
+      [nextBtn, ...opts], ro);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Interactive: the shapes flowing through a tiny GPT                  */
+  /* ------------------------------------------------------------------ */
+  function buildShapeFlow(ctx) {
+    const [cv, g] = ctx.canvas(720, 360);
+    const C = ctx.colors;
+    const FONT = '13px Inter, system-ui, sans-serif';
+    const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
+    let B = 32, T = 8, D = 64, H = 4, V = 65;
+    const bSl = ctx.slider({ label: 'batch B', min: 1, max: 64, step: 1, value: 32, onChange: (v) => { B = v; } });
+    const tSl = ctx.slider({ label: 'context T', min: 2, max: 64, step: 1, value: 8, onChange: (v) => { T = v; } });
+    const dSl = ctx.slider({ label: 'width d', min: 8, max: 256, step: 8, value: 64, onChange: (v) => { D = v; } });
+    const hSl = ctx.slider({ label: 'heads', min: 1, max: 12, step: 1, value: 4, onChange: (v) => { H = v; } });
+    const ro = ctx.readout();
+
+    ctx.loop(() => {
+      g.clearRect(0, 0, 720, 360);
+      const divides = D % H === 0;
+      const headDim = D / H;
+      const rows = [
+        { n: 'idx  (the token ids you fed in)', s: '(' + B + ', ' + T + ')', ok: true },
+        { n: 'token embedding table lookup', s: '(' + B + ', ' + T + ', ' + D + ')', ok: true },
+        { n: '+ position embedding', s: '(' + B + ', ' + T + ', ' + D + ')', ok: true, note: 'broadcast over the batch' },
+        { n: 'split into heads', s: '(' + B + ', ' + H + ', ' + T + ', ' + (divides ? headDim : '?') + ')', ok: divides, note: divides ? 'd ÷ heads = ' + headDim : 'd is not divisible by heads' },
+        { n: 'attention scores  q @ kᵀ', s: '(' + B + ', ' + H + ', ' + T + ', ' + T + ')', ok: divides, note: 'the T×T grid — this is the one that grows quadratically' },
+        { n: 'weighted values, heads merged', s: '(' + B + ', ' + T + ', ' + D + ')', ok: divides },
+        { n: 'MLP  d → 4d → d', s: '(' + B + ', ' + T + ', ' + D + ')', ok: true, note: 'hidden layer is ' + (4 * D) },
+        { n: 'final projection to the vocabulary', s: '(' + B + ', ' + T + ', ' + V + ')', ok: true },
+        { n: 'cross-entropy wants it flattened', s: '(' + (B * T) + ', ' + V + ')  vs targets (' + (B * T) + ',)', ok: true, note: 'the reshape everyone forgets' },
+      ];
+      g.font = 'bold ' + FONT; g.fillStyle = C.text;
+      g.fillText('every tensor shape in one forward pass', 30, 26);
+      let y = 46;
+      rows.forEach(r => {
+        g.font = FONT; g.fillStyle = r.ok ? C.muted : C.danger;
+        g.fillText(r.n, 30, y + 13);
+        g.font = 'bold ' + MONO; g.fillStyle = r.ok ? C.accent : C.danger;
+        g.fillText(r.s, 330, y + 13);
+        if (r.note) { g.font = MONO; g.fillStyle = r.ok ? C.line : C.danger; g.fillText(r.note, 470, y + 13); }
+        y += 26;
+      });
+      g.font = 'bold 15px Inter, system-ui, sans-serif';
+      g.fillStyle = divides ? C.green : C.danger;
+      g.fillText(divides ? 'shapes line up' : 'd must be divisible by the number of heads — this run would crash', 30, 300);
+      const attnCells = B * H * T * T;
+      g.font = MONO; g.fillStyle = C.muted;
+      g.fillText('attention matrix holds ' + attnCells.toLocaleString() + ' numbers', 30, 324);
+      g.font = FONT; g.fillStyle = C.muted;
+      wrapText(g, 'Double the context and that number quadruples. It is the first thing to shrink when you run out of memory.', 30, 346, 640, 16);
+      ro.set({ 'B,T,d,heads': B + ',' + T + ',' + D + ',' + H, 'head dim': divides ? headDim : 'INVALID', 'attn cells': attnCells.toLocaleString() });
+    });
+
+    return ctx.figure(cv,
+      'The single most common thing that stops a from-scratch transformer from running is a shape mismatch, and the single most common mismatch is a width that is not divisible by the number of heads. Drag <b>width d</b> to 100 with 8 heads and watch the row go red. The last row is the other classic: cross-entropy wants the logits flattened to (B·T, V) against targets of shape (B·T,), and forgetting that reshape produces an error message that tells you almost nothing useful.',
+      [bSl, tSl, dSl, hSl], ro);
+  }
+
   ZTA.registerChapter({
     id: '13-build-it-yourself',
     num: 13,
@@ -622,6 +812,14 @@ for step in range(max_steps):
       const lab = (f) => '<code class="inline">labs/' + f + '</code>';
 
       root.append(
+        ctx.callout('tryit', '🖐 Do this first — watch a language model learn to spell, from nothing',
+          'This is a real neural language model training in your browser right now. Nothing is pre-computed.<br>' +
+          '<b>1.</b> Just watch the sample box for twenty seconds. It starts as noise, then spaces appear at word-like intervals, then real words.<br>' +
+          '<b>2.</b> Watch the loss start near <b>ln(V)</b> — the value a model that knows nothing must have — and fall.<br>' +
+          '<b>3.</b> It has about 2,000 parameters. It is learning English spelling from scratch, on your laptop, in under a minute.'),
+        buildTrainer(ctx),
+        ctx.p('Every idea in the previous twelve chapters is in those few hundred lines. The rest of this chapter is how to write them yourself.'),
+
         ctx.p('You have spent twelve chapters watching models learn. Sliders moved, loss curves fell, decision boundaries bent. But every one of those demos was written by someone else. There is a particular moment, and most people who work on AI remember theirs, when you type a training loop yourself, run it, and watch numbers you fully understand turn into behaviour you never explicitly programmed. After that moment the whole field looks different: less like magic, more like plumbing you could fix.'),
         ctx.p('Richard Feynman left a line on his blackboard: <em>"What I cannot create, I do not understand."</em> Andrej Karpathy adopted it as the motto for his from-scratch tutorials, and it is the motto of this chapter. The question we answer is practical. What is the shortest sequence of programs, each small enough to read in one sitting, that takes you from a single artificial neuron to a working GPT, and what do you do after that?'),
         ctx.p('The answer is a ladder of eight labs in the <code class="inline">labs/</code> folder of this repository. Every rung is a complete, runnable model. Together they are under two thousand lines of code. Read them, break them, fix them. But before you open a terminal, train a language model right here, in the next section, and watch it learn to spell.'),
@@ -630,8 +828,6 @@ for step in range(max_steps):
           ctx.p('The model below is the smallest thing that deserves the name <em>neural language model</em>. It is the architecture Yoshua Bengio\'s group proposed in 2003, and the one Karpathy uses in his "makemore" series. It reads the previous three characters and predicts the next one. That is the entire task, and it is the same task GPT does, with two differences: GPT reads thousands of tokens instead of three characters, and it uses a transformer instead of one hidden layer.'),
           ctx.p('Here is the whole forward pass. Each of the three context characters is looked up in an <em>embedding table</em> and becomes a vector of 8 numbers. The three vectors are glued into one vector of 24. A layer of 48 <em>tanh</em> neurons squashes that into 48 numbers. A final layer turns those into one score per character in the vocabulary, and a <em>softmax</em> turns the scores into probabilities. The loss is <em>cross-entropy</em>: minus the log of the probability the model gave to the character that actually came next. Backpropagation computes how every weight should move to raise that probability, and SGD moves it.'),
           ctx.p('Count the parameters for a text with 30 distinct characters: 30 × 8 in the embedding table, 24 × 48 + 48 in the hidden layer, 48 × 30 + 30 in the output layer. That is 2,910 numbers. GPT-3 has 175 billion. The recipe is identical; only the numbers are bigger.'),
-          ctx.callout('tryit', 'Try it', 'Just watch for the first twenty seconds. The sample box starts as noise, then spaces appear at word-like intervals, then real words. Watch the loss cross below the yellow line (pure guessing) within the first second, then grind down slowly. Then: <b>(1)</b> raise the learning rate to 1.0 and watch the loss spike or the model reset itself; drop it to 0.01 and watch learning crawl. <b>(2)</b> Set temperature to 0.2 (the model repeats its favourite phrases) and 2.0 (creative garbage). <b>(3)</b> Switch to context length 2 and compare the best loss you can reach against context 4. <b>(4)</b> Load the Python-like preset and watch it learn indentation and <code class="inline">return</code>. <b>(5)</b> Paste in your own text: a poem, an email, a shopping list.'),
-          buildTrainer(ctx),
           ctx.callout('key', 'What you just saw is the whole field', 'Loss starts at ln(V) because the model starts ignorant. It falls fast as it learns which characters are common, then slowly as it learns which character follows which. It never reaches zero, because English is not fully predictable from three characters. Everything in the rest of this course, from transformers to RLHF, is about making that curve go lower, on more data, with more context. The mechanics you can now see are not a simplification; they are the thing itself.'),
         ),
 
@@ -700,7 +896,10 @@ python labs/01_perceptron.py             # each lab is one file; run it, then re
           ctx.sub('06 · A tiny GPT in PyTorch, trained on Shakespeare — ' + lab('06_tiny_gpt.py'),
             ctx.p('Everything comes together: a token embedding, a positional embedding, a stack of blocks (attention, then a small MLP, each wrapped in a residual connection and a LayerNorm), and a final layer that predicts the next character. It trains on the one-megabyte <code class="inline">labs/data/tinyshakespeare.txt</code>, 65 distinct characters, the same file Karpathy\'s nanoGPT uses.'),
             ctx.code(LOOP_CODE, 'python'),
-            ctx.p('Here is what to expect as it trains, so you know whether things are working. The loss is a ladder and every rung has a look. At step 0 it should be about 4.17, which is ln(65). By a few hundred steps it is near 3.0: the model has learned letter frequencies, so the samples are full of e, t, a and spaces, and still noise. At about 2.5 the nonsense becomes pronounceable — "the wither sould hin". Near 2.0 you get real short words, line breaks in sensible places, and <code class="inline">NAME:</code> speaker headers. The default run (four layers, 128 dimensions, four heads, context 128, roughly 0.8 million parameters, 5,000 steps) lands between 1.6 and 1.8: character names, sentence rhythm, the occasional stage direction. Below 1.5 you need a bigger model — six layers, 384 dimensions, context 256 — and the output reads like a drunk Elizabethan: fluent nonsense in perfect form. Under about 0.9 on this much text you are no longer learning English, you are memorising Shakespeare.'),
+            ctx.p('Here is what to expect as it trains, so you know whether things are working. The loss is a ladder and every rung has a look. At step 0 it should be about 4.17, which is ln(65). By a few hundred steps it is near 3.0: the model has learned letter frequencies, so the samples are full of e, t, a and spaces, and still noise.'),
+            ctx.p(' At about 2.5 the nonsense becomes pronounceable — "the wither sould hin". Near 2.0 you get real short words, line breaks in sensible places, and <code class="inline">NAME:</code> speaker headers.'),
+            ctx.p(' The default run (four layers, 128 dimensions, four heads, context 128, roughly 0.8 million parameters, 5,000 steps) lands between 1.6 and 1.8: character names, sentence rhythm, the occasional stage direction. Below 1.5 you need a bigger model — six layers, 384 dimensions, context 256 — and the output reads like a drunk Elizabethan: fluent nonsense in perfect form.'),
+            ctx.p(' Under about 0.9 on this much text you are no longer learning English, you are memorising Shakespeare.'),
             ctx.p('Time: <code class="inline">--quick</code> (two layers, 64 dimensions, 300 steps) finishes in a minute or two on a laptop CPU and is enough to watch the loss fall off the ln(65) line. The default run takes ten to fifteen minutes on that same CPU and about two minutes on a GPU. The six-layer version really wants a GPU: roughly three minutes there, several hours on CPU. Run that one overnight, or rent a card for an hour.'),
             ctx.ul([
               '<b>Read:</b> the <code class="inline">Block</code> class, then <code class="inline">generate()</code>: the model is called once per new character, with the context cropped to the last <code class="inline">block_size</code> tokens.',
@@ -728,7 +927,22 @@ python labs/01_perceptron.py             # each lab is one file; run it, then re
             ])),
         ),
 
+        ctx.section('The bug that stops every from-scratch transformer',
+          ctx.p('Before the debugging ritual, the failure that comes first: the model will not even run. In a from-scratch transformer that is almost always a tensor shape.'),
+          ctx.callout('tryit', '🖐 Try this',
+            '<b>1.</b> Drag <b>width d</b> to 100 while <b>heads</b> is 8. The split-into-heads row turns red — d must divide evenly by the number of heads, and this is the crash almost everyone hits first.<br>' +
+            '<b>2.</b> Now drag <b>context T</b> from 8 to 64 and watch the attention-matrix count. It grows with T², which is why context is the first thing to shrink when you run out of memory.<br>' +
+            '<b>3.</b> Read the last row. Cross-entropy wants the logits flattened to (B·T, V); forgetting that reshape gives an error message that tells you almost nothing.'),
+          buildShapeFlow(ctx),
+        ),
+
         ctx.section('How to debug a model that will not learn',
+          ctx.callout('tryit', '🖐 Try this — diagnose five broken training runs',
+            '<b>1.</b> Read each curve against the dashed yellow line at ln(V), which is where a healthy run <i>starts</i>.<br>' +
+            '<b>2.</b> Pick an answer, then read the explanation whether you were right or not.<br>' +
+            '<b>3.</b> Pay particular attention to the last one — "cannot memorise 32 examples" is the single most valuable check in the list, and no amount of tuning fixes what it catches.'),
+          buildLossDoctor(ctx),
+
           ctx.p('Every training run that fails, fails quietly. There is no stack trace for "the loss is flat". The remedy is a fixed ritual of sanity checks, cheap enough to run every single time, most of them borrowed from Karpathy\'s <i>A Recipe for Training Neural Networks</i>.'),
           ctx.ol([
             '<b>Check the loss at initialisation.</b> With V classes and a humble model it should be ≈ ln(V). If it is much higher, your last layer is too confident at random; scale its weights down. The interactive below shows why.',
@@ -746,10 +960,14 @@ python labs/01_perceptron.py             # each lab is one file; run it, then re
         ctx.section('Scaling the ladder',
           ctx.p('The eight labs end at a model with a few million parameters. Frontier models have a few trillion. The ladder continues; it just leaves your laptop.'),
           ctx.sub('Reproduce GPT-2',
-            ctx.p('Karpathy\'s <a href="https://github.com/karpathy/nanoGPT" target="_blank">nanoGPT</a> is lab 06 grown up: the same GPT class, plus data loading, mixed precision and multi-GPU support. Point it at a web-text dataset (OpenWebText, or FineWeb) and it reproduces the 124-million-parameter GPT-2 on a rented cloud machine. In <a href="https://github.com/karpathy/llm.c" target="_blank">llm.c</a>, his C/CUDA rewrite, the same reproduction on 10 billion tokens takes about an hour and a half on eight A100s and costs on the order of twenty dollars; the 1.5-billion-parameter GPT-2 XL takes about a day on eight H100s and a few hundred dollars. In 2019 GPT-2 was the most capable language model on Earth. In 2026 you can train it for the price of a dinner. That is what a 100,000× drop in the price of a given capability looks like.'),
+            ctx.p('Karpathy\'s <a href="https://github.com/karpathy/nanoGPT" target="_blank">nanoGPT</a> is lab 06 grown up: the same GPT class, plus data loading, mixed precision and multi-GPU support. Point it at a web-text dataset (OpenWebText, or FineWeb) and it reproduces the 124-million-parameter GPT-2 on a rented cloud machine.'),
+            ctx.p(' In <a href="https://github.com/karpathy/llm.c" target="_blank">llm.c</a>, his C/CUDA rewrite, the same reproduction on 10 billion tokens takes about an hour and a half on eight A100s and costs on the order of twenty dollars; the 1.5-billion-parameter GPT-2 XL takes about a day on eight H100s and a few hundred dollars.'),
+            ctx.p(' In 2019 GPT-2 was the most capable language model on Earth. In 2026 you can train it for the price of a dinner. That is what a 100,000× drop in the price of a given capability looks like.'),
           ),
           ctx.sub('Fine-tune an open model',
-            ctx.p('Pretraining from scratch is the expensive part; you almost never need to. Open-weight models (Llama, Qwen, Gemma, Mistral, DeepSeek) are pretrained on trillions of tokens and released for free. <em>LoRA</em> (low-rank adaptation) freezes the base model and trains small adapter matrices, about 1% of the parameters, so a 7B model fine-tunes on a single consumer GPU. <em>QLoRA</em> quantises the frozen base to 4 bits so a 70B model fits on one 48 GB card. Hugging Face\'s <a href="https://github.com/huggingface/trl" target="_blank">TRL</a> library gives you SFT, reward modelling, DPO and GRPO trainers that are lab 08 at production quality; <a href="https://github.com/unslothai/unsloth" target="_blank">Unsloth</a> makes the same runs two to five times faster on modest hardware. A weekend and fifty dollars gets you a model that beats any frontier model at one narrow task you define, because you have data they do not.'),
+            ctx.p('Pretraining from scratch is the expensive part; you almost never need to. Open-weight models (Llama, Qwen, Gemma, Mistral, DeepSeek) are pretrained on trillions of tokens and released for free.'),
+            ctx.p(' <em>LoRA</em> (low-rank adaptation) freezes the base model and trains small adapter matrices, about 1% of the parameters, so a 7B model fine-tunes on a single consumer GPU. <em>QLoRA</em> quantises the frozen base to 4 bits so a 70B model fits on one 48 GB card.'),
+            ctx.p(' Hugging Face\'s <a href="https://github.com/huggingface/trl" target="_blank">TRL</a> library gives you SFT, reward modelling, DPO and GRPO trainers that are lab 08 at production quality; <a href="https://github.com/unslothai/unsloth" target="_blank">Unsloth</a> makes the same runs two to five times faster on modest hardware. A weekend and fifty dollars gets you a model that beats any frontier model at one narrow task you define, because you have data they do not.'),
           ),
           ctx.sub('Build an eval',
             ctx.p('The most underrated project. Write two hundred questions with verifiable answers in a domain you know, run every model you can reach against them with a script, and publish the table. <a href="https://github.com/EleutherAI/lm-evaluation-harness" target="_blank">lm-evaluation-harness</a> gives you the plumbing. A good eval is more valuable to the field than a mediocre model, and it teaches you where models actually fail rather than where Twitter says they do.'),
@@ -763,7 +981,8 @@ python labs/01_perceptron.py             # each lab is one file; run it, then re
         ctx.callout('history', 'Who wrote this ladder', 'The from-scratch tradition in modern deep learning owes most to Andrej Karpathy, whose 2015 blog post <i>The Unreasonable Effectiveness of Recurrent Neural Networks</i> came with a 100-line character-level model that thousands of people trained on Shakespeare, and whose 2022–2023 <i>Neural Networks: Zero to Hero</i> videos (micrograd, makemore, nanoGPT) established the exact sequence these labs follow. The scalar autograd engine idea goes back further: automatic differentiation was worked out in the 1960s and 1970s (Wengert, Linnainmaa) long before anyone called it backpropagation.'),
 
         ctx.section('Why this matters for modern AI',
-          ctx.p('The people who push the frontier are not the ones who have read the most papers. They are the ones who can sit down with a failing training run and find the bug, who can look at a loss curve and know whether the learning rate is wrong, who can implement a new idea in an afternoon because the machinery is already in their hands. That skill is built by the ladder, not by reading about it. Every technique in chapters 10 to 12 (mixture-of-experts, RLHF, speculative decoding) was first a small script someone wrote to see if it would work. Chapter 15 will lay out how one person gets from here to that frontier; this chapter is the part you cannot skip.'),
+          ctx.p('The people who push the frontier are not the ones who have read the most papers. They are the ones who can sit down with a failing training run and find the bug, who can look at a loss curve and know whether the learning rate is wrong, who can implement a new idea in an afternoon because the machinery is already in their hands.'),
+          ctx.p(' That skill is built by the ladder, not by reading about it. Every technique in chapters 10 to 12 (mixture-of-experts, RLHF, speculative decoding) was first a small script someone wrote to see if it would work. Chapter 15 will lay out how one person gets from here to that frontier; this chapter is the part you cannot skip.'),
         ),
 
         ctx.quiz([
