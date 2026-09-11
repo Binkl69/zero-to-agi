@@ -199,7 +199,7 @@
       /* Interactive C: stylised feature hierarchy (edges → … → object)      */
       /* ------------------------------------------------------------------ */
       function hierarchyDemo() {
-        const W = 720, H = 300;
+        const W = 720, H = 324;
         const [cv, g] = ctx.canvas(W, H);
         const COLS = [
           { x: 110, label: 'Edges', sub: 'tiny oriented strokes' },
@@ -284,7 +284,8 @@
             g.fillStyle = C.muted; g.font = FONT; g.fillText(cdef.sub, cdef.x, 252);
           });
           g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'center';
-          g.fillText('stylised illustration of what deeper layers tend to represent — not the network\'s real learned filters, which look far messier', W / 2, 282);
+          wrapText(g, 'stylised illustration of what deeper layers tend to represent — not the network\'s real learned filters, which look far messier', W / 2, 284, 600, 16);
+          g.textAlign = 'left';
         }
         ctx.loop((dt) => {
           if (SC.playing) { SC.depth += SC.dir * dt * SC.speed; if (SC.depth > 3) { SC.depth = 3; SC.dir = -1; } if (SC.depth < 0) { SC.depth = 0; SC.dir = 1; } depthSl.value = SC.depth; }
@@ -351,6 +352,16 @@
           for (let r = 0; r < a.length; r++) for (let c = 0; c < a[r].length; c++) { tot++; if (Math.abs(a[r][c] - b[r][c]) > 1e-9) n++; }
           return { n, tot, frac: tot ? n / tot : 0 };
         }
+        /* how much of the response changed: sum|a-b| / (sum|a| + sum|b|), so 0% = identical and
+           100% = nothing in common. Counting *entries* that differ would punish the pooled map
+           purely for being four times smaller, which would hide the very effect pooling has. */
+        function moved(a, b) {
+          let d = 0, s = 0;
+          for (let r = 0; r < a.length; r++) for (let c = 0; c < a[r].length; c++) {
+            d += Math.abs(a[r][c] - b[r][c]); s += Math.abs(a[r][c]) + Math.abs(b[r][c]);
+          }
+          return { frac: s > 1e-9 ? d / s : 0 };
+        }
 
         let drag = false;
         const CELL = 11, IX = 30, IY = 70;
@@ -370,11 +381,11 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 460);
+          g.clearRect(0, 0, cv.W, cv.H);
           const ref = imageAt(HOME.x, HOME.y), now = imageAt(ox, oy);
           const fRef = convolve(ref), fNow = convolve(now);
           const pRef = pool(fRef), pNow = pool(fNow);
-          const cIn = changed(ref, now), cF = changed(fRef, fNow), cP = changed(pRef, pNow);
+          const cIn = changed(ref, now), cF = moved(fRef, fNow), cP = moved(pRef, pNow);
 
           /* ---- the image ---- */
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
@@ -393,7 +404,7 @@
           g.font = 'bold ' + FONT; g.fillStyle = cIn.frac > 0 ? C.danger : C.muted;
           g.fillText(cIn.n + ' of ' + cIn.tot + ' pixels changed', IX, IY + N * CELL + 22);
           g.font = MONO; g.fillStyle = C.muted;
-          wrapText(g, 'red outline = a pixel whose value is different from the starting position', IX, IY + N * CELL + 42, 180, 15);
+          wrapText(g, 'red outline = a pixel whose value is different from the starting position', IX, IY + N * CELL + 42, 205, 15);
 
           /* ---- a fully-connected layer's view: one flat row ---- */
           const SX = 250, SY = 66;
@@ -412,41 +423,43 @@
           g.font = FONT; g.fillStyle = C.muted;
           wrapText(g, 'Every row is 16 pixels of the image laid end to end. To this layer there is no "next to" — row 3 and row 4 are simply far-apart entries in a list, and it must learn the shape again for every position it could occupy.', SX, SY + N * 5 + 18, 440, 16);
 
-          /* ---- feature map and pooled map ---- */
-          const draw = (mat, X, Y, cell, title, sub, ch) => {
+          /* ---- feature map and pooled map: one column each, titles wrapped to width ---- */
+          const MTITLE = 234, MSUB = 250, MY = 290;      // shared baselines for both panels
+          const panel = (mat, X, cell, title, sub, subW, ch) => {
             g.font = 'bold ' + FONT; g.fillStyle = C.text;
-            g.fillText(title, X, Y - 20);
+            g.fillText(title, X, MTITLE);
             g.font = MONO; g.fillStyle = C.muted;
-            g.fillText(sub, X, Y - 6);
+            wrapText(g, sub, X, MSUB, subW, 14);
             const peak = Math.max(1e-6, ...mat.flat().map(Math.abs));
             for (let r = 0; r < mat.length; r++) for (let c = 0; c < mat[r].length; c++) {
               g.fillStyle = heatColor(mat[r][c] / peak);
-              g.fillRect(X + c * cell, Y + r * cell, cell - 1, cell - 1);
+              g.fillRect(X + c * cell, MY + r * cell, cell - 1, cell - 1);
             }
             g.font = 'bold ' + FONT; g.fillStyle = ch.frac > 0.4 ? C.warn : C.green;
-            g.fillText((ch.frac * 100).toFixed(0) + '% of values changed', X, Y + mat.length * cell + 18);
+            g.fillText((ch.frac * 100).toFixed(0) + '% of this response changed', X, MY + mat.length * cell + 18);
           };
-          draw(fNow, SX, 300, 8, 'after one 3×3 filter', '14 × 14 feature map — 9 weights, reused everywhere', cF);
-          draw(pNow, SX + 180, 300, 8, 'after 2×2 max pooling', '7 × 7 — keeps the strongest response nearby', cP);
+          panel(fNow, SX, 8, 'after one 3×3 filter', '14 × 14 feature map — 9 weights, reused everywhere', 170, cF);
+          panel(pNow, SX + 200, 8, 'after 2×2 max pooling', '7 × 7 — keeps the strongest response nearby', 240, cP);
 
-          /* ---- the weight tally ---- */
-          const TX = 500;
+          /* ---- the weight tally: its own column under the image, clear of both maps ---- */
+          const TX = IX;
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
-          g.fillText('weights in the first layer', TX, 280);
+          g.fillText('weights in the first layer', TX, 356);
           g.font = MONO;
           g.fillStyle = C.danger;
-          g.fillText('fully connected: 150,528,000', TX, 302);
-          g.fillStyle = C.muted; g.fillText('(a 224×224 colour photo', TX, 318);
-          g.fillText(' into 1,000 hidden units)', TX, 332);
-          g.fillStyle = C.green;
-          g.fillText('one 3×3 filter: 9', TX, 356);
+          g.fillText('fully connected: 150,528,000', TX, 376);
           g.fillStyle = C.muted;
-          g.fillText('+ 1 bias. That is the whole layer.', TX, 372);
+          g.fillText('(a 224×224 colour photo into', TX, 392);
+          g.fillText('1,000 hidden units)', TX, 408);
+          g.fillStyle = C.green;
+          g.fillText('one 3×3 filter: 9 + 1 bias', TX, 428);
+          g.fillStyle = C.muted;
+          g.fillText('That is the whole layer.', TX, 444);
 
           ro.set({ shift: '(' + ox + ', ' + oy + ')', 'pixels changed': cIn.n + '/' + cIn.tot, 'feature map changed': (cF.frac * 100).toFixed(0) + '%', 'pooled changed': (cP.frac * 100).toFixed(0) + '%' });
         });
 
-        return ctx.figure(cv, 'The same shape, moved. Red marks every value that is different from where it started. A fully-connected layer has no notion that two pixels are neighbours — it sees a list of 256 unrelated numbers, so a one-pixel nudge rewrites a large slice of its input and it must learn the shape afresh at every position. The filter has nine weights in total, reused at all 196 positions, and its response simply <i>moves with the shape</i>. Pooling then throws away some of that movement, which is where genuine position-blindness starts.', [xSl, ySl, nudge, home], ro);
+        return ctx.figure(cv, 'The same shape, moved. Red marks every value that is different from where it started. A fully-connected layer has no notion that two pixels are neighbours — it sees a list of 256 unrelated numbers, so a one-pixel nudge rewrites more than half of the pixels that carry the shape and it must learn that shape afresh at every position. The filter has nine weights in total, reused at all 196 positions, and its response simply <i>moves with the shape</i>. Pooling then throws away some of that movement, which is where genuine position-blindness starts.', [xSl, ySl, nudge, home], ro);
       }
 
       /* ------------------------------------------------------------------ */
@@ -471,7 +484,7 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 330);
+          g.clearRect(0, 0, cv.W, cv.H);
           const R = rf();
           const IMG = 64, CELL = 4, X = 40, Y = 60;
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
@@ -497,8 +510,10 @@
           wrapText(g, 'The white dot is one single unit. The green square is every pixel of the original image that can influence it — its receptive field.', TX, 94, 330, 17);
           g.font = MONO; g.fillStyle = C.muted;
           g.fillText('weights per filter: ' + paramsPerFilter(), TX, 150);
-          g.fillText('covering ' + (R * R) + ' pixels of image', TX, 168);
-          const ratio = (R * R) / paramsPerFilter();
+          const cover = Math.min(IMG, R);                    // the image is only 64 x 64 - never claim more
+          g.fillText(R >= IMG ? 'covering all ' + (IMG * IMG).toLocaleString() + ' pixels of the image'
+            : 'covering ' + (cover * cover).toLocaleString() + ' pixels of the image', TX, 168);
+          const ratio = (cover * cover) / paramsPerFilter();
           g.font = 'bold ' + FONT; g.fillStyle = C.accent;
           g.fillText(ratio.toFixed(1) + '× more reach than weights', TX, 190);
           g.font = FONT; g.fillStyle = C.muted;
@@ -516,7 +531,7 @@
       /* Interactive F: how a modern multimodal model chops up your image    */
       /* ------------------------------------------------------------------ */
       function patchTokens() {
-        const [cv, g] = ctx.canvas(720, 340);
+        const [cv, g] = ctx.canvas(720, 384);
         let side = 224, patch = 16;
         const SIZES = [112, 224, 336, 448, 672];
         const sSl = ctx.slider({ label: 'image size (pixels)', min: 0, max: 4, step: 1, value: 1, fmt: (v) => SIZES[v] + '²', onChange: (v) => { side = SIZES[v]; } });
@@ -524,10 +539,10 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 340);
+          g.clearRect(0, 0, cv.W, cv.H);
           const per = Math.floor(side / patch);
           const tokens = per * per;
-          const BOX = 250, X = 40, Y = 56;
+          const BOX = 280, X = 40, Y = 56;
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
           g.fillText('your image, cut into tokens', X, 32);
           /* a stand-in picture so the grid has something to cut up */
@@ -548,32 +563,38 @@
           }
           g.strokeStyle = C.warn; g.lineWidth = 2;
           g.strokeRect(X, Y, step, step);
-          g.font = MONO; g.fillStyle = C.warn;
+          g.font = MONO;
+          const tagW = g.measureText('one token').width;
+          g.fillStyle = 'rgba(10,14,22,0.8)';                       // so the label stays readable over the picture
+          g.fillRect(X + step + 3, Y + step - 13, tagW + 6, 15);
+          g.fillStyle = C.warn;
           g.fillText('one token', X + step + 6, Y + step - 2);
 
-          const TX = 330;
+          const TX = 350, TW = 330;
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
           g.fillText('what the model is handed', TX, 32);
           g.font = MONO; g.fillStyle = C.muted;
           g.fillText(side + ' ÷ ' + patch + ' = ' + per + ' patches per side', TX, 58);
-          g.fillText(per + ' × ' + per + ' =', TX, 78);
+          const eq = per + ' × ' + per + ' = ';
+          g.fillText(eq, TX, 80);
+          const eqW = g.measureText(eq).width;                      // keep the big number clear of the sum
           g.font = 'bold 26px Inter, system-ui, sans-serif'; g.fillStyle = C.green;
-          g.fillText(tokens.toLocaleString() + ' tokens', TX + 62, 80);
+          g.fillText(tokens.toLocaleString() + ' tokens', TX + eqW + 6, 82);
           g.font = FONT; g.fillStyle = C.muted;
-          wrapText(g, 'Each patch is flattened and pushed through one small layer into a vector — exactly the kind of vector a word becomes in chapter 6. From there the model cannot tell which tokens came from pixels and which came from text.', TX, 106, 340, 17);
+          wrapText(g, 'Each patch is flattened and pushed through one small layer into a vector — exactly the kind of vector a word becomes in chapter 6. From there the model cannot tell which tokens came from pixels and which came from text.', TX, 110, TW, 17);
 
           /* cost bar: attention is quadratic in the number of tokens */
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
-          g.fillText('attention cost grows with tokens²', TX, 176);
+          g.fillText('attention cost grows with tokens²', TX, 210);
           const rel = tokens * tokens / (196 * 196);
-          const w = ctx.clamp(Math.log10(Math.max(1, rel)) / 3, 0.02, 1) * 320;
-          g.fillStyle = C.line; g.fillRect(TX, 186, 320, 14);
+          const w = ctx.clamp(Math.log10(Math.max(1, rel)) / 3, 0.02, 1) * TW;
+          g.fillStyle = C.line; g.fillRect(TX, 220, TW, 14);
           g.fillStyle = rel > 20 ? C.danger : rel > 4 ? C.warn : C.green;
-          g.fillRect(TX, 186, w, 14);
+          g.fillRect(TX, 220, w, 14);
           g.font = MONO; g.fillStyle = C.muted;
-          g.fillText(rel < 1 ? (1 / rel).toFixed(1) + '× cheaper than 224²/16' : rel.toFixed(1) + '× the cost of 224²/16', TX, 216);
+          g.fillText(rel < 1 ? (1 / rel).toFixed(1) + '× cheaper than 224²/16' : rel.toFixed(1) + '× the cost of 224²/16', TX, 250);
           g.font = FONT; g.fillStyle = C.muted;
-          wrapText(g, 'Halve the patch size and you get four times the tokens and sixteen times the attention cost. This is the whole reason high-resolution image input is expensive, and why models tile large images instead of shrinking the patch.', TX, 238, 340, 17);
+          wrapText(g, 'Halve the patch size and you get four times the tokens and sixteen times the attention cost. This is the whole reason high-resolution image input is expensive, and why models tile large images instead of shrinking the patch.', TX, 274, TW, 17);
           ro.set({ image: side + '²', patch: patch + '²', tokens });
         });
 
@@ -586,11 +607,11 @@
       root.append(
         callout('tryit', '🖐 Do this first — move a shape one pixel and watch a network break',
           `<b>1.</b> Drag the white shape around the grid, or press <b>Nudge 1 pixel right</b>.<br>
-           <b>2.</b> Read the counter under the image: a single pixel of movement changes <b>dozens</b> of the 256 input values.<br>
+           <b>2.</b> Read the counter under the image: a single pixel of movement rewrites <b>a dozen</b> of the 256 input values — more than half of every pixel the shape lights up. Drag it right across the grid and it is dozens.<br>
            <b>3.</b> Look at the flattened row on the right — that is all a fully-connected network ever receives. Nothing in it says these pixels are neighbours.<br>
            <b>4.</b> Now look at the two heatmaps at the bottom. The shape moved; the pattern in them <i>moved with it</i> instead of scrambling.`),
         shiftLab(),
-        p(`That is the problem and the fix in one picture. Shift the shape and a fully-connected layer sees a mostly new input, so it would have to learn "cross" separately for every position it could occupy. The filter underneath just found the same thing in a new place, using the same nine numbers.`),
+        p(`That is the problem and the fix in one picture. Shift the shape and almost every pixel that carried it lands on a different input of the fully-connected layer, so it would have to learn "cross" separately for every position it could occupy. The filter underneath just found the same thing in a new place, using the same nine numbers.`),
       );
 
       root.append(section('Why a plain network cannot see',

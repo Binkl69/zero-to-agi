@@ -408,7 +408,7 @@
       /* Interactive: lost in the middle                                   */
       /* ================================================================ */
       function lostInMiddle() {
-        const [cv, g] = ctx.canvas(720, 330);
+        const [cv, g] = ctx.canvas(720, 360);
         let pos = 0.5, ctxLen = 30, model = 'typical';
         /* U-shaped recall: strong at the edges, sagging in the middle, and the sag deepens
            as the context grows. Shaped after the Liu et al. (2023) curves, not measured here. */
@@ -432,7 +432,7 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 330);
+          g.clearRect(0, 0, cv.W, cv.H);
           /* the context, drawn as a row of documents */
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
           g.fillText('the model\'s context: ' + ctxLen + ' documents, one of which has the answer', 34, 26);
@@ -517,7 +517,7 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 340);
+          g.clearRect(0, 0, cv.W, cv.H);
           const inCost = promptTok / 1e6 * IN_PRICE * (cacheHit ? CACHE_READ : 1);
           const outCost = outTok / 1e6 * OUT_PRICE;
           const per = inCost + outCost;

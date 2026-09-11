@@ -296,7 +296,9 @@ for step in range(max_steps):
       const pw = W - padL - padR, ph = HH - padT - padB;
       const lnV = Math.log(m.V);
       const yMax = Math.max(1, lnV * 1.15), yMin = 0;    // max(1, …) so a 2-character vocabulary never divides by ~0
-      const yOf = v => padT + ph * (1 - (Math.min(Math.max(v, yMin), yMax) - yMin) / (yMax - yMin));
+      /* unclamped: a step that overshoots above the axis must run off the top (the clip below
+         trims it) instead of being laid flat along the top edge, which would read as a plateau */
+      const yOf = v => padT + ph * (1 - (v - yMin) / (yMax - yMin));
       g.strokeStyle = ctx.colors.line; g.lineWidth = 1; g.font = '11px JetBrains Mono, monospace'; g.fillStyle = ctx.colors.muted; g.textAlign = 'right';
       for (let v = 0; v <= yMax; v += 1) { const y = yOf(v); g.beginPath(); g.moveTo(padL, y); g.lineTo(W - padR, y); g.stroke(); g.fillText(v.toFixed(0), padL - 6, y + 4); }
       // uniform-guess baseline
@@ -304,25 +306,28 @@ for step in range(max_steps):
       g.textAlign = 'left'; g.fillStyle = ctx.colors.warn; g.fillText('ln(V) = ' + lnV.toFixed(2) + '  (uniform guessing)', padL + 6, yOf(lnV) - 5);
       const n = hist.length;
       if (n > 1) {
-        const cols = Math.min(pw, n);
+        g.save(); g.beginPath(); g.rect(padL, padT, pw, ph); g.clip();
+        const DOT = 3.5, pwD = pw - DOT - 1;      // the newest point is a dot: leave it room inside the clip
+        const cols = Math.min(Math.floor(pwD), n);
         g.strokeStyle = 'rgba(124,156,255,0.25)'; g.lineWidth = 1; g.beginPath();
         for (let c = 0; c < cols; c++) {
           const i0 = Math.floor(c * n / cols), i1 = Math.max(i0 + 1, Math.floor((c + 1) * n / cols));
           let mn = Infinity, mx = -Infinity;
           for (let i = i0; i < i1; i++) { const v = hist[i]; if (v < mn) mn = v; if (v > mx) mx = v; }
-          const x = padL + (c + 0.5) / cols * pw;
+          const x = padL + (c + 0.5) / cols * pwD;
           g.moveTo(x, yOf(mx)); g.lineTo(x, yOf(mn) + 0.5);
         }
         g.stroke();
         g.strokeStyle = ctx.colors.accent; g.lineWidth = 2; g.beginPath();
         for (let c = 0; c < cols; c++) {
           const i = Math.min(n - 1, Math.floor((c + 0.5) * n / cols));
-          const x = padL + (c + 0.5) / cols * pw, y = yOf(emaHist[i]);
+          const x = padL + (c + 0.5) / cols * pwD, y = yOf(emaHist[i]);
           if (c === 0) g.moveTo(x, y); else g.lineTo(x, y);
         }
         g.stroke();
-        const lx = padL + (cols - 0.5) / cols * pw, ly = yOf(emaHist[n - 1]);
-        g.fillStyle = ctx.colors.accent; g.beginPath(); g.arc(lx, ly, 3.5, 0, Math.PI * 2); g.fill();
+        const lx = padL + (cols - 0.5) / cols * pwD, ly = yOf(emaHist[n - 1]);
+        g.fillStyle = ctx.colors.accent; g.beginPath(); g.arc(lx, ly, DOT, 0, Math.PI * 2); g.fill();
+        g.restore();
       }
       g.fillStyle = ctx.colors.muted; g.textAlign = 'left'; g.fillText('loss (cross-entropy, nats)', padL + 6, padT + 10);
       g.textAlign = 'right'; g.fillText('step ' + step.toLocaleString() + (hist.length ? '  ·  smoothed ' + (emaLoss || 0).toFixed(3) : ''), W - padR, HH - 8);
@@ -410,18 +415,23 @@ for step in range(max_steps):
       f: { x: 460, y: 150, label: 'f = e+c', kind: 'op', fd: 2, bd: 1 },
       L: { x: 630, y: 211, label: 'L = f*d', kind: 'out', fd: 3, bd: 0 },
     };
+    /* Each edge's local-derivative chip is hand-placed in the empty corridor beside its curve:
+       the boxes are 96 wide, so the gaps between the columns are 104/74/74px and a two-line chip
+       (symbol above, number below) fits there without touching a node or another chip. */
     const edges = [
-      { from: 'a', to: 'e', local: () => vals.b, localTxt: () => '∂e/∂a = b' },
-      { from: 'b', to: 'e', local: () => vals.a, localTxt: () => '∂e/∂b = a' },
-      { from: 'e', to: 'f', local: () => 1, localTxt: () => '∂f/∂e = 1' },
-      { from: 'c', to: 'f', local: () => 1, localTxt: () => '∂f/∂c = 1' },
-      { from: 'f', to: 'L', local: () => vals.d, localTxt: () => '∂L/∂f = d' },
-      { from: 'd', to: 'L', local: () => cur.f, localTxt: () => '∂L/∂d = f' },
+      { from: 'a', to: 'e', local: () => vals.b, sym: '∂e/∂a = b', lx: 190, ly: 46 },
+      { from: 'b', to: 'e', local: () => vals.a, sym: '∂e/∂b = a', lx: 190, ly: 128 },
+      { from: 'e', to: 'f', local: () => 1, sym: '∂f/∂e', lx: 375, ly: 96 },
+      { from: 'c', to: 'f', local: () => 1, sym: '∂f/∂c', lx: 190, ly: 172 },
+      { from: 'f', to: 'L', local: () => vals.d, sym: '∂L/∂f = d', lx: 545, ly: 148 },
+      { from: 'd', to: 'L', local: () => cur.f, sym: '∂L/∂d = f', lx: 360, ly: 254 },
     ];
     const cur = { a: 0, b: 0, c: 0, d: 0, e: 0, f: 0, L: 0 };
     const grad = { a: NaN, b: NaN, c: NaN, d: NaN, e: NaN, f: NaN, L: NaN };
     let phase = 'idle', prog = 0, forwardDone = false, backwardDone = false, dirty = true;
     const DUR = 1.8, LO = -5, HI = 10;      // LO/HI must match the sliders' min/max
+    const HW = 48;                          // half the width of a node box
+    const CHIP_FONT = '10px JetBrains Mono, monospace', CHIP_LH = 12;
 
     function forwardCompute() {
       cur.a = vals.a; cur.b = vals.b; cur.c = vals.c; cur.d = vals.d;
@@ -445,10 +455,11 @@ for step in range(max_steps):
       const fStage = phase === 'forward' ? prog * 3 : (forwardDone ? 99 : -1);
       const bStage = phase === 'backward' ? prog * 3 : (backwardDone ? 99 : -1);
       let flowingLabel = '';
+      const chips = [];                          // edge labels, drawn after the boxes so nothing hides them
       // edges
       for (const ed of edges) {
         const A = nodes[ed.from], Bn = nodes[ed.to];
-        const x0 = A.x + 55, y0 = A.y, x1 = Bn.x - 55, y1 = Bn.y;
+        const x0 = A.x + HW, y0 = A.y, x1 = Bn.x - HW, y1 = Bn.y;
         const tF = fStage - (Bn.fd - 1);           // 0..1 while the forward pulse travels
         const tB = bStage - (A.bd - 1);            // 0..1 while the backward pulse travels
         const active = (phase === 'forward' && tF > 0 && tF < 1) || (phase === 'backward' && tB > 0 && tB < 1);
@@ -456,12 +467,7 @@ for step in range(max_steps):
         g.lineWidth = active ? 2.5 : 1.5;
         g.beginPath(); g.moveTo(x0, y0); g.bezierCurveTo(x0 + 60, y0, x1 - 60, y1, x1, y1); g.stroke();
         // local derivative label (shown once the backward flow reaches this edge)
-        if (bStage >= A.bd - 1 || backwardDone) {
-          const mx = (x0 + x1) / 2, my = (y0 + y1) / 2 - 10;
-          g.font = '11px JetBrains Mono, monospace'; g.textAlign = 'center';
-          g.fillStyle = ctx.colors.danger;
-          g.fillText(ed.localTxt() + ' = ' + fmt(ed.local()), mx, my);
-        }
+        if (bStage >= A.bd - 1 || backwardDone) chips.push(ed);
         if (active) {
           const t = phase === 'forward' ? tF : 1 - tB;
           const s = t, u = 1 - t;
@@ -480,17 +486,38 @@ for step in range(max_steps):
         const showGrad = (bStage >= n.bd || backwardDone) && !isNaN(grad[k]);
         const col = n.kind === 'leaf' ? ctx.colors.accent : n.kind === 'op' ? ctx.colors.purple : ctx.colors.pink;
         g.fillStyle = '#111827'; g.strokeStyle = col; g.lineWidth = showVal ? 2 : 1;
-        rr(n.x - 55, n.y - 26, 110, 52, 8); g.fill(); g.stroke();
+        rr(n.x - HW, n.y - 26, HW * 2, 52, 8); g.fill(); g.stroke();
         g.fillStyle = col; g.font = '600 12px Inter, sans-serif'; g.textAlign = 'center';
         g.fillText(n.label, n.x, n.y - 10);
         g.font = '11px JetBrains Mono, monospace';
         g.fillStyle = ctx.colors.text; g.fillText('data ' + (showVal ? fmt(cur[k]) : '?'), n.x, n.y + 6);
         g.fillStyle = showGrad ? ctx.colors.danger : ctx.colors.muted; g.fillText('grad ' + (showGrad ? fmt(grad[k]) : '?'), n.x, n.y + 20);
       }
+      // edge chips last: an opaque plate keeps the curve from running through the numbers
+      g.font = CHIP_FONT; g.textAlign = 'center';
+      for (const ed of chips) {
+        const l1 = ed.sym, l2 = '= ' + fmt(ed.local());
+        const w = Math.max(g.measureText(l1).width, g.measureText(l2).width);
+        g.fillStyle = '#141b28'; g.strokeStyle = 'rgba(251,113,133,0.35)'; g.lineWidth = 1;
+        g.fillRect(ed.lx - w / 2 - 6, ed.ly - 9, w + 12, CHIP_LH + 13);
+        g.strokeRect(ed.lx - w / 2 - 6, ed.ly - 9, w + 12, CHIP_LH + 13);
+        g.fillStyle = ctx.colors.danger;
+        g.fillText(l1, ed.lx, ed.ly); g.fillText(l2, ed.lx, ed.ly + CHIP_LH);
+      }
       g.fillStyle = ctx.colors.muted; g.font = '12px Inter, sans-serif'; g.textAlign = 'left';
       g.fillText(flowingLabel || (backwardDone ? 'done: every leaf now knows how much L changes if it changes' : forwardDone ? 'forward done — press Backward to send dL/dL = 1 back through the graph' : 'press Forward'), 20, HH - 14);
     }
-    function rr(x, y, w, hh, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + hh, r); g.arcTo(x + w, y + hh, x, y + hh, r); g.arcTo(x, y + hh, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+    /* Traced side by side rather than with arcTo: an arcTo path is described by its corner
+       targets, so the "outline" cuts diagonally across the middle of the box it is meant to
+       surround — harmless on screen, but it is not the shape this box actually is. */
+    function rr(x, y, w, hh, r) {
+      g.beginPath();
+      g.moveTo(x + r, y); g.lineTo(x + w - r, y); g.quadraticCurveTo(x + w, y, x + w, y + r);
+      g.lineTo(x + w, y + hh - r); g.quadraticCurveTo(x + w, y + hh, x + w - r, y + hh);
+      g.lineTo(x + r, y + hh); g.quadraticCurveTo(x, y + hh, x, y + hh - r);
+      g.lineTo(x, y + r); g.quadraticCurveTo(x, y, x + r, y);
+      g.closePath();
+    }
 
     function updateRd() {
       rd.set({ a: fmt(vals.a), b: fmt(vals.b), c: fmt(vals.c), d: fmt(vals.d), L: forwardDone ? fmt(cur.L) : '?',
@@ -576,21 +603,33 @@ for step in range(max_steps):
       const lnV = Math.log(V);
       const cur = lossFor(Math.pow(10, logStd));
       const yMax = Math.max(lnV * 2.2, cur * 1.1, 2);
-      const xOf = s => padL + (Math.log10(s) + 2) / 3 * pw, yOf = l => padT + ph * (1 - Math.min(l, yMax) / yMax);
+      /* no clamp here: a loss above the top of the axis must leave the plot (the clip below trims
+         it), because flattening it onto the top edge would draw a plateau the model does not have */
+      const xOf = s => padL + (Math.log10(s) + 2) / 3 * pw, yOf = l => padT + ph * (1 - l / yMax);
       g.strokeStyle = ctx.colors.line; g.lineWidth = 1; g.font = '11px JetBrains Mono, monospace'; g.fillStyle = ctx.colors.muted;
-      [0.01, 0.1, 1, 10].forEach(s => { const x = xOf(s); g.beginPath(); g.moveTo(x, padT); g.lineTo(x, padT + ph); g.stroke(); g.textAlign = 'center'; g.fillText('σ = ' + s, x, HH - 10); });
+      [0.01, 0.1, 1, 10].forEach((s, i) => {
+        const x = xOf(s); g.beginPath(); g.moveTo(x, padT); g.lineTo(x, padT + ph); g.stroke();
+        /* the outermost ticks sit on the plot edges, so their labels hang off the canvas if centred */
+        g.textAlign = i === 0 ? 'left' : i === 3 ? 'right' : 'center';
+        g.fillText('σ = ' + s, x, HH - 10);
+      });
       const stepY = yMax > 12 ? 5 : yMax > 6 ? 2 : 1;
       for (let l = 0; l <= yMax; l += stepY) { const y = yOf(l); g.beginPath(); g.moveTo(padL, y); g.lineTo(W - padR, y); g.stroke(); g.textAlign = 'right'; g.fillText(String(l), padL - 6, y + 4); }
       g.setLineDash([5, 4]); g.strokeStyle = ctx.colors.warn; g.beginPath(); g.moveTo(padL, yOf(lnV)); g.lineTo(W - padR, yOf(lnV)); g.stroke(); g.setLineDash([]);
       g.fillStyle = ctx.colors.warn; g.textAlign = 'left'; g.fillText('ln(V) = ' + lnV.toFixed(2) + '  (the loss of an honest "I have no idea")', padL + 6, yOf(lnV) - 5);
+      g.save(); g.beginPath(); g.rect(padL, padT, pw, ph); g.clip();
       g.strokeStyle = ctx.colors.accent; g.lineWidth = 2; g.beginPath();
       curve.forEach((l, i) => { const x = xOf(stds[i]), y = yOf(l); if (i === 0) g.moveTo(x, y); else g.lineTo(x, y); });
       g.stroke();
+      g.restore();
       const cx = xOf(Math.pow(10, logStd)), cy = yOf(cur);
       g.strokeStyle = ctx.colors.danger; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(cx, padT); g.lineTo(cx, padT + ph); g.stroke(); g.setLineDash([]);
       g.fillStyle = cur > lnV * 1.15 ? ctx.colors.danger : ctx.colors.green; g.beginPath(); g.arc(cx, cy, 6, 0, Math.PI * 2); g.fill();
       g.fillStyle = ctx.colors.text; g.font = '600 12px Inter, sans-serif'; g.textAlign = cx > W / 2 ? 'right' : 'left';
-      g.fillText('measured init loss ' + cur.toFixed(2), cx + (cx > W / 2 ? -10 : 10), cy - 10);
+      /* for small σ the dot sits exactly on the ln(V) line, where this label would be printed on
+         top of the ln(V) one — drop it below the dot whenever the two are that close */
+      const nearLnV = Math.abs(cy - yOf(lnV)) < 22;
+      g.fillText('measured init loss ' + cur.toFixed(2), cx + (cx > W / 2 ? -10 : 10), cy + (nearLnV ? 24 : -10));
       g.fillStyle = ctx.colors.muted; g.font = '11px Inter, sans-serif'; g.textAlign = 'left'; g.fillText('initial loss vs. the std-dev σ of the random logits (log scale)', padL + 6, padT + 10);
       const verdict = cur > lnV * 1.15 ? 'confidently wrong at init → shrink the last layer\'s weights (or zero its bias)' : cur < lnV * 0.9 ? 'below ln(V): only possible if the targets are not uniform — check for leakage' : 'healthy: about ln(V), the model starts out humble';
       rd.set({ 'vocab V': V.toLocaleString(), 'ln(V)': lnV.toFixed(3), 'logit σ': Math.pow(10, logStd).toFixed(3), 'init loss': cur.toFixed(3), verdict });
@@ -680,7 +719,7 @@ for step in range(max_steps):
     const ro = ctx.readout();
 
     ctx.loop(() => {
-      g.clearRect(0, 0, 720, 360);
+      g.clearRect(0, 0, cv.W, cv.H);
       const c = CASES[idx];
       const P = { x: 55, y: 44, w: 300, h: 170 };
       g.font = 'bold ' + FONT; g.fillStyle = C.text;
@@ -755,12 +794,13 @@ for step in range(max_steps):
     let B = 32, T = 8, D = 64, H = 4, V = 65;
     const bSl = ctx.slider({ label: 'batch B', min: 1, max: 64, step: 1, value: 32, onChange: (v) => { B = v; } });
     const tSl = ctx.slider({ label: 'context T', min: 2, max: 64, step: 1, value: 8, onChange: (v) => { T = v; } });
-    const dSl = ctx.slider({ label: 'width d', min: 8, max: 256, step: 8, value: 64, onChange: (v) => { D = v; } });
+    /* step 4, not 8: the caption tells the reader to try d = 100, which a step of 8 cannot reach */
+    const dSl = ctx.slider({ label: 'width d', min: 8, max: 256, step: 4, value: 64, onChange: (v) => { D = v; } });
     const hSl = ctx.slider({ label: 'heads', min: 1, max: 12, step: 1, value: 4, onChange: (v) => { H = v; } });
     const ro = ctx.readout();
 
     ctx.loop(() => {
-      g.clearRect(0, 0, 720, 360);
+      g.clearRect(0, 0, cv.W, cv.H);
       const divides = D % H === 0;
       const headDim = D / H;
       const rows = [
@@ -768,31 +808,34 @@ for step in range(max_steps):
         { n: 'token embedding table lookup', s: '(' + B + ', ' + T + ', ' + D + ')', ok: true },
         { n: '+ position embedding', s: '(' + B + ', ' + T + ', ' + D + ')', ok: true, note: 'broadcast over the batch' },
         { n: 'split into heads', s: '(' + B + ', ' + H + ', ' + T + ', ' + (divides ? headDim : '?') + ')', ok: divides, note: divides ? 'd ÷ heads = ' + headDim : 'd is not divisible by heads' },
-        { n: 'attention scores  q @ kᵀ', s: '(' + B + ', ' + H + ', ' + T + ', ' + T + ')', ok: divides, note: 'the T×T grid — this is the one that grows quadratically' },
+        { n: 'attention scores  q @ kᵀ', s: '(' + B + ', ' + H + ', ' + T + ', ' + T + ')', ok: divides, note: 'the T×T grid — grows as T²' },
         { n: 'weighted values, heads merged', s: '(' + B + ', ' + T + ', ' + D + ')', ok: divides },
         { n: 'MLP  d → 4d → d', s: '(' + B + ', ' + T + ', ' + D + ')', ok: true, note: 'hidden layer is ' + (4 * D) },
         { n: 'final projection to the vocabulary', s: '(' + B + ', ' + T + ', ' + V + ')', ok: true },
-        { n: 'cross-entropy wants it flattened', s: '(' + (B * T) + ', ' + V + ')  vs targets (' + (B * T) + ',)', ok: true, note: 'the reshape everyone forgets' },
+        { n: 'cross-entropy wants it flattened', s: '(' + (B * T) + ', ' + V + ') vs targets (' + (B * T) + ',)', ok: true, note: 'the reshape everyone forgets' },
       ];
+      /* three fixed columns: the widest name, the widest shape and the widest note each have to
+         clear the next column, and the last note has to finish inside 720px */
+      const NAME_X = 30, SHAPE_X = 252, NOTE_X = 496;
       g.font = 'bold ' + FONT; g.fillStyle = C.text;
-      g.fillText('every tensor shape in one forward pass', 30, 26);
-      let y = 46;
+      g.fillText('every tensor shape in one forward pass', NAME_X, 24);
+      let y = 40;
       rows.forEach(r => {
         g.font = FONT; g.fillStyle = r.ok ? C.muted : C.danger;
-        g.fillText(r.n, 30, y + 13);
+        g.fillText(r.n, NAME_X, y + 13);
         g.font = 'bold ' + MONO; g.fillStyle = r.ok ? C.accent : C.danger;
-        g.fillText(r.s, 330, y + 13);
-        if (r.note) { g.font = MONO; g.fillStyle = r.ok ? C.line : C.danger; g.fillText(r.note, 470, y + 13); }
-        y += 26;
+        g.fillText(r.s, SHAPE_X, y + 13);
+        if (r.note) { g.font = MONO; g.fillStyle = r.ok ? C.line : C.danger; g.fillText(r.note, NOTE_X, y + 13); }
+        y += 25;
       });
       g.font = 'bold 15px Inter, system-ui, sans-serif';
       g.fillStyle = divides ? C.green : C.danger;
-      g.fillText(divides ? 'shapes line up' : 'd must be divisible by the number of heads — this run would crash', 30, 300);
+      g.fillText(divides ? 'shapes line up' : 'd must be divisible by the number of heads — this run would crash', NAME_X, 280);
       const attnCells = B * H * T * T;
       g.font = MONO; g.fillStyle = C.muted;
-      g.fillText('attention matrix holds ' + attnCells.toLocaleString() + ' numbers', 30, 324);
+      g.fillText('attention matrix holds ' + attnCells.toLocaleString() + ' numbers', NAME_X, 301);
       g.font = FONT; g.fillStyle = C.muted;
-      wrapText(g, 'Double the context and that number quadruples. It is the first thing to shrink when you run out of memory.', 30, 346, 640, 16);
+      wrapText(g, 'Double the context and that number quadruples. It is the first thing to shrink when you run out of memory.', NAME_X, 321, 640, 16);
       ro.set({ 'B,T,d,heads': B + ',' + T + ',' + D + ',' + H, 'head dim': divides ? headDim : 'INVALID', 'attn cells': attnCells.toLocaleString() });
     });
 

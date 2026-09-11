@@ -75,10 +75,15 @@
     return merges;
   }
   const BPE_MERGES = trainBPE(CORPUS_TEXT, 200);
+  /* the alphabet the merges start from: every character in the corpus, plus the end-of-word mark */
+  const BPE_BASE_VOCAB = new Set((CORPUS_TEXT.toLowerCase().match(/[a-z]/g) || [])).size + 1;
   const BPE_RANK = new Map(BPE_MERGES.map((k, i) => [k, i]));
   const BPE_WORD_COUNT = new Set((CORPUS_TEXT.toLowerCase().match(/[a-z]+/g) || [])).size;
 
-  function bpeEncodeWord(word) {
+  /* limit = how many of the learned merge rules the reader has switched on; the tokenizer is
+     the same algorithm either way, it just stops applying rules it has not reached yet. */
+  function bpeEncodeWord(word, limit) {
+    const cap = limit === undefined ? BPE_MERGES.length : limit;
     let symbols = word.split('').concat(['</w>']);
     if (symbols.length <= 2) return symbols;
     // eslint-disable-next-line no-constant-condition
@@ -86,20 +91,20 @@
       let bestRank = Infinity, bestIdx = -1;
       for (let i = 0; i < symbols.length - 1; i++) {
         const r = BPE_RANK.get(symbols[i] + '' + symbols[i + 1]);
-        if (r !== undefined && r < bestRank) { bestRank = r; bestIdx = i; }
+        if (r !== undefined && r < cap && r < bestRank) { bestRank = r; bestIdx = i; }
       }
       if (bestIdx === -1) break;
       symbols = symbols.slice(0, bestIdx).concat([symbols[bestIdx] + symbols[bestIdx + 1]], symbols.slice(bestIdx + 2));
     }
     return symbols;
   }
-  function bpeTokenizeText(text) {
+  function bpeTokenizeText(text, limit) {
     const out = [];
     const re = /([a-zA-Z]+)|([0-9]+)|(\s+)|([^\sa-zA-Z0-9]+)/g;
     let m;
     while ((m = re.exec(text))) {
       if (m[1]) {
-        const syms = bpeEncodeWord(m[1].toLowerCase());
+        const syms = bpeEncodeWord(m[1].toLowerCase(), limit);
         for (const s of syms) out.push(s.replace('</w>', '‿'));
       } else if (m[2]) {
         out.push(m[2]);
@@ -156,14 +161,19 @@
           class: 'token-box',
           style: { minHeight: '64px', padding: '12px', background: '#0f1520', border: '1px solid ' + C.line, borderRadius: '10px', display: 'flex', flexWrap: 'wrap', gap: '5px', alignItems: 'center', lineHeight: '1.9' },
         });
+        const mergeLine = h('div', {
+          style: { marginTop: '10px', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: '12px', color: C.muted },
+        });
+        const wrap = h('div', {}, box, mergeLine);
         const PALETTE = [C.accent, C.green, C.warn, C.danger, C.pink, C.purple, C.orange];
         const ro = ctx.readout();
-        const S = { text: "Let's count: how many r's are in strawberry?" };
+        const S = { text: "Let's count: how many r's are in strawberry?", merges: BPE_MERGES.length };
+        const showSym = (sym) => sym.replace('</w>', '\u203f');
         function render() {
           box.innerHTML = '';
           const clipped = S.text.length > 500;
           const text = S.text.slice(0, 500);
-          const toks = text.length ? bpeTokenizeText(text) : [];
+          const toks = text.length ? bpeTokenizeText(text, S.merges) : [];
           let ci = 0;
           for (const t of toks) {
             const isSpace = t === '·';
@@ -183,22 +193,33 @@
           if (clipped) box.append(h('span', { style: { color: C.warn, fontSize: '12px' } }, ' (showing first 500 characters)'));
           const nChars = text.length;
           const rate = 0.000003; // illustrative $3 / million input tokens — not any specific real price
+          if (S.merges === 0) {
+            mergeLine.textContent = 'merge 0 of ' + BPE_MERGES.length + ' — nothing fused yet, so every token is a single character.';
+          } else {
+            const pair = BPE_MERGES[S.merges - 1].split('');
+            mergeLine.textContent = 'merge ' + S.merges + ' of ' + BPE_MERGES.length + ' — newest rule: "'
+              + showSym(pair[0]) + '" + "' + showSym(pair[1]) + '"  \u2192  "' + showSym(pair[0] + pair[1]) + '"';
+          }
           ro.set({
             tokens: toks.length,
             characters: nChars,
             'chars / token': toks.length ? (nChars / toks.length).toFixed(2) : '–',
+            'vocabulary': BPE_BASE_VOCAB + S.merges,
             'illustrative cost @ $3/M tok': '$' + (toks.length * rate).toFixed(6),
-            'merges learned': BPE_MERGES.length,
           });
         }
         const ta = ctx.textarea({ label: 'Type or paste text', value: S.text, onChange: (v) => { S.text = v; render(); } });
+        const mSl = ctx.slider({
+          label: 'merge rules learned', min: 0, max: BPE_MERGES.length, step: 1, value: BPE_MERGES.length,
+          fmt: (v) => String(Math.round(v)), onChange: (v) => { S.merges = Math.round(v); render(); },
+        });
         const b1 = ctx.button('Preset: “strawberry”', () => { S.text = 'strawberry'; ta.value = S.text; render(); });
         const b2 = ctx.button('Preset: a long rare word', () => { S.text = 'pneumonoultramicroscopicsilicovolcanoconiosis'; ta.value = S.text; render(); });
         const b3 = ctx.button('Preset: a normal sentence', () => { S.text = 'The transformer changed how machines read language forever.'; ta.value = S.text; render(); });
         render();
-        return ctx.figure(box,
-          `This is a real byte-pair-encoding (BPE) tokenizer, trained right now, in your browser, on a ${BPE_WORD_COUNT}-word built-in corpus about language models (not the internet) — it learned ${BPE_MERGES.length} merge rules by repeatedly fusing the most frequent adjacent pair of symbols. Each coloured chip is one token; “${'‿'}” marks the end of a word, the way real tokenizers mark word boundaries. Common words from its training text often survive as one piece; rare or unfamiliar ones fragment into smaller chunks. A production tokenizer (GPT-4's, Claude's) is the same algorithm trained on hundreds of billions of characters, so it recognises far more whole words — but any invented or rare-enough string still gets chopped up exactly like this.`,
-          [ta, b1, b2, b3], ro);
+        return ctx.figure(wrap,
+          `This is a real byte-pair-encoding (BPE) tokenizer, trained right now, in your browser, on a ${BPE_WORD_COUNT}-word built-in corpus about language models (not the internet) — it learned ${BPE_MERGES.length} merge rules by repeatedly fusing the most frequent adjacent pair of symbols. Each coloured chip is one token; “${'‿'}” marks the end of a word, the way real tokenizers mark word boundaries. Drag <b>merge rules learned</b> back to 0 and every token collapses to a single character; walk it forward and watch letter pairs, then endings, then whole words appear as single chips while the token count of the same sentence falls. Common words from its training text often survive as one piece; rare or unfamiliar ones fragment into smaller chunks. A production tokenizer (GPT-4's, Claude's) is the same algorithm trained on hundreds of billions of characters, so it recognises far more whole words — but any invented or rare-enough string still gets chopped up exactly like this.`,
+          [ta, mSl, b1, b2, b3], ro);
       }
 
       /* ================================================================== */
@@ -238,27 +259,39 @@
           gc.lineTo(p1.x - 8 * Math.cos(ang - 0.3), p1.y - 8 * Math.sin(ang - 0.3));
           gc.lineTo(p1.x - 8 * Math.cos(ang + 0.3), p1.y - 8 * Math.sin(ang + 0.3));
           gc.closePath(); gc.fill();
-          gc.font = MONO; gc.textAlign = 'left';
-          gc.fillText(label, p1.x + 6, p1.y + 4 + (labelOff || 0));
           gc.restore();
+          return { x: p1.x + 6, y: p1.y + 4 + (labelOff || 0), text: label, color: color };
         }
-        function bars(gc, x0, y0, w2, h2, vals, labels, mode) {
+        /* maxAbs is passed in, not guessed: the raw and the scaled panel share one scale so
+           that ÷√2 visibly shortens every bar, and the scale grows with the data so a slider
+           at its extreme cannot draw a bar taller than its frame. */
+        function bars(gc, x0, y0, w2, h2, vals, labels, mode, maxAbs) {
+          const bw = w2 / vals.length;
+          const top = mode === 'unit' ? 1 : Math.max(1e-6, maxAbs);
+          const zero = mode === 'unit' ? y0 + h2 - 2 : y0 + h2 / 2;
+          const span = mode === 'unit' ? h2 - 8 : h2 / 2 - 4;
           gc.save();
           gc.strokeStyle = C.line; gc.strokeRect(x0, y0, w2, h2);
-          const bw = w2 / vals.length;
-          const maxAbs = mode === 'unit' ? 1 : 4;
-          const zero = mode === 'unit' ? y0 + h2 : y0 + h2 / 2;
           if (mode !== 'unit') { gc.strokeStyle = C.muted; gc.globalAlpha = 0.5; gc.beginPath(); gc.moveTo(x0, zero); gc.lineTo(x0 + w2, zero); gc.stroke(); gc.globalAlpha = 1; }
+          gc.beginPath(); gc.rect(x0, y0, w2, h2); gc.clip();
           vals.forEach((v, i) => {
             const cx = x0 + bw * (i + 0.5);
-            const bh = Math.min(mode === 'unit' ? h2 : h2 / 2, Math.abs(v) / maxAbs * (mode === 'unit' ? h2 : h2 / 2));
+            const bh = ctx.clamp(Math.abs(v) / top, 0, 1) * span;
             const barY = v >= 0 ? zero - bh : zero;
             gc.fillStyle = v >= 0 ? C.accent : C.danger;
             gc.fillRect(cx - bw * 0.28, barY, bw * 0.56, Math.max(1, bh));
-            gc.fillStyle = C.text; gc.font = MONO; gc.textAlign = 'center';
-            gc.fillText(v.toFixed(2), cx, v >= 0 ? barY - 4 : barY + bh + 12);
-            gc.fillStyle = C.muted; gc.fillText(labels[i], cx, y0 + h2 + 14);
+            /* the number rides inside a tall bar and sits just outside a short one, so it
+               is always inside the frame and never lands on the key name below it */
+            const inside = bh >= 18;
+            gc.fillStyle = inside ? '#0a0e16' : C.text; gc.font = MONO; gc.textAlign = 'center';
+            gc.fillText(v.toFixed(2), cx, v >= 0
+              ? (inside ? barY + 14 : barY - 4)
+              : (inside ? barY + bh - 5 : barY + bh + 12));
           });
+          gc.restore();
+          gc.save();
+          gc.fillStyle = C.muted; gc.font = MONO; gc.textAlign = 'center';
+          vals.forEach((v, i) => gc.fillText(labels[i], x0 + bw * (i + 0.5), y0 + h2 + 14));
           gc.restore();
         }
         function draw() {
@@ -269,27 +302,51 @@
           g.strokeStyle = C.line; g.globalAlpha = 0.4;
           g.beginPath(); g.moveTo(PX, ORG.y); g.lineTo(PX + PS, ORG.y); g.moveTo(ORG.x, PY); g.lineTo(ORG.x, PY + PS); g.stroke();
           g.globalAlpha = 1;
-          for (let t = 0; t < 3; t++) {
-            arrow(g, S.Q[t], C.accent, null, 'Q' + (t + 1), -6);
-            arrow(g, S.K[t], C.warn, [5, 3], 'K' + (t + 1), 6);
-            arrow(g, S.V[t], C.green, [1, 4], 'V' + (t + 1), 16);
-          }
           const r = compute();
-          arrow(g, r.out, C.pink, null, 'output', 26);
+          const tips = [];
+          g.save(); g.beginPath(); g.rect(PX, PY, PS, PS); g.clip();
+          for (let t = 0; t < 3; t++) {
+            tips.push(arrow(g, S.Q[t], C.accent, null, 'Q' + (t + 1), -8));
+            tips.push(arrow(g, S.K[t], C.warn, [5, 3], 'K' + (t + 1), 4));
+            tips.push(arrow(g, S.V[t], C.green, [1, 4], 'V' + (t + 1), 16));
+          }
+          tips.push(arrow(g, r.out, C.pink, null, 'output', 28));
+          g.restore();
+          /* names go on last, each nudged down until it sits clear of the ones already
+             placed: three coincident vectors must still show three readable names */
+          const placed = [];
+          g.textAlign = 'left';
+          tips.forEach((tp, idx) => {
+            g.font = (idx === tips.length - 1 ? 'bold ' : '') + MONO;
+            const tw = g.measureText(tp.text).width;
+            const x = ctx.clamp(tp.x, PX + 3, PX + PS - tw - 3);
+            let y = ctx.clamp(tp.y, PY + 12, PY + PS - 5);
+            for (let guard = 0; guard < 24; guard++) {
+              const clash = placed.some((q) => Math.abs(q.y - y) < 12 && x < q.x + q.w + 4 && q.x < x + tw + 4);
+              if (!clash) break;
+              y += 12;
+              if (y > PY + PS - 5) y = PY + 12;
+            }
+            placed.push({ x, y, w: tw });
+            g.fillStyle = tp.color; g.fillText(tp.text, x, y);
+          });
           g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'left';
           wrapText(g, 'solid = Q · dashed = K · dotted = V · thick pink = the attention output for the selected query', PX, PY + PS + 18, PS, 13);
 
           const RX = 320, RW = W - RX - 16;
           g.fillStyle = C.text; g.font = 'bold 13px Inter, system-ui, sans-serif'; g.textAlign = 'left';
           g.fillText('query = token ' + (S.qi + 1) + '  —  scores against every key', RX, 20);
-          bars(g, RX, 34, RW, 70, r.raw, ['K1', 'K2', 'K3']);
-          g.fillStyle = C.muted; g.font = FONT; g.fillText('raw  QKᵀ', RX, 122);
-          bars(g, RX, 138, RW, 70, r.scaled, ['K1', 'K2', 'K3']);
-          g.fillText('scaled  ÷ √2', RX, 226);
-          bars(g, RX, 242, RW, 70, r.w, ['K1', 'K2', 'K3'], 'unit');
-          g.fillText('softmax weights (sum to 1)', RX, 330);
+          const panel = (title, y0, vals, mode, maxAbs) => {
+            g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'left';
+            g.fillText(title, RX, y0 - 8);
+            bars(g, RX, y0, RW, 62, vals, ['K1', 'K2', 'K3'], mode, maxAbs);
+          };
+          const rawMax = Math.max(1, ...r.raw.map((v) => Math.abs(v)));
+          panel('raw  QKᵀ', 48, r.raw, null, rawMax);
+          panel('scaled  ÷ √2  (same scale as above)', 154, r.scaled, null, rawMax);
+          panel('softmax weights (sum to 1)', 260, r.w, 'unit', 1);
           g.fillStyle = C.text; g.font = MONO; g.textAlign = 'left';
-          wrapText(g, 'output = ' + r.w.map((w, i) => f2(w) + '·V' + (i + 1)).join(' + ') + ' = (' + f2(r.out[0]) + ', ' + f2(r.out[1]) + ')', RX, 352, RW, 15);
+          wrapText(g, 'output = ' + r.w.map((w, i) => f2(w) + '·V' + (i + 1)).join(' + ') + ' = (' + f2(r.out[0]) + ', ' + f2(r.out[1]) + ')', RX, 362, RW, 15);
         }
         const ro = ctx.readout();
         function refresh() { draw(); const r = compute(); ro.set({ 'top key': 'K' + (r.w.indexOf(Math.max(...r.w)) + 1), weight: pct(Math.max(...r.w)) }); }
@@ -357,7 +414,7 @@
           return { tokens: raw, tags, weights, truncated: text.trim().split(/\s+/).length > 16 };
         }
 
-        const W = 720, H = 500;
+        const W = 720, H = 560;
         const [cv, g] = ctx.canvas(W, H);
         const S = { text: DEFAULT_SENTENCE, causal: false, temp: 1, query: 0 };
         let chipBoxes = [], matrixGeo = null;
@@ -431,12 +488,13 @@
           wrapText(g, 'border colour = toy part-of-speech guess: pink = pronoun, blue = content word, orange = verb/aux, purple = conjunction, grey = determiner/function word', 14, 205, W - 28, 13);
           if (a.truncated) { g.fillStyle = C.warn; g.fillText('(showing first 16 words)', 14, 235); }
 
-          // matrix
-          const n2 = n, cell = ctx.clamp(Math.min(340 / n2, 30), 12, 30);
-          const mx0 = (W - n2 * cell) / 2, my0 = 258;
-          matrixGeo = { x0: mx0, y0: my0, cell, n: n2 };
+          // matrix — its own heading first, then a cell size that keeps every row on the canvas
           g.fillStyle = C.text; g.font = 'bold 12px Inter, system-ui, sans-serif'; g.textAlign = 'left';
-          g.fillText('Every query (row) × every key (column) — click a row to inspect it above.', 14, my0 - 10);
+          g.fillText('Every query (row) × every key (column) — click a row to inspect it above.', 14, 258);
+          const my0 = 286;
+          const n2 = n, cell = ctx.clamp(Math.min(340 / n2, (H - my0 - 12) / n2, 30), 12, 30);
+          const mx0 = (W - n2 * cell) / 2;
+          matrixGeo = { x0: mx0, y0: my0, cell, n: n2 };
           for (let i = 0; i < n2; i++) {
             for (let j = 0; j < n2; j++) {
               const wt = a.weights[i][j];
@@ -482,7 +540,7 @@
       function blockDiagram() {
         const W = 720, H = 380;
         const [cv, g] = ctx.canvas(W, H);
-        const X0 = 64, X1 = 656, LY = 250, BOXY = 108, BOXH = 46;
+        const X0 = 64, X1 = 656, LY = 250, BOXY = 106, BOXH = 58;
         const S = { layers: 6, u: 0, playing: true, speed: 1 };
         const trail = [];
         function blockGeo(k, L) {
@@ -490,17 +548,21 @@
           return { bx, bw, attnX: bx - bw * 0.2, mlpX: bx + bw * 0.2 };
         }
         function phaseAt(u, L) {
-          const k = Math.min(L - 1, Math.floor(u)), t = u - k;
+          /* u is a clock that can arrive stale, backwards or wrapped; fold it into [0, L)
+             so floor(u) can never index a block that is not on screen. */
+          let uu = isFinite(u) ? u % L : 0;
+          if (uu < 0) uu += L;
+          const k = ctx.clamp(Math.floor(uu), 0, L - 1), t = uu - k;
           const { bx, bw, attnX, mlpX } = blockGeo(k, L);
           const lp = (a, b, u2) => a + (b - a) * ctx.clamp(u2, 0, 1);
           let x, y, label = '', box = null;
           if (t < 0.10) { x = lp(bx - bw * 0.5, attnX, t / 0.10); y = LY; }
           else if (t < 0.18) { x = attnX; y = lp(LY, BOXY + BOXH, (t - 0.10) / 0.08); }
-          else if (t < 0.40) { x = attnX; y = BOXY + BOXH / 2; label = 'Attention — every token gathers information from every other token, all at once'; box = 'attn'; }
+          else if (t < 0.40) { x = attnX; y = BOXY + BOXH - 12; label = 'Attention — every token gathers information from every other token, all at once'; box = 'attn'; }
           else if (t < 0.48) { x = attnX; y = lp(BOXY + BOXH, LY, (t - 0.40) / 0.08); label = 'Add & Norm — attention’s output is added back onto the residual stream, then normalised'; }
           else if (t < 0.55) { x = lp(attnX, mlpX, (t - 0.48) / 0.07); y = LY; label = 'Add & Norm'; }
           else if (t < 0.63) { x = mlpX; y = lp(LY, BOXY + BOXH, (t - 0.55) / 0.08); }
-          else if (t < 0.90) { x = mlpX; y = BOXY + BOXH / 2; label = 'MLP — the same small feed-forward network applied to each token independently'; box = 'mlp'; }
+          else if (t < 0.90) { x = mlpX; y = BOXY + BOXH - 12; label = 'MLP — the same small feed-forward network applied to each token independently'; box = 'mlp'; }
           else if (t < 0.98) { x = mlpX; y = lp(BOXY + BOXH, LY, (t - 0.90) / 0.08); label = 'Add & Norm — the MLP’s output is added back onto the residual stream, then normalised'; }
           else { x = lp(mlpX, bx + bw * 0.5, (t - 0.98) / 0.02); y = LY; label = 'Add & Norm'; }
           return { k, x, y, label, box };
@@ -527,18 +589,29 @@
           g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'left';
           g.fillText('tokens + positions in', X0 - 30, LY + 20);
           g.textAlign = 'right'; g.fillText('→ next-token probabilities', X1 + 20, LY + 20);
-          g.textAlign = 'center'; g.fillStyle = C.accent; g.fillText('residual stream', (X0 + X1) / 2, LY - 10);
+          g.textAlign = 'center';
+          const rsW = g.measureText('residual stream').width;
+          g.fillStyle = '#0a0e16'; g.fillRect((X0 + X1) / 2 - rsW / 2 - 7, LY - 23, rsW + 14, 18);
+          g.fillStyle = C.accent; g.fillText('residual stream', (X0 + X1) / 2, LY - 10);
 
           const ph = phaseAt(S.u, L);
+          /* everything below is driven by the animation clock: keep it inside the diagram */
+          g.save(); g.beginPath(); g.rect(24, BOXY - 10, W - 48, LY - BOXY + 40); g.clip();
           if (ph.box) {
             const geo = blockGeo(ph.k, L);
             const bxp = ph.box === 'attn' ? geo.attnX : geo.mlpX;
-            g.strokeStyle = ph.box === 'attn' ? C.pink : C.orange; g.lineWidth = 2;
-            g.strokeRect(bxp - 46, BOXY, 92, BOXH);
-            g.fillStyle = '#111827'; g.fillRect(bxp - 46, BOXY, 92, BOXH);
-            g.strokeRect(bxp - 46, BOXY, 92, BOXH);
-            g.fillStyle = ph.box === 'attn' ? C.pink : C.orange; g.font = 'bold 12px Inter, system-ui, sans-serif'; g.textAlign = 'center';
-            g.fillText(ph.box === 'attn' ? 'Multi-Head Attention' : 'MLP', bxp, BOXY + BOXH / 2 + 4);
+            const col = ph.box === 'attn' ? C.pink : C.orange, BW2 = 112;
+            g.fillStyle = '#111827'; g.fillRect(bxp - BW2 / 2, BOXY, BW2, BOXH);
+            g.strokeStyle = col; g.lineWidth = 2; g.strokeRect(bxp - BW2 / 2, BOXY, BW2, BOXH);
+            g.fillStyle = col; g.textAlign = 'center';
+            if (ph.box === 'attn') {
+              g.font = 'bold 12px Inter, system-ui, sans-serif';
+              g.fillText('Multi-Head', bxp, BOXY + 17);
+              g.fillText('Attention', bxp, BOXY + 32);
+            } else {
+              g.font = 'bold 13px Inter, system-ui, sans-serif';
+              g.fillText('MLP', bxp, BOXY + 25);
+            }
           }
           trail.push({ x: ph.x, y: ph.y });
           if (trail.length > 16) trail.shift();
@@ -547,6 +620,7 @@
             g.beginPath(); g.arc(p.x, p.y, 3 + al * 4, 0, Math.PI * 2);
             g.fillStyle = 'rgba(251,113,133,' + (al * 0.8) + ')'; g.fill();
           });
+          g.restore();
           if (ph.label) {
             g.fillStyle = C.warn; g.font = FONT; g.textAlign = 'center';
             wrapText(g, ph.label, W / 2, H - 34, W - 60, 14);
@@ -558,7 +632,7 @@
         const ro = ctx.readout();
         ctx.loop((dt) => {
           const L = ctx.clamp(Math.round(S.layers), 1, 12);
-          if (S.playing) { S.u += dt * S.speed * 0.85; if (S.u >= L) S.u -= L; }
+          if (S.playing) { S.u += Math.max(0, dt) * S.speed * 0.85; S.u = ((S.u % L) + L) % L; }
           draw();
           ro.set({ layers: L, 'params scale with': '12·d² per layer (next section)' });
         });
@@ -606,7 +680,7 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 330);
+          g.clearRect(0, 0, cv.W, cv.H);
           const w = (word || '').toLowerCase();
           const toks = w ? tokenize(w) : [];
           const trueCount = w.split('').filter(c => c === letter).length;
@@ -672,7 +746,8 @@
       /* Interactive: attention is order-blind, and how position is restored  */
       /* ================================================================== */
       function positionLab() {
-        const [cv, g] = ctx.canvas(720, 380);
+        const PW_H = 408;
+        const [cv, g] = ctx.canvas(720, PW_H);
         const BASE = ['the', 'dog', 'bit', 'the', 'man'];
         let swapped = false, usePE = true, probe = 0;
         const words = () => swapped ? ['the', 'man', 'bit', 'the', 'dog'] : BASE;
@@ -715,7 +790,7 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 380);
+          g.clearRect(0, 0, 720, PW_H);
           const ws = words();
           const S = scores();
 
@@ -742,13 +817,6 @@
           g.font = MONO; g.fillStyle = C.muted;
           g.fillText('each row sums to 1', GX, GY + ws.length * CELL + 16);
 
-          /* ---- the verdict on order-blindness ---- */
-          g.font = 'bold ' + FONT; g.fillStyle = usePE ? C.green : C.danger;
-          wrapText(g, usePE
-            ? 'With positional encoding, swapping two words genuinely changes the scores — the model can tell the two sentences apart.'
-            : 'Without it, swapping two words only shuffles the grid. The same numbers come back in a different order, because a dot product has no idea where either token sat.',
-            34, GY + ws.length * CELL + 44, 640, 17);
-
           /* ---- the positional encoding pattern itself ---- */
           const PX = 380, PY = 56, PW = 300, PH = 150;
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
@@ -770,6 +838,13 @@
           g.font = FONT; g.fillStyle = C.muted;
           wrapText(g, 'Sine and cosine waves at different frequencies. Fast waves at the top distinguish neighbouring positions; slow waves at the bottom distinguish far-apart ones — so a single vector encodes position at every scale at once, and nothing had to be learned.',
             PX, PY + PH + 40, 300, 16);
+
+          /* ---- the verdict on order-blindness: full width, below both columns ---- */
+          g.font = 'bold ' + FONT; g.fillStyle = usePE ? C.green : C.danger; g.textAlign = 'left';
+          wrapText(g, usePE
+            ? 'With positional encoding, swapping two words genuinely changes the scores — the model can tell the two sentences apart.'
+            : 'Without it, swapping two words only shuffles the grid. The same numbers come back in a different order, because a dot product has no idea where either token sat.',
+            34, 358, 652, 17);
           ro.set({ order: swapped ? 'man bit dog' : 'dog bit man', 'positional encoding': usePE ? 'on' : 'off' });
         });
 
@@ -793,7 +868,7 @@
         const human = (n) => n >= 1e9 ? (n / 1e9).toFixed(1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : (n / 1e3).toFixed(0) + 'K';
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 330);
+          g.clearRect(0, 0, cv.W, cv.H);
           const attn = 4 * d * d;          // Q, K, V and the output projection
           const mlp = 8 * d * d;           // two matrices, hidden width 4d
           const per = attn + mlp;          // 12 d^2 per block
@@ -844,7 +919,8 @@
       /* Interactive: why replies stream, and why long chats get slower       */
       /* ================================================================== */
       function kvCacheLab() {
-        const [cv, g] = ctx.canvas(720, 340);
+        const KH = 380;
+        const [cv, g] = ctx.canvas(720, KH);
         let prompt = 200, gen = 300, cached = true;
         const pSl = ctx.slider({ label: 'prompt length (tokens)', min: 0, max: 2000, step: 25, value: 200, onChange: (v) => { prompt = v; } });
         const gSl = ctx.slider({ label: 'tokens generated', min: 10, max: 1000, step: 10, value: 300, onChange: (v) => { gen = v; } });
@@ -853,65 +929,83 @@
           cBtn.textContent = 'KV-cache: ' + (cached ? 'on' : 'off');
         }, 'primary');
         const ro = ctx.readout();
+        const human = (n) => n >= 1e9 ? (n / 1e9).toFixed(1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? (n / 1e3).toFixed(0) + 'K' : Math.round(n).toLocaleString();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 340);
-          /* Work to produce ONE more token when the sequence is already n long.
-             With the cache: the new token's Q against n stored keys, so O(n).
-             Without it: every token's K and V recomputed and full attention redone, so O(n^2).
-             Per-step rather than cumulative, because per-step is what the reader feels. */
+          g.clearRect(0, 0, 720, KH);
+          /* Work to produce ONE more token when the sequence is already n long, counted in
+             token-to-token comparisons — one unit is one query·key dot product and the value
+             it drags along. With the cache: the new token's Q against n stored keys, so n.
+             Without it: every token's K and V recomputed and full attention redone, so n².
+             BOTH CURVES ARE IN THE SAME UNITS, so the gap you see on the axis is the real gap;
+             per-step rather than cumulative, because per-step is what the reader feels. */
           const cachedAt = (n) => n;
-          const uncachedAt = (n) => n * n / 1000;   // same units, scaled to fit one axis
+          const uncachedAt = (n) => n * n;
           const cur = [], unc = [];
           for (let t = 0; t < gen; t++) { const n = prompt + t + 1; cur.push(cachedAt(n)); unc.push(uncachedAt(n)); }
           const peak = Math.max(unc[gen - 1], cur[gen - 1], 1);
 
-          const P = { x: 60, y: 50, w: 420, h: 200 };
-          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          const P = { x: 62, y: 52, w: 418, h: 208 };
+          g.font = 'bold ' + FONT; g.fillStyle = C.text; g.textAlign = 'left';
           g.fillText('work to produce each next token', P.x, 30);
+          g.font = MONO; g.fillStyle = C.muted; g.textAlign = 'right';
+          g.fillText('top of axis = ' + human(peak), P.x + P.w, 30);
           g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(P.x, P.y, P.w, P.h);
           const px = (t) => P.x + t / Math.max(1, gen - 1) * P.w;
-          const py = (v) => P.y + P.h - ctx.clamp(v / peak, 0, 1) * P.h;
+          const py = (v) => P.y + P.h - 2 - ctx.clamp(v / peak, 0, 1) * (P.h - 4);
           const drawLine = (arr, col, wdt) => {
             g.strokeStyle = col; g.lineWidth = wdt; g.beginPath();
             arr.forEach((v, t) => { t ? g.lineTo(px(t), py(v)) : g.moveTo(px(t), py(v)); });
             g.stroke();
           };
+          /* nothing data-driven may paint outside the plot frame */
+          g.save(); g.beginPath(); g.rect(P.x, P.y, P.w, P.h); g.clip();
           drawLine(unc, cached ? 'rgba(251,113,133,0.45)' : C.danger, cached ? 2 : 3);
           drawLine(cur, cached ? C.green : 'rgba(56,217,169,0.45)', cached ? 3 : 2);
-          g.font = MONO; g.fillStyle = C.muted;
-          g.fillText('tokens generated \u2192', P.x + 150, P.y + P.h + 20);
-          g.save(); g.translate(P.x - 22, P.y + P.h - 30); g.rotate(-Math.PI / 2);
+          g.restore();
+
+          g.font = MONO; g.fillStyle = C.muted; g.textAlign = 'center';
+          g.fillText('tokens generated →', P.x + P.w / 2, P.y + P.h + 22);
+          g.textAlign = 'left';
+          g.save(); g.translate(P.x - 24, P.y + P.h - 20); g.rotate(-Math.PI / 2);
           g.fillText('work per token', 0, 0); g.restore();
-          g.font = MONO;
-          g.fillStyle = C.green; g.fillText('with cache: rises gently, linear in n', P.x + 8, P.y + P.h - 14);
-          g.fillStyle = C.danger; g.fillText('without: curves upward, n\u00b2', P.x + 8, P.y + P.h - 30);
+
+          /* legend below the frame, where no curve can ever be drawn through it */
+          const LY0 = P.y + P.h + 48;
+          g.lineWidth = 3; g.strokeStyle = cached ? C.green : 'rgba(56,217,169,0.45)';
+          g.beginPath(); g.moveTo(P.x, LY0 - 4); g.lineTo(P.x + 24, LY0 - 4); g.stroke();
+          g.font = MONO; g.fillStyle = C.green;
+          g.fillText('with cache: n — ' + human(cur[gen - 1]) + ' comparisons at the last step', P.x + 32, LY0);
+          g.strokeStyle = cached ? 'rgba(251,113,133,0.45)' : C.danger;
+          g.beginPath(); g.moveTo(P.x, LY0 + 16); g.lineTo(P.x + 24, LY0 + 16); g.stroke();
+          g.fillStyle = C.danger;
+          g.fillText('without: n² — ' + human(unc[gen - 1]) + ' comparisons at the last step', P.x + 32, LY0 + 20);
 
           const TX = 510;
           const finalN = prompt + gen;
           const saving = finalN;   // n^2 / n = n, the length of the sequence
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
-          g.fillText('per generated token', TX, 60);
+          g.fillText('per generated token', TX, 52);
           g.font = MONO; g.fillStyle = C.green;
-          g.fillText('cached:   compute Q,K,V', TX, 84);
-          g.fillText('          for 1 new token', TX, 100);
+          g.fillText('cached:   compute Q,K,V', TX, 76);
+          g.fillText('          for 1 new token', TX, 92);
           g.fillStyle = C.danger;
-          g.fillText('uncached: redo all', TX, 124);
-          g.fillText('          ' + (prompt + gen) + ' tokens', TX, 140);
+          g.fillText('uncached: redo all', TX, 116);
+          g.fillText('          ' + finalN + ' tokens', TX, 132);
           g.font = 'bold 20px Inter, system-ui, sans-serif';
           g.fillStyle = C.green;
-          g.fillText(saving.toLocaleString() + '× less work', TX, 178);
+          g.fillText(saving.toLocaleString() + '× less work', TX, 170);
           g.font = FONT; g.fillStyle = C.muted;
-          wrapText(g, 'A Key and Value never change once computed — only new tokens get added to the end. So store them.', TX, 200, 190, 16);
+          wrapText(g, 'A Key and Value never change once computed — only new tokens get added to the end. So store them.', TX, 194, 190, 16);
           g.font = 'bold ' + FONT; g.fillStyle = C.warn;
-          g.fillText('the catch', TX, 264);
+          g.fillText('the catch', TX, 268);
           g.font = FONT; g.fillStyle = C.muted;
-          wrapText(g, 'The cache grows with every token exchanged, so a long conversation costs more memory and slows down — even with the cache on.', TX, 284, 190, 16);
-          ro.set({ 'context now': (prompt + gen).toLocaleString() + ' tokens', 'cache': cached ? 'on' : 'off', 'work saved': saving.toLocaleString() + '×' });
+          wrapText(g, 'The cache grows with every token exchanged, so a long conversation costs more memory and slows down — even with the cache on.', TX, 288, 190, 16);
+          ro.set({ 'context now': finalN.toLocaleString() + ' tokens', 'cache': cached ? 'on' : 'off', 'work saved': saving.toLocaleString() + '×' });
         });
 
         return ctx.figure(cv,
-          'Generation is a loop: predict one token, append it, feed the whole sequence back in, predict again. Done naively, every step recomputes the Key and Value vectors for every earlier token — but those never change, so they are stored the first time and only the newest token is computed fresh. That is the KV-cache, and it is the single biggest reason a chat reply feels fast. It also explains the thing you have felt: long conversations get slower and heavier, because the cache keeps growing with everything you have said.',
+          'Generation is a loop: predict one token, append it, feed the whole sequence back in, predict again. Done naively, every step recomputes the Key and Value vectors for every earlier token — but those never change, so they are stored the first time and only the newest token is computed fresh. That is the KV-cache, and it is the single biggest reason a chat reply feels fast. Both curves are drawn in the same unit — one token-to-token comparison — which is why the cached line looks almost flat: at 500 tokens of context it is doing 500× less work per token. It also explains the thing you have felt: long conversations get slower and heavier, because the cache keeps growing with everything you have said.',
           [pSl, gSl, cBtn], ro);
       }
       /* ================================================================== */

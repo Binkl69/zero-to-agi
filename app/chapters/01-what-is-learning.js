@@ -182,7 +182,7 @@
         ctx.callout('tryit', '🖐 Try this',
           `Run it on puzzle 1, then on puzzle 3. Compare the two counters at the end.`),
         buildBruteForce(ctx),
-        ctx.p(`Thousands of lines work for puzzle 1. <b>Zero</b> work for puzzle 3. That is not the machine giving up early. There is no answer of that shape anywhere.`),
+        ctx.p(`Out of 10,800 lines tried, <b>414</b> work for puzzle 1 and <b>zero</b> work for puzzle 3. That is not the machine giving up early. There is no answer of that shape anywhere.`),
         ctx.callout('history', '📜 The book that froze the field',
           `In 1969 Marvin Minsky and Seymour Papert published <i>Perceptrons</i>, proving exactly this on paper. Frank Rosenblatt's perceptron, built in 1958 and breathlessly covered in the press, could never learn XOR. Funding dried up and neural-network research went cold for over a decade, a period now called the first <em>AI winter</em>. The irony is that the fix was already understood in principle. Nobody yet knew how to train it.`),
       ));
@@ -340,9 +340,11 @@
      quantities that cannot go below zero, but a Gaussian happily produces a
      tumour of −6 mm. Every generated point is held inside the range its own
      axis advertises, so nothing is drawn off the end of the plot and no reader
-     is shown a payment of −£9.63. Holding the points changes what a line can
-     achieve on the tumour data — the ceiling there is 92.5%, not the 91.7% of
-     the unheld version — so the prose was remeasured, not assumed. */
+     is shown a payment of −£9.63. Holding the points leaves every measured
+     ceiling exactly where it was (91.2 / 92.5 / 80.1). The tumour figure reads
+     92.5% rather than the older 91.7% because bestLine below now solves each
+     angle exactly instead of sampling offsets on a grid that stepped past the
+     best cut. Both numbers were remeasured, not assumed. */
   const hold = (v, hi) => Math.max(0, Math.min(hi, v));
 
   const DATASETS = {
@@ -532,7 +534,7 @@
 
     ctx.loop(() => {
       const D = DATASETS[key];
-      g.clearRect(0, 0, 720, 420);
+      g.clearRect(0, 0, cv.W, cv.H);
       const st = stats();
 
       /* shaded verdict regions */
@@ -691,7 +693,7 @@
 
     ctx.loop((dt) => {
       if (playing) { t = Math.min(1, t + dt * 0.45); tSl.value = +t.toFixed(2); if (t >= 1) stop(); }
-      g.clearRect(0, 0, 720, 400);
+      g.clearRect(0, 0, cv.W, cv.H);
       const u = ease(t);
       const inOld = u < 0.5;
 
@@ -1079,7 +1081,7 @@
       g.fillText('pass ' + pass + (lastMistakes == null ? '' : '  ·  mistakes last pass: ' + lastMistakes), 16, 44);
 
       // mistake history bars, in the strip below the axis labels
-      const bx0 = 16, by0 = b.H - 28;
+      const bx0 = 16, by0 = b.H - 32;
       g.fillStyle = C.muted; g.font = '10px Inter, system-ui, sans-serif';
       g.fillText('mistakes per pass', bx0, by0 - 16);
       history.forEach((m, i) => {
@@ -1150,13 +1152,28 @@
       return { ax: cxp, ay: cyp, bx: cxp - ny, by: cyp + nx };
     }
 
+    /* how far the nearest dot sits from a line. lineFor gives a unit direction,
+       so the cross product is already a perpendicular distance. */
+    function marginOf(L) {
+      let m = Infinity;
+      for (const p of PTS) m = Math.min(m, Math.abs((L.bx - L.ax) * (p[1] - L.ay) - (L.by - L.ay) * (p[0] - L.ax)));
+      return m;
+    }
+
     function testOne() {
       const labels = PUZZLES[puzzle].labels;
       const L = lineFor(angleI, offI);
       for (const flip of [false, true]) {
         tried++;
         const s = scoreOf(labels, (x, y) => classify(x, y, L.ax, L.ay, L.bx, L.by, flip));
-        if (s === 4) { worked++; if (!bestShown) bestShown = { L: L, flip: flip }; }
+        if (s === 4) {
+          worked++;
+          /* show the winner with the most daylight around it, not whichever one
+             the sweep reached first — the first is typically a line that grazes
+             two dots, which reads as a mistake next to "plenty of lines work" */
+          const m = marginOf(L);
+          if (!bestShown || m > bestShown.m) bestShown = { L: L, flip: flip, m: m };
+        }
       }
       if (trail.length < 260 && angleI % 2 === 0) trail.push(L);
       offI++;
@@ -1167,6 +1184,9 @@
     const readout = ctx.readout();
     ctx.loop(() => {
       if (running) for (let i = 0; i < 40; i++) { if (!running) break; testOne(); }
+      /* the sweep stops itself at the last line, so the button has to stop
+         saying "Pause" without being pressed */
+      if (done && runBtn.textContent === 'Pause') runBtn.textContent = 'Try every line';
 
       const labels = PUZZLES[puzzle].labels;
       drawFrame(g, b, C);
@@ -1223,7 +1243,7 @@
     });
 
     return ctx.figure(cv,
-      'Every orientation and position, both ways round. On puzzle 1 the winner counter climbs into the thousands. On puzzle 3 it stays on zero from the first line to the last.',
+      'Every orientation and position, both ways round. On puzzle 1 the winner counter climbs into the hundreds. On puzzle 3 it stays on zero from the first line to the last.',
       [sel, runBtn, ctx.button('Reset', () => { reset(); runBtn.textContent = 'Try every line'; })],
       readout);
   }

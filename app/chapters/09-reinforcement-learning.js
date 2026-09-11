@@ -297,8 +297,8 @@
           }
           // returns chart. Range covers the true worst case: 299 steps of −0.1 then the pit = −39.9.
           const px = 440, py = 20, pw = 260, ph = 250;
-          const RLO = -40, RHI = 10, RSPAN = RHI - RLO;
-          const retY = (v) => py + ph * (1 - (ctx.clamp(v, RLO, RHI) - RLO) / RSPAN);
+          const RLO = -40, RHI = 10, RSPAN = RHI - RLO, RPAD = 2;
+          const retY = (v) => py + RPAD + (ph - 2 * RPAD) * (1 - (ctx.clamp(v, RLO, RHI) - RLO) / RSPAN);
           g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(px, py, pw, ph);
           g.fillStyle = C.muted; g.font = '11px Inter, sans-serif'; g.textAlign = 'left'; g.textBaseline = 'top';
           g.fillText('return per episode (last ' + returns.length + ')', px, py - 14);
@@ -306,15 +306,19 @@
           g.strokeStyle = '#1b2434'; g.beginPath(); g.moveTo(px, y0); g.lineTo(px + pw, y0); g.stroke();
           g.fillStyle = C.muted; g.textAlign = 'right'; g.fillText('+10', px - 4, py); g.fillText('0', px - 4, y0 - 5); g.fillText('−40', px - 4, py + ph - 10);
           if (returns.length > 1) {
+            g.save(); g.beginPath(); g.rect(px, py, pw, ph); g.clip();
             g.strokeStyle = C.green; g.lineWidth = 1.5; g.beginPath();
             returns.forEach((v, i) => {
               const x = px + i / (returns.length - 1) * pw, y = retY(v);
               i ? g.lineTo(x, y) : g.moveTo(x, y);
             });
             g.stroke();
+            g.restore();
           }
+          // legend, split over two lines so it stays inside the 260px-wide right column
           g.fillStyle = C.muted; g.textAlign = 'left'; g.font = '11px Inter, sans-serif';
-          g.fillText('Q(s,a): green = positive, red = negative, arrow = greedy action', px, py + ph + 10);
+          g.fillText('Q(s,a): green = positive, red = negative,', px, py + ph + 10);
+          g.fillText('arrow = greedy action', px, py + ph + 25);
         }
         function argmaxIdx(arr) { let b = 0; for (let i = 1; i < 4; i++) if (arr[i] > arr[b]) b = i; return b; }
 
@@ -454,13 +458,16 @@
           const xmax = Math.max(T, you.t), ymax = Math.max(20, you.regret, agents[0].regret, agents[1].regret) * 1.1;
           g.textAlign = 'right'; g.fillText(ymax.toFixed(0), px - 4, py); g.fillText('0', px - 4, py + ph - 10);
           g.textAlign = 'center'; g.fillText(xmax + ' pulls', px + pw / 2, py + ph + 6);
+          g.save(); g.beginPath(); g.rect(px, py, pw, ph); g.clip();
           [you, ...agents].forEach((ag) => {
             if (ag.hist.length < 2) return;
             g.strokeStyle = ag.color; g.lineWidth = 1.5; g.beginPath();
             const stride = Math.max(1, Math.floor(ag.hist.length / 300));
-            for (let i = 0; i < ag.hist.length; i += stride) { const x = px + i / xmax * pw, y = py + ph - ag.hist[i] / ymax * ph; i ? g.lineTo(x, y) : g.moveTo(x, y); }
+            // inset by half the stroke so a curve sitting on regret 0 is not sliced by the clip
+            for (let i = 0; i < ag.hist.length; i += stride) { const x = px + i / xmax * pw, y = py + ph - 1 - ag.hist[i] / ymax * (ph - 2); i ? g.lineTo(x, y) : g.moveTo(x, y); }
             g.stroke();
           });
+          g.restore();
           // random baseline (dashed): regret grows at (best - mean rate) per pull
           const avgGap = best - rates.reduce((a, b) => a + b, 0) / K;
           g.strokeStyle = 'rgba(148,163,184,0.5)'; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(px, py + ph);
@@ -639,7 +646,7 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 340);
+          g.clearRect(0, 0, cv.W, cv.H);
           const CS = 52, GX = 30, GY = 52;
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
           g.fillText(revealed ? 'the world, revealed' : 'the world (you cannot see it)', GX, 34);
@@ -724,7 +731,7 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 320);
+          g.clearRect(0, 0, cv.W, cv.H);
           const vN = value(NEAR, gamma), vF = value(FAR, gamma);
           const picksFar = vF > vN;
 
@@ -742,19 +749,24 @@
             if (i === 0) { g.fillStyle = C.accent; g.beginPath(); g.arc(x + CS / 2 - 1, Y + 20, 10, 0, 7); g.fill(); }
           }
           g.font = MONO; g.fillStyle = C.muted;
-          g.fillText('you are here', X0 - 6, Y + 58);
+          // "you are here" goes above the corridor: on the label row below it would run straight
+          // into the "2 steps" marker, which is only two cells along.
+          g.fillText('you are here', X0 - 6, Y - 8);
           g.fillText('2 steps', X0 + NEAR.steps * CS - 8, Y + 58);
           g.fillText('12 steps', X0 + FAR.steps * CS - 10, Y + 58);
 
           /* the discount curve */
           const P = { x: 50, y: 150, w: 340, h: 120 };
           g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(P.x, P.y, P.w, P.h);
+          g.save(); g.beginPath(); g.rect(P.x, P.y, P.w, P.h); g.clip();
           g.strokeStyle = C.accent; g.lineWidth = 2; g.beginPath();
           for (let i = 0; i <= 20; i++) {
-            const x = P.x + i / 20 * P.w, y = P.y + P.h - Math.pow(gamma, i) * P.h;
+            // inset by half the stroke so the γ⁰ = 1 end is not sliced by the clip
+            const x = P.x + i / 20 * P.w, y = P.y + P.h - 1 - Math.pow(gamma, i) * (P.h - 2);
             i ? g.lineTo(x, y) : g.moveTo(x, y);
           }
           g.stroke();
+          g.restore();
           g.font = MONO; g.fillStyle = C.muted;
           g.fillText('what a reward n steps away is worth today', P.x, P.y - 8);
           g.fillText('0', P.x - 14, P.y + P.h + 4); g.fillText('1', P.x - 14, P.y + 6);
@@ -762,6 +774,9 @@
 
           /* the comparison */
           const TX = 430;
+          // at γ = 0.5 the far reward is worth 0.005, so two decimals would print a bare "0.00"
+          // and lose the whole point of the demo — small values get three.
+          const fmtV = (v) => (v >= 0.1 ? v.toFixed(2) : v.toFixed(3));
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
           g.fillText('what each is worth right now', TX, 150);
           const bar = (lab, v, col, y, detail) => {
@@ -769,17 +784,17 @@
             g.fillStyle = C.line; g.fillRect(TX, y + 8, 180, 16);
             g.fillStyle = col; g.fillRect(TX, y + 8, ctx.clamp(v / 20, 0, 1) * 180, 16);
             g.font = 'bold 15px Inter, system-ui, sans-serif'; g.fillStyle = col;
-            g.fillText(v.toFixed(2), TX + 190, y + 21);
+            g.fillText(fmtV(v), TX + 190, y + 21);
             g.font = '11px "JetBrains Mono", ui-monospace, monospace'; g.fillStyle = C.muted;
             g.fillText(detail, TX, y + 38);
           };
-          bar('near (+3, 2 steps)', vN, C.warn, 172, '3 × ' + gamma.toFixed(3) + '² = ' + vN.toFixed(2));
-          bar('far (+20, 12 steps)', vF, C.green, 228, '20 × ' + gamma.toFixed(3) + '¹² = ' + vF.toFixed(2));
+          bar('near (+3, 2 steps)', vN, C.warn, 172, '3 × ' + gamma.toFixed(3) + '² = ' + fmtV(vN));
+          bar('far (+20, 12 steps)', vF, C.green, 228, '20 × ' + gamma.toFixed(3) + '¹² = ' + fmtV(vF));
 
           g.font = 'bold 15px Inter, system-ui, sans-serif';
           g.fillStyle = picksFar ? C.green : C.warn;
           g.fillText(picksFar ? 'the agent walks past the +3' : 'the agent grabs the +3 and stops', 34, 300);
-          ro.set({ γ: gamma.toFixed(3), 'near worth': vN.toFixed(2), 'far worth': vF.toFixed(2), chooses: picksFar ? 'the far +20' : 'the near +3' });
+          ro.set({ γ: gamma.toFixed(3), 'near worth': fmtV(vN), 'far worth': fmtV(vF), chooses: picksFar ? 'the far +20' : 'the near +3' });
         });
 
         return ctx.figure(cv,
@@ -824,20 +839,26 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 330);
+          g.clearRect(0, 0, cv.W, cv.H);
           const hist = run();
           const P = { x: 55, y: 50, w: 400, h: 210 };
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
           g.fillText('how well the policy performs, update by update', P.x, 30);
           g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(P.x, P.y, P.w, P.h);
-          const px = (i) => P.x + i / (hist.length - 1) * P.w;
-          const py = (v) => P.y + P.h - ctx.clamp(v, 0, 1) * P.h;
-          g.font = MONO; g.fillStyle = C.muted;
-          g.fillText('best possible', P.x + 4, py(1) + 12);
+          // DOT is the collapse-marker radius: inset the data range by it on every side so a
+          // point sitting exactly on a limit is not sliced in half by the clip below.
+          // HEAD leaves a band above the "best possible" line for its label, which the curve
+          // (performance never exceeds 1) can therefore never reach.
+          const DOT = 4, HEAD = 22;
+          const px = (i) => P.x + DOT + i / (hist.length - 1) * (P.w - 2 * DOT);
+          const py = (v) => P.y + P.h - DOT - ctx.clamp(v, 0, 1) * (P.h - DOT - HEAD);
           g.setLineDash([3, 3]); g.strokeStyle = 'rgba(148,163,184,0.4)';
           g.beginPath(); g.moveTo(P.x, py(1)); g.lineTo(P.x + P.w, py(1)); g.stroke();
           g.setLineDash([]);
+          g.font = MONO; g.fillStyle = C.muted;
+          g.fillText('best possible', P.x + 4, py(1) - 8);
           const scores = hist.map(perf);
+          g.save(); g.beginPath(); g.rect(P.x, P.y, P.w, P.h); g.clip();
           g.strokeStyle = clipping ? C.green : C.danger; g.lineWidth = 2.5;
           g.beginPath();
           scores.forEach((v, i) => { i ? g.lineTo(px(i), py(v)) : g.moveTo(px(i), py(v)); });
@@ -845,9 +866,10 @@
           scores.forEach((v, i) => {
             if (i && Math.abs(hist[i] - hist[i - 1]) > 0.55) {
               g.fillStyle = C.danger;
-              g.beginPath(); g.arc(px(i), py(v), 4, 0, 7); g.fill();
+              g.beginPath(); g.arc(px(i), py(v), DOT, 0, 7); g.fill();
             }
           });
+          g.restore();
           g.font = MONO; g.fillStyle = C.muted;
           g.fillText('policy updates →', P.x + 150, P.y + P.h + 20);
 

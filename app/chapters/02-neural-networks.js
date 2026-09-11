@@ -192,7 +192,7 @@
           g.strokeStyle = C.line; g.strokeRect(plot.x, plot.y, plot.s, plot.s);
           // network diagram on the right
           const nx = [430, 560, 690], inY = [140, 240], outY = 190;
-          const hidY = (j) => 28 + (j + 0.5) * (324 / S.N);
+          const hidY = (j) => 28 + (j + 0.5) * (300 / S.N);   // stays clear of the key on the last row
           let maxW = 0.5;                                   // no allocation, and non-finite-safe
           for (let j = 0; j < S.N; j++) {
             const m = Math.max(Math.abs(S.W1[j][0]), Math.abs(S.W1[j][1]), Math.abs(S.W2[j]));
@@ -211,7 +211,8 @@
           node(nx[2], outY, 15, 'ŷ');
           g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'center';
           g.fillText('inputs', nx[0], 14); g.fillText('hidden (' + S.N + ', ' + S.act + ')', nx[1], 14); g.fillText('output', nx[2], 14);
-          g.fillText('red edge = positive weight, blue = negative, thickness = size', 560, H - 8);
+          g.fillText('red edge = positive weight, blue = negative', 560, H - 24);
+          g.fillText('thickness = size of the weight', 560, H - 8);
           if (!S.hist.length) { g.fillStyle = C.text; g.font = FONT; g.textAlign = 'center'; g.fillText('press ▶ Play to train', plot.x + plot.s / 2, plot.y + 22); }
           // probe: what does the network predict under the reader's finger?
           if (probe.on) {
@@ -240,7 +241,7 @@
           }
         }
         function drawLoss() {
-          const LW = 720, LH = 130, px = 44, py = 12, pw = 620, ph = 96;
+          const LW = 720, LH = 130, px = 72, py = 12, pw = 580, ph = 96;   // margins fit "max 0.000" and "acc 100%"
           lg.clearRect(0, 0, LW, LH);
           lg.fillStyle = '#0f1520'; lg.fillRect(px, py, pw, ph); lg.strokeStyle = C.line; lg.strokeRect(px, py, pw, ph);
           lg.font = MONO; lg.fillStyle = C.muted; lg.textAlign = 'right';
@@ -308,21 +309,23 @@
         const L = (x) => 0.5 * (x - 1) * (x - 1) + 0.5;
         const trueSlope = (x) => (x - 1);          // for the tangent only; never shown as algebra
 
-        const wSl = ctx.slider({ label: 'the weight, w', min: -1.5, max: 4, step: 0.05, value: 2.6, digits: 2, onChange: (v) => { w = v; } });
-        const eSl = ctx.slider({ label: 'how big a nudge', min: 0.005, max: 1.2, step: 0.005, value: 0.8, digits: 3, onChange: (v) => { eps = v; } });
+        /* w and the nudge are capped so that BOTH measured points always land inside the
+           plot window below: a reader must never lose sight of the point being measured. */
+        const wSl = ctx.slider({ label: 'the weight, w', min: -1.5, max: 3.5, step: 0.05, value: 2.6, digits: 2, onChange: (v) => { w = v; } });
+        const eSl = ctx.slider({ label: 'how big a nudge', min: 0.005, max: 0.9, step: 0.005, value: 0.8, digits: 3, onChange: (v) => { eps = v; } });
         const tinyBtn = ctx.button('make the nudge tiny', () => { eps = 0.01; eSl.value = 0.01; }, 'primary');
         const bigBtn = ctx.button('make it big again', () => { eps = 0.8; eSl.value = 0.8; });
         const botBtn = ctx.button('go to the bottom', () => { w = 1; wSl.value = 1; });
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 400);
+          g.clearRect(0, 0, cv.W, cv.H);
           const L0 = L(w), L1 = L(w + eps);
           const dL = L1 - L0;
           const measured = dL / eps;
 
           const P = { x: 60, y: 40, w: 380, h: 250 };
-          const X0 = -1.8, X1 = 4.4, Y0 = 0, Y1 = 6.2;
+          const X0 = -1.8, X1 = 4.5, Y0 = 0, Y1 = 6.8;   // covers every reachable (w, w + nudge)
           const px = (x) => P.x + (x - X0) / (X1 - X0) * P.w;
           const py = (y) => P.y + P.h - (y - Y0) / (Y1 - Y0) * P.h;
 
@@ -331,6 +334,11 @@
           g.fillText('the weight, w  →', P.x + 120, P.y + P.h + 22);
           g.save(); g.translate(P.x - 40, P.y + P.h - 60); g.rotate(-Math.PI / 2);
           g.fillText('the loss, L  →', 0, 0); g.restore();
+
+          /* everything that depends on w and the nudge stays inside the plot box. The clip is
+             let out by one dot radius so a point sitting on an axis limit is not sliced in half. */
+          g.save();
+          g.beginPath(); g.rect(P.x - 6, P.y - 6, P.w + 12, P.h + 12); g.clip();
 
           /* the loss curve */
           g.strokeStyle = C.accent; g.lineWidth = 2.5; g.beginPath();
@@ -360,14 +368,30 @@
           g.strokeStyle = 'rgba(251,191,36,0.55)'; g.lineWidth = 1; g.setLineDash([2, 3]);
           g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, ay); g.lineTo(bx, by); g.stroke();
           g.setLineDash([]);
-          g.font = MONO; g.fillStyle = C.warn;
-          g.fillText('you moved w by ' + eps.toFixed(3), Math.min(ax, bx) + 4, ay + 16);
-          g.fillText('L moved by ' + dL.toFixed(3), bx + 8, (ay + by) / 2);
 
           [[ax, ay, C.text], [bx, by, C.warn]].forEach(([x, y, col]) => {
             g.beginPath(); g.arc(x, y, 6, 0, 7); g.fillStyle = col; g.fill();
             g.strokeStyle = '#0a0e16'; g.lineWidth = 2; g.stroke();
           });
+          g.restore();
+
+          /* the two measurements, kept inside the plot whatever the sliders say, and each on
+             its own opaque chip so the yellow measurement line never runs through the number */
+          g.font = MONO;
+          const chip = (txt, x, y) => {
+            const cw = g.measureText(txt).width;
+            g.fillStyle = 'rgba(10,14,22,0.92)';
+            g.fillRect(x - 4, y - 12, cw + 8, 17);
+            g.fillStyle = C.warn; g.fillText(txt, x, y);
+          };
+          const tw = 'you moved w by ' + eps.toFixed(3), tl = 'L moved by ' + dL.toFixed(3);
+          const wW = g.measureText(tw).width, wL = g.measureText(tl).width;
+          chip(tw,
+            ctx.clamp(Math.min(ax, bx) + 4, P.x + 6, P.x + P.w - wW - 6),
+            ctx.clamp(ay + 16, P.y + 16, P.y + P.h - 6));
+          chip(tl,
+            bx + 8 + wL <= P.x + P.w - 6 ? bx + 8 : Math.max(P.x + 6, bx - 8 - wL),
+            ctx.clamp((ay + by) / 2, P.y + 16, P.y + P.h - 6));
 
           /* ---- the arithmetic, spelled out ---- */
           const TX = 475;
@@ -430,10 +454,11 @@
       /* Interactive B: gradient descent on a bumpy 1-D loss                  */
       /* ------------------------------------------------------------------ */
       function gradientDescent1D() {
-        const W = 720, H = 312;
+        const W = 720, H = 338;      // room for the live numbers BELOW the plot, not on top of it
         const [cv, g] = ctx.canvas(W, H);
         const X0 = -6, X1 = 6;
-        const f = (x) => 0.05 * x * x + 0.8 * Math.sin(1.3 * x) + 0.3 * Math.cos(2.7 * x);
+        /* +1.1 keeps the whole curve above zero: a quantity called "loss" must never read negative */
+        const f = (x) => 0.05 * x * x + 0.8 * Math.sin(1.3 * x) + 0.3 * Math.cos(2.7 * x) + 1.1;
         const df = (x) => 0.1 * x + 1.04 * Math.cos(1.3 * x) - 0.81 * Math.sin(2.7 * x);
         let ymin = Infinity, ymax = -Infinity, gmin = 0;
         for (let x = X0; x <= X1; x += 0.005) { const v = f(x); if (v < ymin) { ymin = v; gmin = x; } if (v > ymax) ymax = v; }
@@ -458,6 +483,9 @@
         function draw(t) {
           g.clearRect(0, 0, W, H);
           g.fillStyle = '#0f1520'; g.fillRect(plot.x, plot.y, plot.w, plot.h); g.strokeStyle = C.line; g.strokeRect(plot.x, plot.y, plot.w, plot.h);
+          // everything that moves stays in the plot; the clip is let out by the ball's radius
+          // so a ball parked on an axis limit is not sliced in half
+          g.save(); g.beginPath(); g.rect(plot.x - 8, plot.y - 8, plot.w + 16, plot.h + 16); g.clip();
           // the curve
           g.strokeStyle = C.accent; g.lineWidth = 2.5; g.beginPath();
           for (let i = 0; i <= 300; i++) { const x = X0 + (X1 - X0) * i / 300, s = toPx(x, f(x)); if (i === 0) g.moveTo(s.x, s.y); else g.lineTo(s.x, s.y); }
@@ -486,11 +514,21 @@
           // proposed next step arrow
           const nx = ctx.clamp(bx - S.lr * slope, X0, X1), Q = toPx(nx, f(nx));
           g.strokeStyle = C.text; g.globalAlpha = 0.6; g.setLineDash([4, 3]); g.beginPath(); g.moveTo(P.x, P.y); g.lineTo(Q.x, Q.y); g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
-          g.fillStyle = C.text; g.font = MONO; g.textAlign = 'left';
-          g.fillText('x = ' + f2(bx) + '   loss = ' + f3(by) + '   slope = ' + f2(slope) + '   steps = ' + S.steps, plot.x + 8, plot.y + plot.h - 8);
-          g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'left';
-          wrapText(g, S.msg, plot.x, plot.y + plot.h + 20, plot.w, 15);   // wrapped: messages are long
-          g.fillStyle = C.muted; g.font = MONO; g.textAlign = 'right'; g.fillText('red = slope under your feet · dashed = next step', plot.x + plot.w - 8, plot.y + plot.h - 8);
+          g.restore();
+          // key for the two guide lines: bottom-right of the plot, on an opaque chip so the
+          // tangent cannot be drawn through it
+          const key = 'red = slope under your feet · dashed = next step';
+          g.font = MONO; g.textAlign = 'right';
+          const kw = g.measureText(key).width, ky = plot.y + plot.h - 8;
+          g.fillStyle = 'rgba(10,14,22,0.92)';
+          g.fillRect(plot.x + plot.w - 12 - kw, ky - 13, kw + 8, 18);
+          g.fillStyle = C.muted; g.fillText(key, plot.x + plot.w - 8, ky);
+          // the live numbers go UNDER the plot, where nothing can be drawn over them and they
+          // cannot collide with the key
+          g.textAlign = 'left'; g.fillStyle = C.text; g.font = MONO;
+          g.fillText('x = ' + f2(bx) + '   loss = ' + f3(by) + '   slope = ' + f2(slope) + '   steps = ' + S.steps, plot.x, plot.y + plot.h + 20);
+          g.fillStyle = C.muted; g.font = FONT;
+          wrapText(g, S.msg, plot.x, plot.y + plot.h + 42, plot.w, 15);   // wrapped: messages are long
         }
         function updateRO() { ro.set({ x: f2(S.x), loss: f3(f(S.x)), slope: f2(df(S.x)), steps: S.steps, 'learning rate': f2(S.lr) }); }
         const lrSl = ctx.slider({ label: 'learning rate η', min: 0.01, max: 1.5, step: 0.01, value: 0.3, fmt: f2, onChange: (v) => { S.lr = v; updateRO(); } });
@@ -500,7 +538,7 @@
         const resetBtn = ctx.button('Reset', reset);
         updateRO();
         ctx.loop((dt, t) => { if (S.running) { S.acc += dt * 5; while (S.acc >= 1) { S.acc -= 1; step(); } } draw(t); });
-        return ctx.figure(cv, 'Gradient descent in one dimension: feel the slope, step the other way, repeat. The curve is <code class="inline">0.05x² + 0.8·sin(1.3x) + 0.3·cos(2.7x)</code>, chosen for its bumps. Its four dips sit at x ≈ −5.74, −1.15, 0.96 and 3.44; only the second is the global minimum.', [lrSl, stSl, stepBtn, runBtn, resetBtn], ro);
+        return ctx.figure(cv, 'Gradient descent in one dimension: feel the slope, step the other way, repeat. The curve is <code class="inline">0.05x² + 0.8·sin(1.3x) + 0.3·cos(2.7x) + 1.1</code>, chosen for its bumps. Its four dips sit at x ≈ −5.74, −1.15, 0.96 and 3.44; only the second is the global minimum.', [lrSl, stSl, stepBtn, runBtn, resetBtn], ro);
       }
 
       /* ------------------------------------------------------------------ */
@@ -527,20 +565,32 @@
           g.fillStyle = C.text; g.font = MONO; g.textAlign = 'center'; g.fillText(label, px[0], px[1] + 4);
           if (sub) { g.fillStyle = subColor || C.muted; g.fillText(sub, px[0], px[1] + r + 16); }
         }
-        /* One edge. Exactly one label is shown at a time — the forward product while the green wave
-           is on or past it, the gradient once the red wave arrives — so labels can never overlap. */
-        function edge(A, B, w, fwdU, bwdU, fwdLabel, bwdLabel, at) {
-          g.strokeStyle = C.line; g.lineWidth = 2; g.beginPath(); g.moveTo(A[0], A[1]); g.lineTo(B[0], B[1]); g.stroke();
-          const lx = A[0] + (B[0] - A[0]) * at, ly = A[1] + (B[1] - A[1]) * at;
-          g.font = MONO; g.textAlign = 'center';
-          if (fwdU > 0 && fwdU < 1) { const px = A[0] + (B[0] - A[0]) * fwdU, py = A[1] + (B[1] - A[1]) * fwdU; g.beginPath(); g.arc(px, py, 6, 0, Math.PI * 2); g.fillStyle = C.green; g.fill(); }
-          if (bwdU > 0 && bwdU < 1) { const u = 1 - bwdU, px = A[0] + (B[0] - A[0]) * u, py = A[1] + (B[1] - A[1]) * u; g.beginPath(); g.arc(px, py, 6, 0, Math.PI * 2); g.fillStyle = C.danger; g.fill(); }
-          if (bwdU >= 0.55) {
-            g.fillStyle = C.muted; g.fillText('w = ' + f2(w), lx, ly - 7);
-            g.fillStyle = C.danger; g.fillText(bwdLabel, lx, ly + 14);
-          } else if (fwdU >= 0.55) {
-            g.fillStyle = C.green; g.fillText(fwdLabel, lx, ly - 7);
-          }
+        /* Every edge, described once. Exactly one label is shown at a time — the forward product
+           while the green wave is on or past it, the gradient once the red wave arrives. */
+        const EDGES = [];
+        for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
+          EDGES.push({ A: P.in[i], B: P.hid[j], rA: 20, rB: 22, at: 0.35, layer: 1, w: W1[j][i],
+            fwd: f2(W1[j][i]) + '×' + f2(x[i]) + '=' + f2(W1[j][i] * x[i]),
+            bwd: '∂L/∂w = ' + f3(gW1[j][i]) });
+        }
+        for (let j = 0; j < 2; j++) {
+          EDGES.push({ A: P.hid[j], B: P.out, rA: 22, rB: 24, at: 0.5, layer: 2, w: W2[j],
+            fwd: f2(W2[j]) + '×' + f2(hh[j]) + '=' + f2(W2[j] * hh[j]),
+            bwd: '∂L/∂w = ' + f3(gW2[j]) });
+        }
+        /* A wire stops at each node's rim, so it can never run under a node's own label. */
+        function wireEnds(e) {
+          const ex = e.B[0] - e.A[0], ey = e.B[1] - e.A[1], en = Math.hypot(ex, ey) || 1;
+          return [e.A[0] + ex / en * e.rA, e.A[1] + ey / en * e.rA,
+            e.B[0] - ex / en * e.rB, e.B[1] - ey / en * e.rB];
+        }
+        /* Numbers sit ON their wire, so each gets an opaque chip: a sloping wire would otherwise
+           be drawn straight through its own label. */
+        function chipText(txt, cx, cy, col) {
+          const cw = g.measureText(txt).width;
+          g.fillStyle = 'rgba(10,14,22,0.92)';
+          g.fillRect(cx - cw / 2 - 4, cy - 12, cw + 8, 17);
+          g.fillStyle = col; g.fillText(txt, cx, cy);
         }
         function draw() {
           const t = S.t;
@@ -553,10 +603,22 @@
           g.fillText('fixed: hidden biases ' + f2(b1[0]) + ' / ' + f2(b1[1]) + ' · output bias ' + f2(b2), 16, 44);
           const f1u = ease((t - T.inputs) / (T.f1 - T.inputs)), f2u = ease((t - T.hid) / (T.f2 - T.hid));
           const b2u = ease((t - T.loss) / (T.b2 - T.loss)), b1u = ease((t - T.b2) / (T.b1 - T.b2));
-          for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
-            edge(P.in[i], P.hid[j], W1[j][i], f1u, b1u, f2(W1[j][i]) + '×' + f2(x[i]) + '=' + f2(W1[j][i] * x[i]), '∂L/∂w = ' + f3(gW1[j][i]), 0.35);
+          /* three passes, so nothing is ever painted across a number: every wire, then every
+             label on its chip, then the travelling dots on top */
+          g.strokeStyle = C.line; g.lineWidth = 2;
+          for (const e of EDGES) { const q = wireEnds(e); g.beginPath(); g.moveTo(q[0], q[1]); g.lineTo(q[2], q[3]); g.stroke(); }
+          g.font = MONO; g.textAlign = 'center';
+          for (const e of EDGES) {
+            const fu = e.layer === 1 ? f1u : f2u, bu = e.layer === 1 ? b1u : b2u;
+            const lx = e.A[0] + (e.B[0] - e.A[0]) * e.at, ly = e.A[1] + (e.B[1] - e.A[1]) * e.at;
+            if (bu >= 0.55) { chipText('w = ' + f2(e.w), lx, ly - 7, C.muted); chipText(e.bwd, lx, ly + 14, C.danger); }
+            else if (fu >= 0.55) chipText(e.fwd, lx, ly - 7, C.green);
           }
-          for (let j = 0; j < 2; j++) edge(P.hid[j], P.out, W2[j], f2u, b2u, f2(W2[j]) + '×' + f2(hh[j]) + '=' + f2(W2[j] * hh[j]), '∂L/∂w = ' + f3(gW2[j]), 0.5);
+          for (const e of EDGES) {
+            const fu = e.layer === 1 ? f1u : f2u, bu = e.layer === 1 ? b1u : b2u, q = wireEnds(e);
+            if (fu > 0 && fu < 1) { g.beginPath(); g.arc(q[0] + (q[2] - q[0]) * fu, q[1] + (q[3] - q[1]) * fu, 6, 0, Math.PI * 2); g.fillStyle = C.green; g.fill(); }
+            if (bu > 0 && bu < 1) { const u = 1 - bu; g.beginPath(); g.arc(q[0] + (q[2] - q[0]) * u, q[1] + (q[3] - q[1]) * u, 6, 0, Math.PI * 2); g.fillStyle = C.danger; g.fill(); }
+          }
           // nodes
           const inAlpha = ease(t / T.inputs);
           g.globalAlpha = 0.25 + 0.75 * inAlpha;
@@ -608,8 +670,8 @@
         const PTS = [[0, 0, 0], [0, 1, 1], [1, 0, 1], [1, 1, 0]]; // x1, x2, target (XOR)
         /* two lines, each held by two draggable endpoints in unit coords */
         const lines = [
-          { a: [-0.3, 1.25], b: [1.25, -0.3], flip: false },
-          { a: [-0.3, 0.35], b: [0.35, -0.3], flip: false },
+          { a: [0.05, 0.90], b: [0.90, 0.05], flip: false },   // fires when x1 + x2 > 0.95
+          { a: [0.05, 0.30], b: [0.30, 0.05], flip: false },   // fires when x1 + x2 > 0.35
         ];
         const RULES = [
           { value: 'and',    label: 'A AND B',     fn: (A, B) => A && B },
@@ -627,6 +689,23 @@
         function fires(L, x, y) {
           const s = (L.b[0] - L.a[0]) * (y - L.a[1]) - (L.b[1] - L.a[1]) * (x - L.a[0]);
           return L.flip ? s < 0 : s > 0;
+        }
+        /* the infinite line through two pixel points, trimmed to the plot square (Liang–Barsky).
+           Both handles live inside the square, so the drawn line always starts and ends on the
+           frame: it can never run across the truth table or off the canvas. */
+        function boxSpan(ax, ay, bx, by) {
+          const dx = bx - ax, dy = by - ay;
+          if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) return null;
+          let t0 = -1e6, t1 = 1e6;
+          const p = [-dx, dx, -dy, dy];
+          const q = [ax - PAD, PAD + SQ - ax, ay - PAD, PAD + SQ - ay];
+          for (let i = 0; i < 4; i++) {
+            if (p[i] === 0) { if (q[i] < 0) return null; continue; }
+            const t = q[i] / p[i];
+            if (p[i] < 0) { if (t > t1) return null; if (t > t0) t0 = t; }
+            else { if (t < t0) return null; if (t < t1) t1 = t; }
+          }
+          return { x0: ax + t0 * dx, y0: ay + t0 * dy, x1: ax + t1 * dx, y1: ay + t1 * dy };
         }
         function out(x, y) {
           const f = RULES.find(r => r.value === rule).fn;
@@ -657,7 +736,7 @@
         cv.addEventListener('pointermove', (e) => {
           if (!drag) return;
           const p = cv.pos(e);
-          drag.L[drag.k] = [ctx.clamp(xu(p.x), -0.45, 1.45), ctx.clamp(yu(p.y), -0.45, 1.45)];
+          drag.L[drag.k] = [ctx.clamp(xu(p.x), 0, 1), ctx.clamp(yu(p.y), 0, 1)];
         });
         const stop = () => { drag = null; };
         cv.addEventListener('pointerup', stop);
@@ -675,20 +754,20 @@
         const flipB = ctx.button('Flip line B', () => { lines[1].flip = !lines[1].flip; });
         const solveBtn = ctx.button('Show me one answer', () => {
           drag = null;
-          lines[0] = { a: [-0.3, 0.8], b: [0.8, -0.3], flip: false };   // fires when x1 + x2 > 0.5
-          lines[1] = { a: [-0.3, 1.8], b: [1.8, -0.3], flip: false };   // fires when x1 + x2 > 1.5
-          setRule('andnot');                                            // "exactly one switch on"
+          lines[0] = { a: [0.05, 0.45], b: [0.45, 0.05], flip: false };   // fires when x1 + x2 > 0.5
+          lines[1] = { a: [0.55, 0.95], b: [0.95, 0.55], flip: false };   // fires when x1 + x2 > 1.5
+          setRule('andnot');                                             // "exactly one switch on"
         }, 'primary');
         const resetBtn = ctx.button('Reset', () => {
           drag = null;
-          lines[0] = { a: [-0.3, 1.25], b: [1.25, -0.3], flip: false };
-          lines[1] = { a: [-0.3, 0.35], b: [0.35, -0.3], flip: false };
+          lines[0] = { a: [0.05, 0.90], b: [0.90, 0.05], flip: false };
+          lines[1] = { a: [0.05, 0.30], b: [0.30, 0.05], flip: false };
           setRule('and');
         });
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 360);
+          g.clearRect(0, 0, cv.W, cv.H);
           /* shaded region where the network says 1 */
           const N = 50, cell = SQ / N;
           for (let i = 0; i < N; i++) {
@@ -701,23 +780,30 @@
           g.strokeStyle = C.line; g.lineWidth = 1;
           g.strokeRect(PAD, PAD, SQ, SQ);
 
-          /* the two lines */
+          /* the two lines — drawn only across the square they divide, and named in the
+             margin at the edge they leave through, so no label sits under a line */
           [[lines[0], C.warn, 'A'], [lines[1], C.purple, 'B']].forEach(([L, col, name]) => {
-            const dx = L.b[0] - L.a[0], dy = L.b[1] - L.a[1];
-            const n = Math.hypot(dx, dy) || 1;
-            const ex = dx / n * 4, ey = dy / n * 4;
-            g.strokeStyle = col; g.lineWidth = 2.5;
-            g.beginPath();
-            g.moveTo(ux(L.a[0] - ex), uy(L.a[1] - ey));
-            g.lineTo(ux(L.b[0] + ex), uy(L.b[1] + ey));
-            g.stroke();
+            const span = boxSpan(ux(L.a[0]), uy(L.a[1]), ux(L.b[0]), uy(L.b[1]));
+            g.save();
+            g.beginPath(); g.rect(PAD - 9, PAD - 9, SQ + 18, SQ + 18); g.clip();  // +9 = handle radius
+            if (span) {
+              g.strokeStyle = col; g.lineWidth = 2.5;
+              g.beginPath(); g.moveTo(span.x0, span.y0); g.lineTo(span.x1, span.y1); g.stroke();
+            }
             g.fillStyle = col;
             [L.a, L.b].forEach(pt => {
               g.beginPath(); g.arc(ux(pt[0]), uy(pt[1]), 7, 0, 7); g.fill();
               g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke();
             });
-            g.font = 'bold ' + FONT; g.fillStyle = col;
-            g.fillText(name, ux(L.b[0] + ex) - 14, uy(L.b[1] + ey) - 8);
+            g.restore();
+            if (span) {
+              g.font = 'bold ' + FONT; g.fillStyle = col;
+              const ex = span.x1, ey = span.y1;
+              if (ey <= PAD + 0.5) g.fillText(name, ex - 4, PAD - 8);
+              else if (ey >= PAD + SQ - 0.5) g.fillText(name, ex - 4, PAD + SQ + 22);
+              else if (ex <= PAD + 0.5) g.fillText(name, PAD - 20, ey + 5);
+              else g.fillText(name, PAD + SQ + 9, ey + 5);
+            }
           });
 
           /* the four data points */
@@ -780,7 +866,7 @@
       /* Interactive E: why a stack of linear layers stays linear            */
       /* ------------------------------------------------------------------ */
       function activationLab() {
-        const [cv, g] = ctx.canvas(720, 340);
+        const [cv, g] = ctx.canvas(720, 380);
         const ACTS = {
           linear:  { label: 'linear (none)', f: (z) => z,                       col: '#fb7185' },
           sigmoid: { label: 'sigmoid',       f: (z) => 1 / (1 + Math.exp(-z)),  col: '#7c9cff' },
@@ -815,7 +901,7 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 340);
+          g.clearRect(0, 0, cv.W, cv.H);
           const A = ACTS[act];
 
           /* ---- left: the activation function itself ---- */
@@ -909,7 +995,7 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 330);
+          g.clearRect(0, 0, cv.W, cv.H);
           const P = { x: 55, y: 36, w: 380, h: 230 };
           const px = (v) => P.x + v * P.w;
           const py = (v) => P.y + P.h - ctx.clamp(v, 0, 5) / 5 * P.h;
@@ -1012,10 +1098,10 @@
           : String(Math.round(n));
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 320);
+          g.clearRect(0, 0, cv.W, cv.H);
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
           g.fillText('every weight is one number the chain rule has to supply a gradient for', 40, 26);
-          const X = 260, W = 400, top = 52, rowH = 40;
+          const X = 260, W = 340, top = 52, rowH = 40;   // W leaves room for the count beside a full bar
           REF.forEach((r, i) => {
             const v = r.get ? r.get() : r.v;
             const frac = Math.log10(Math.max(1, v)) / 12;      // log scale, 10^0 … 10^12
@@ -1030,7 +1116,7 @@
             g.fillText(human(v), X + Math.max(3, frac * W) + 10, y + 17);
           });
           g.font = MONO; g.fillStyle = C.line;
-          g.fillText('bar length is logarithmic: each equal step is 10× more weights', X, top + REF.length * rowH + 18);
+          g.fillText('bar length is logarithmic: each equal step is 10× more weights', 40, top + REF.length * rowH + 18);
           ro.set({ shape: inputs + ' → ' + Array(depth).fill(width).join(' → ') + ' → 1', weights: human(params()) });
         });
 

@@ -56,6 +56,7 @@ function checkFrame(ops, W, H) {
   };
 
   const texts = [], frames = [], blocks = [];
+  let clearW = 0, clearH = 0, opaqueBg = false;
   for (const op of ops) {
     const b = visibleBox(op);
     if (!b) continue;
@@ -76,6 +77,8 @@ function checkFrame(ops, W, H) {
           + r0(100 - 100 * area(b) / area(op.box)) + '% cut off by the clip region around it');
       }
     }
+    if (op.kind === 'clear' && b.x0 <= 1 && b.y0 <= 1) { clearW = Math.max(clearW, b.x1); clearH = Math.max(clearH, b.y1); }
+    if (op.kind === 'rect' && op.alpha >= 0.99 && b.x0 <= 1 && b.y0 <= 1 && b.x1 >= W - 1 && b.y1 >= H - 1) opaqueBg = true;
     if (op.kind === 'frame' && area(b) > 9000) frames.push(b);
     /* an opaque block hides what is under it: labels on badges and bars are
        normal, and without this every one of them would be reported */
@@ -99,6 +102,17 @@ function checkFrame(ops, W, H) {
         add('offcanvas-paint', op.kind + ' reaches ' + r0(outBy) + 'px outside the ' + W + '×' + H
           + ' canvas [' + [b.x0, b.y0, b.x1, b.y1].map(r0).join(',') + ']');
       }
+    }
+  }
+
+  /* A frame that clears less than the whole canvas leaves the uncovered strip
+     showing whatever was painted there last time — forever. It happens when a
+     hard-coded clearRect size drifts from the canvas size. */
+  if ((clearW || clearH) && !opaqueBg && ops.length > 2) {
+    const shortBy = Math.max(W - clearW, H - clearH);
+    if (shortBy > 2) {
+      add('stale-pixels', 'the frame clears only ' + r0(clearW) + '×' + r0(clearH) + ' of a ' + W + '×' + H
+        + ' canvas, so a ' + r0(shortBy) + 'px strip keeps the previous frame forever');
     }
   }
 

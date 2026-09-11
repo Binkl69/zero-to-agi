@@ -592,7 +592,7 @@
     const ro = ctx.readout();
 
     ctx.loop(() => {
-      g.clearRect(0, 0, 720, 340);
+      g.clearRect(0, 0, cv.W, cv.H);
       const wa = words(a), wb = words(b);
       const ba = bag(a), bb = bag(b);
       const identical = sameBag(ba, bb) && wa.join(' ') !== wb.join(' ');
@@ -623,14 +623,17 @@
         : (wa.join(' ') === wb.join(' ') ? 'The two sentences are the same.' : 'Different counts, so these two are distinguishable.'), 30, 136);
       if (identical) {
         g.font = FONT; g.fillStyle = C.muted;
-        wrapText(g, 'Nothing downstream can tell these apart. Not a bigger network, not more training data — the information was destroyed before the model saw it.', 30, 156, 420, 17);
+        wrapText(g, 'Nothing downstream can tell these apart. Not a bigger network, not more training data — the information was destroyed before the model saw it.', 30, 156, 640, 17);
       }
 
       /* ---- the fixed-size input problem ---- */
       const Y = 210;
       g.font = 'bold ' + FONT; g.fillStyle = C.text;
       g.fillText('and a fixed-size input has nowhere to put a sentence', 30, Y - 12);
-      const CW = 30, CH = 26;
+      /* the grid has to leave room for the status label to its right, so the cells
+         narrow as the slot count grows instead of pushing the label off the canvas */
+      const CW = Math.min(30, 480 / slots), CH = 26;
+      const CHARS = CW >= 26 ? 4 : 3;
       [[wa, Y, C.accent, 'A'], [wb, Y + 46, C.warn, 'B']].forEach(([ws, y, col, lab]) => {
         g.font = MONO; g.fillStyle = col; g.fillText(lab, 12, y + 18);
         for (let i = 0; i < slots; i++) {
@@ -638,7 +641,7 @@
           const w = ws[i];
           g.fillStyle = w ? col : '#131a27';
           g.globalAlpha = w ? 0.8 : 1; g.fillRect(x, y, CW - 3, CH); g.globalAlpha = 1;
-          if (w) { g.fillStyle = '#0a0e16'; g.font = '10px "JetBrains Mono", ui-monospace, monospace'; g.fillText(w.slice(0, 4), x + 3, y + 17); }
+          if (w) { g.fillStyle = '#0a0e16'; g.font = '10px "JetBrains Mono", ui-monospace, monospace'; g.fillText(w.slice(0, CHARS), x + 2, y + 17); }
         }
         const over = ws.length - slots;
         g.font = MONO;
@@ -690,14 +693,14 @@
     const ro = ctx.readout();
 
     ctx.loop(() => {
-      g.clearRect(0, 0, 720, 340);
+      g.clearRect(0, 0, cv.W, cv.H);
       const { c, rnn } = belt();
       const P = { x: 55, y: 46, w: 610, h: 200 };
       const px = (t) => P.x + t / STEPS * P.w;
       const py = (v) => P.y + P.h - (ctx.clamp(v, -0.4, 1.2) + 0.4) / 1.6 * P.h;
 
       g.font = 'bold ' + FONT; g.fillStyle = C.text;
-      g.fillText('the cell state travelling through time', P.x, 28);
+      g.fillText('the cell state through time', P.x, 28);
       g.strokeStyle = C.line; g.lineWidth = 1;
       g.strokeRect(P.x, P.y, P.w, P.h);
       g.font = MONO; g.fillStyle = C.muted;
@@ -727,8 +730,25 @@
       g.strokeStyle = C.green; g.lineWidth = 3;
       g.beginPath(); c.forEach((v, t) => { t ? g.lineTo(px(t), py(v)) : g.moveTo(px(t), py(v)); }); g.stroke();
       c.forEach((v, t) => { if (t % 3 === 0) { g.fillStyle = C.green; g.beginPath(); g.arc(px(t), py(v), 3, 0, 7); g.fill(); } });
-      g.font = MONO; g.fillStyle = C.green; g.fillText('LSTM cell state', P.x + 8, P.y + P.h - 10);
-      g.fillStyle = C.muted; g.fillText('plain RNN (decay 0.8)', P.x + 8, P.y + P.h - 26);
+
+      /* Legend lives on the header row, outside the plot frame: inside the box both
+         traces sweep the full height, so any in-plot key gets drawn straight through. */
+      g.font = MONO;
+      const KEY = [
+        { col: C.muted, dash: [4, 3], lw: 1.5, t: 'plain RNN (decay 0.8)' },
+        { col: C.green, dash: [], lw: 3, t: 'LSTM cell state' },
+      ];
+      const SW = 18, PAD = 6, GAP = 18;
+      let kw = GAP * (KEY.length - 1);
+      KEY.forEach((k) => { kw += SW + PAD + g.measureText(k.t).width; });
+      let kx = P.x + P.w - kw;
+      KEY.forEach((k) => {
+        g.strokeStyle = k.col; g.lineWidth = k.lw; g.setLineDash(k.dash);
+        g.beginPath(); g.moveTo(kx, 24); g.lineTo(kx + SW, 24); g.stroke();
+        g.setLineDash([]);
+        g.fillStyle = k.col; g.fillText(k.t, kx + SW + PAD, 28);
+        kx += SW + PAD + g.measureText(k.t).width + GAP;
+      });
 
       /* verdict */
       const left = c[STEPS];
@@ -737,9 +757,11 @@
       g.fillStyle = left > 0.9 ? C.green : left > 0.2 ? C.warn : C.danger;
       g.fillText('after ' + STEPS + ' steps, the note reads ' + left.toFixed(3) + ' (it was written as 1.000)', P.x, 300);
       g.font = MONO; g.fillStyle = C.muted;
-      g.fillText('gradient multiplier per step = the forget gate = ' + eff.toFixed(3)
-        + (eff === 1 ? '  ← nothing vanishes, nothing explodes' : ''), P.x, 322);
-      ro.set({ forget: forget.toFixed(2), input: input.toFixed(2), 'survives to step 30': (left * 100).toFixed(1) + '%', 'plain RNN': (rnn[STEPS] * 100).toFixed(1) + '%' });
+      g.fillText(cutAt >= 0
+        ? 'gradient multiplier per step = the forget gate = ' + forget.toFixed(3) + ' until step ' + cutAt + ', then 0.000'
+        : 'gradient multiplier per step = the forget gate = ' + eff.toFixed(3)
+          + (eff === 1 ? '  ← nothing vanishes or explodes' : ''), P.x, 322);
+      ro.set({ forget: forget.toFixed(2) + (cutAt >= 0 ? ' → 0 at step ' + cutAt : ''), input: input.toFixed(2), 'survives to step 30': (left * 100).toFixed(1) + '%', 'plain RNN': (rnn[STEPS] * 100).toFixed(1) + '%' });
     });
 
     return ctx.figure(cv,
@@ -781,7 +803,7 @@
 
     ctx.loop((dt) => {
       if (playing) { acc += dt; if (acc > 0.9) { acc = 0; tpos = (tpos + 1) % TGT.length; } }
-      g.clearRect(0, 0, 720, 380);
+      g.clearRect(0, 0, cv.W, cv.H);
       const SY = 60, TY = 300, X0 = 60, SW = 600;
       const sx = (i) => X0 + (i + 0.5) * (SW / SRC.length);
       const tx = (i) => X0 + (i + 0.5) * (SW / TGT.length);
@@ -810,16 +832,28 @@
         g.font = MONO; g.fillStyle = C.muted;
         g.fillText((256 / srcLen).toFixed(1) + ' numbers per source word', KX + 24, KY + 14);
       } else {
+        /* start the fan below the weight row so the thick line cannot slice
+           through the very number it is illustrating */
         SRC.forEach((w, i) => {
           const a = ALIGN[tpos][i];
           g.strokeStyle = 'rgba(56,217,169,' + (0.08 + 0.85 * a) + ')';
           g.lineWidth = 0.6 + a * 7;
-          g.beginPath(); g.moveTo(sx(i), SY + 14); g.lineTo(tx(tpos), TY - 8); g.stroke();
+          g.beginPath(); g.moveTo(sx(i), SY + 40); g.lineTo(tx(tpos), TY - 8); g.stroke();
         });
+        /* The fan sweeps the whole middle of the canvas, so this note gets an
+           opaque card — painted after the lines, before the text — instead of
+           being read through a 7px stroke. */
+        const L1 = 'every source word stays available, all the time';
+        const L2 = '256 numbers per source word, however long the sentence';
+        g.font = 'bold ' + FONT; const w1 = g.measureText(L1).width;
+        g.font = MONO; const w2 = g.measureText(L2).width;
+        const cw = Math.max(w1, w2) + 24, cx = X0 - 12, cy = 158;
+        g.fillStyle = '#0a0e16'; g.fillRect(cx, cy, cw, 50);
+        g.fillStyle = 'rgba(56,217,169,0.55)'; g.fillRect(cx, cy, 3, 50);
         g.font = 'bold ' + FONT; g.fillStyle = C.green;
-        g.fillText('every source word stays available, all the time', X0, 176);
+        g.fillText(L1, X0, cy + 20);
         g.font = MONO; g.fillStyle = C.muted;
-        g.fillText('256 numbers per source word, however long the sentence', X0, 196);
+        g.fillText(L2, X0, cy + 40);
       }
 
       /* words */

@@ -204,12 +204,17 @@
           g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'left';
           g.fillText('+ mixed with code, books, papers, maths, dialogue and synthetic data → a ~15T-token training set (Llama 3 scale)', 14, 250);
           g.fillText('rejected pages fall out of the lane', 14, 268);
+          /* pages are clipped to the lane: a rejected one falls out of the bottom of it and is
+             gone, instead of landing on the stage labels printed underneath */
+          g.save();
+          g.beginPath(); g.rect(0, 40, 720, 160); g.clip();
           for (const q of parts) {
             g.fillStyle = q.dead
               ? 'rgba(251,113,133,' + Math.max(0, q.life).toFixed(3) + ')'
               : (q.warm ? 'rgba(124,156,255,0.85)' : 'rgba(56,217,169,0.85)');
             g.fillRect(q.x, q.y, q.w, q.w * 1.3);
           }
+          g.restore();
           roAcc += dt;
           if (roAcc > 0.2) {                      // don't rebuild the readout DOM 60× a second
             roAcc = 0;
@@ -312,9 +317,16 @@
             g.strokeStyle = 'rgba(230,235,245,0.25)'; g.setLineDash([4, 4]);
             g.beginPath(); g.moveTo(X1(lo), Y1(k - lo)); g.lineTo(X1(hi), Y1(k - hi)); g.stroke();
             g.setLineDash([]);
-            if (hi - lo > 0.6) {
+            /* label the diagonal where it is already inside the panel — a diagonal that enters
+               through the top edge would otherwise put its label in the panel's title row */
+            const inset = 16 / (P1.h / (P1.y1 - P1.y0));        // 16px expressed in log-token units
+            const ll = Math.max(lo, k - (P1.y1 - inset));
+            if (hi - ll > 0.5) {
               g.fillStyle = 'rgba(230,235,245,0.6)';
-              g.fillText('1e' + lc, X1(lo) + 3, Y1(k - lo) - 3);
+              const lx0 = X1(ll), ly0 = Y1(k - ll) - 3;
+              const w = g.measureText('1e' + lc).width;
+              if (lx0 + 3 + w < P1.x + P1.w - 2) g.fillText('1e' + lc, lx0 + 3, ly0);
+              else { g.textAlign = 'right'; g.fillText('1e' + lc, lx0 - 3, ly0); g.textAlign = 'left'; }
             }
           }
 
@@ -331,19 +343,27 @@
           g.stroke();
           g.restore();
 
-          /* ---- reference runs ---- */
+          /* ---- reference runs ----
+             The frontier and the iso-compute diagonals sweep straight through this corner of the
+             panel, so every name gets an opaque plate under it: the plate sits on the colour
+             field (not on any data point) and keeps the name readable wherever the lines fall. */
           g.font = FONT; g.textBaseline = 'middle';
           for (const r of REFS) {
             const x = X1(Math.log10(r.N)), y = Y1(Math.log10(r.D));
             g.fillStyle = C.warn; g.beginPath(); g.arc(x, y, 3, 0, Math.PI * 2); g.fill();
-            g.fillStyle = C.muted;
-            if (x > P1.x + P1.w - 74) { g.textAlign = 'right'; g.fillText(r.nm, x - 6, y + r.ly); }
-            else { g.textAlign = 'left'; g.fillText(r.nm, x + 6, y + r.ly); }
+            const w = g.measureText(r.nm).width;
+            const lx0 = ctx.clamp(x > P1.x + P1.w - 74 ? x - 6 - w : x + 6, P1.x + 3, P1.x + P1.w - w - 3);
+            const ly0 = ctx.clamp(y + r.ly, P1.y + 9, P1.y + P1.h - 9);
+            g.fillStyle = C.bg; g.fillRect(lx0 - 3, ly0 - 7, w + 6, 14);
+            g.fillStyle = C.muted; g.textAlign = 'left'; g.fillText(r.nm, lx0, ly0);
           }
 
           /* ---- the reader's point ---- */
           const N = Math.pow(10, st.logN), D = Math.pow(10, st.logD), Cc = 6 * N * D, loss = L(N, D);
-          const ux = X1(st.logN), uy = Y1(st.logD);
+          /* keep the whole marker inside the panel at the extremes of the sliders, so it never
+             sits half on top of the axis numbers */
+          const ux = ctx.clamp(X1(st.logN), P1.x + 7, P1.x + P1.w - 7);
+          const uy = ctx.clamp(Y1(st.logD), P1.y + 7, P1.y + P1.h - 7);
           g.beginPath(); g.arc(ux, uy, 6, 0, Math.PI * 2);
           g.fillStyle = C.accent; g.fill(); g.strokeStyle = '#ffffff'; g.lineWidth = 2; g.stroke();
 
@@ -381,12 +401,18 @@
           g.fillText('irreducible loss E = ' + fit.E, P2.x + 5, Y2(fit.E) - 3);
 
           const o = optimal(Cc), bestL = L(o.N, o.D);
-          const px = ctx.clamp(X2(Math.log10(Cc)), P2.x, P2.x + P2.w), py = Y2(loss);
+          const px = ctx.clamp(X2(Math.log10(Cc)), P2.x + 7, P2.x + P2.w - 7);
+          const py = ctx.clamp(Y2(loss), P2.y + 7, P2.y + P2.h - 7);
           if (loss - bestL > 0.02) {
             g.strokeStyle = C.danger; g.lineWidth = 1;
             g.beginPath(); g.moveTo(px, py); g.lineTo(px, Y2(bestL)); g.stroke();
-            g.fillStyle = C.danger; g.textAlign = px > P2.x + P2.w - 90 ? 'right' : 'left'; g.textBaseline = 'middle';
-            g.fillText('+' + (loss - bestL).toFixed(2) + ' loss wasted', px + (px > P2.x + P2.w - 90 ? -8 : 8), (py + Y2(bestL)) / 2);
+            const wasted = '+' + (loss - bestL).toFixed(2) + ' loss wasted';
+            g.fillStyle = C.danger; g.textBaseline = 'middle';
+            /* keep it to the right of the marker, where the green curve runs below it; only flip
+               when the text would otherwise leave the canvas */
+            const flip = px + 8 + g.measureText(wasted).width > cv.W - 6;
+            g.textAlign = flip ? 'right' : 'left';
+            g.fillText(wasted, px + (flip ? -8 : 8), (py + Y2(bestL)) / 2);
           }
           g.beginPath(); g.arc(px, py, 6, 0, Math.PI * 2);
           g.fillStyle = C.accent; g.fill(); g.strokeStyle = '#ffffff'; g.lineWidth = 2; g.stroke();
@@ -405,7 +431,9 @@
           /* ---- numbers ---- */
           const gpuHours = Cc / (1e15 * st.mfu) / 3600;
           readout.set({
-            N: fmtBig(N), D: fmtBig(D), 'tokens/param': (D / N).toFixed(0),
+            N: fmtBig(N), D: fmtBig(D),
+            'tokens/param': D / N < 0.01 ? (D / N).toExponential(1)
+              : D / N < 10 ? (D / N).toFixed(2) : D / N < 1e4 ? (D / N).toFixed(0) : fmtBig(D / N),
             C: fmtSci(Cc) + ' FLOPs', loss: loss.toFixed(3), perplexity: Math.exp(loss).toFixed(1),
             'optimal N*': fmtBig(o.N), 'optimal D*': fmtBig(o.D),
             'H100-hours': fmtBig(gpuHours), cost: fmtMoney(gpuHours * st.price),
@@ -504,12 +532,15 @@
         })();
         const idxAt = (l) => ctx.clamp(Math.round((l - T0) / DT), 0, curve.length - 1);
 
-        const [cv, g] = ctx.canvas(720, 262);
+        const [cv, g] = ctx.canvas(720, 280);
         const sample = h('div', { style: { fontFamily: 'var(--mono)', fontSize: '.88rem', lineHeight: 1.6, padding: '12px 14px', borderTop: '1px solid var(--line)', minHeight: '104px', whiteSpace: 'pre-wrap' } });
         const readout = ctx.readout();
         const P = { x: 52, y: 22, w: 646, h: 196, x0: T0, x1: T1, y0: 1.5, y1: 11.5 };
-        const X = (l) => P.x + (l - P.x0) / (P.x1 - P.x0) * P.w;
-        const Y = (v) => P.y + P.h - (ctx.clamp(v, P.y0, P.y1) - P.y0) / (P.y1 - P.y0) * P.h;
+        /* inset the data range by a dot radius so the marker at either end of the run is not
+           sliced in half by the clip that keeps the curve inside the plot box */
+        const PAD = 7;
+        const X = (l) => P.x + PAD + (l - P.x0) / (P.x1 - P.x0) * (P.w - 2 * PAD);
+        const Y = (v) => P.y + P.h - PAD - (ctx.clamp(v, P.y0, P.y1) - P.y0) / (P.y1 - P.y0) * (P.h - 2 * PAD);
 
         let logT = T0, playing = false, scrubbing = false, speed = 1, roAcc = 1, lastSample = '';
 
@@ -545,12 +576,16 @@
           g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'left'; g.textBaseline = 'bottom';
           g.fillText('floor for a 1B model: ' + FLOOR.toFixed(2), P.x + 5, Y(FLOOR) - 3);
 
-          /* checkpoints */
+          /* checkpoints — the dashed line starts below the label row so it never runs through the
+             label, and the label is kept inside the plot so it cannot land on the y-axis numbers */
+          g.font = FONT; g.textAlign = 'center'; g.textBaseline = 'top';
           for (const s of STAGES) {
+            const lab = 'ckpt ' + fmtBig(Math.pow(10, s.at));
+            const half = g.measureText(lab).width / 2 + 3;
             g.strokeStyle = 'rgba(251,191,36,0.4)'; g.setLineDash([3, 3]);
-            g.beginPath(); g.moveTo(X(s.at), P.y); g.lineTo(X(s.at), P.y + P.h); g.stroke(); g.setLineDash([]);
-            g.fillStyle = C.warn; g.textAlign = 'center'; g.textBaseline = 'top';
-            g.fillText('ckpt ' + fmtBig(Math.pow(10, s.at)), X(s.at), P.y + 3);
+            g.beginPath(); g.moveTo(X(s.at), P.y + 18); g.lineTo(X(s.at), P.y + P.h); g.stroke(); g.setLineDash([]);
+            g.fillStyle = C.warn;
+            g.fillText(lab, ctx.clamp(X(s.at), P.x + half, P.x + P.w - half), P.y + 3);
           }
 
           /* the run so far */
@@ -566,8 +601,10 @@
           g.fillStyle = C.accent; g.fill(); g.strokeStyle = C.bg; g.lineWidth = 1.5; g.stroke();
           g.restore();
 
-          g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'right'; g.textBaseline = 'bottom';
-          g.fillText('drag anywhere on the chart to scrub through the run', P.x + P.w - 5, P.y + P.h - 5);
+          /* the scrub hint lives under the axis, not inside the plot, where the floor line and the
+             end of the loss curve would otherwise be drawn straight through it */
+          g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'center'; g.textBaseline = 'top';
+          g.fillText('drag anywhere on the chart to scrub through the run', P.x + P.w / 2, P.y + P.h + 38);
         }
 
         function updateSample() {
@@ -586,7 +623,7 @@
         cv.style.cursor = 'ew-resize';
         function scrubTo(ev) {
           const q = cv.pos(ev);
-          logT = ctx.clamp(T0 + (q.x - P.x) / P.w * (T1 - T0), T0, T1);
+          logT = ctx.clamp(T0 + (q.x - P.x - PAD) / (P.w - 2 * PAD) * (T1 - T0), T0, T1);
         }
         cv.addEventListener('pointerdown', (ev) => {
           scrubbing = true; setPlaying(false);
@@ -670,7 +707,7 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 350);
+          g.clearRect(0, 0, cv.W, cv.H);
           const losses = TOKENS.map(t => -Math.log(pOf(t)));
           const total = losses.reduce((a, b) => a + b, 0);
           const avg = total / TOKENS.length;
@@ -717,12 +754,20 @@
           g.font = MONOF; g.fillStyle = C.muted;
           g.fillText('0', P.x, P.y + 30);
           g.fillText('good models live here', P.x + 40, P.y + 30);
-          g.fillText('11.5 = pure guessing over 100,000 tokens', lx(11.5) - 210, P.y + 30);
+          /* right-align the end-of-scale label against the end of the scale itself, so it can
+             never run past the canvas edge whatever the font measures */
+          g.textAlign = 'right';
+          g.fillText('11.5 = pure guessing over 100,000 tokens', lx(11.5), P.y + 30);
+          g.textAlign = 'left';
 
           g.font = 'bold 16px Inter, system-ui, sans-serif'; g.fillStyle = C.text;
-          g.fillText('perplexity = e^loss = ' + ppl.toFixed(1), P.x, 322);
+          const pplLine = 'perplexity = e^loss = ' + ppl.toFixed(1);
+          g.fillText(pplLine, P.x, 322);
+          /* start the gloss after the headline actually ends — a five-figure perplexity is much
+             wider than the worked example's 5.9 and used to be written over */
+          const nx = P.x + g.measureText(pplLine).width + 16;
           g.font = UI; g.fillStyle = C.muted;
-          wrapText(g, '— as unsure as if every token were a ' + Math.round(ppl) + '-way multiple-choice question.', P.x + 250, 322, 400, 16);
+          wrapText(g, '— as unsure as if every token were a ' + Math.round(ppl) + '-way multiple-choice question.', nx, 322, P.x + P.w - nx, 16);
           ro.set({ 'loss (nats/token)': avg.toFixed(2), perplexity: ppl.toFixed(1), 'like a multiple choice of': Math.round(ppl) });
         });
 
@@ -767,7 +812,7 @@
 
         ctx.loop((dt) => {
           reveal = Math.min(1, reveal + dt * 0.55);
-          g.clearRect(0, 0, 720, 360);
+          g.clearRect(0, 0, cv.W, cv.H);
           const c = CASES[idx];
           const lines = showChat ? c.chat : c.base;
 
@@ -822,7 +867,7 @@
 
         ctx.loop((dt) => {
           t += dt;
-          g.clearRect(0, 0, 720, 330);
+          g.clearRect(0, 0, cv.W, cv.H);
           const total = experts * expertSize;
           const active = dense ? total : topK * expertSize;
           const tokIdx = Math.floor(t * 1.2) % TOKENS.length;
@@ -836,7 +881,12 @@
           g.fillText('"' + TOKENS[tokIdx] + '"', 30, 52);
 
           const shown = Math.min(experts, 16);
-          const BW = Math.min(38, 600 / shown);
+          /* reserve room on the row for the "… and N more" tag before sizing the boxes, so the
+             tag always fits on the canvas however many experts are hidden */
+          const moreLbl = experts > shown ? '… and ' + (experts - shown) + ' more' : '';
+          g.font = MONOF;
+          const moreW = moreLbl ? g.measureText(moreLbl).width + 12 : 0;
+          const BW = Math.min(38, (660 - moreW) / shown - 4);
           for (let i = 0; i < shown; i++) {
             const on = chosen.indexOf(i) >= 0;
             const x = 30 + i * (BW + 4);
@@ -850,15 +900,18 @@
             }
           }
           g.font = MONOF; g.fillStyle = C.muted;
-          if (experts > shown) g.fillText('… and ' + (experts - shown) + ' more', 30 + shown * (BW + 4) + 6, 110);
+          if (moreLbl) g.fillText(moreLbl, 30 + shown * (BW + 4) + 6, 110);
           g.fillText(dense ? 'a dense model: every token goes through every parameter' : 'only the lit experts do any work for this token', 30, 152);
 
           /* the two bars */
           const BX = 30, BWD = 430;
+          /* both bars share one scale, and the scale grows with the model, so the stored bar never
+             saturates and the two bars always show the true stored : active ratio */
+          const BMAX = Math.max(700, total);
           const bar = (lab, v, col, y, note) => {
             g.font = UI; g.fillStyle = C.muted; g.fillText(lab, BX, y);
             g.fillStyle = C.line; g.fillRect(BX, y + 8, BWD, 18);
-            g.fillStyle = col; g.fillRect(BX, y + 8, ctx.clamp(v / 700, 0, 1) * BWD, 18);
+            g.fillStyle = col; g.fillRect(BX, y + 8, ctx.clamp(v / BMAX, 0, 1) * BWD, 18);
             g.font = 'bold 16px Inter, system-ui, sans-serif'; g.fillStyle = col;
             g.fillText(v.toFixed(0) + 'B', BX + BWD + 14, y + 23);
             g.font = MONOF; g.fillStyle = C.muted; g.fillText(note, BX, y + 42);

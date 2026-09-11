@@ -382,7 +382,7 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 400);
+          g.clearRect(0, 0, cv.W, cv.H);
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
           g.fillText('tick what you think "AGI" has to mean — numbered buttons below toggle each row', 30, 24);
 

@@ -203,6 +203,7 @@
     const [cv, g] = ctx.canvas(W, HH);
     cv.style.touchAction = 'none'; cv.style.cursor = 'grab';
     const padL = 48, padR = 16, axisY = 350, laneY0 = 326, laneGap = 12, maxLanes = 15;
+    const TITLE_FONT = '10px Inter, sans-serif';
     const curveTop = 22, curveBot = 132, histTop = 376, histBot = 420;
     const MINY = 1938, MAXY = 2030, BUCKET = 5;
     const FIT0 = 1940, FIT1 = 2028;
@@ -230,18 +231,31 @@
       t0 = a; t1 = a + span;
     }
     function visible() { return ENTRIES.filter(e => enabled[e.tag]); }
+    /* Lanes are packed on the full width each entry will occupy — the dot AND the
+       title printed beside it once the view is zoomed in far enough to show one.
+       Packing on the dot alone put four 150px titles in one 12px lane. */
     function layout() {
       placed = [];
       for (const b of buckets) b.n = 0;
-      const R = pxPerYear() > 18 ? 5 : 4, minGap = R * 2 + 2;
+      const R = pxPerYear() > 18 ? 5 : 4;
+      const named = pxPerYear() > 55;
+      if (named) g.font = TITLE_FONT;
       for (const e of visible()) {
         const bi = Math.floor((e.t - FIT0) / BUCKET);
         if (bi >= 0 && bi < buckets.length) buckets[bi].n++;
         const x = xOf(e.t);
         if (x < padL - 20 || x > W - padR + 20) continue;
+        let label = null, x0 = x - R - 1, x1 = x + R + 1;
+        if (named) {
+          const txt = e.title.length > 34 ? e.title.slice(0, 33) + '…' : e.title;
+          const w = g.measureText(txt).width;
+          const right = x + 9 + w < W - padR;
+          label = { txt: txt, right: right };
+          if (right) x1 = x + 9 + w + 5; else x0 = x - 9 - w - 5;
+        }
         let lane = 0;
-        while (lane < maxLanes - 1 && placed.some(p => p.lane === lane && Math.abs(p.x - x) < minGap)) lane++;
-        placed.push({ e, x, y: laneY0 - lane * laneGap, lane, r: R });
+        while (lane < maxLanes - 1 && placed.some(p => p.lane === lane && p.x1 > x0 && p.x0 < x1)) lane++;
+        placed.push({ e, x, y: laneY0 - lane * laneGap, lane, r: R, label: label, x0: x0, x1: x1 });
       }
     }
     /* Rebuilds the card only when the entry actually changes (pointermove fires constantly). */
@@ -282,15 +296,21 @@
         .sort((a, b) => a.t - b.t);
       let run = 0; const env = [];
       for (const p of pts) { run = Math.max(run, p.v); env.push({ t: p.t, v: run, est: p.est, raw: p.v }); }
+      /* the record curve is clipped to the band: when the view is zoomed into a
+         late decade it enters from far off to the left, and unclipped it ran
+         straight across the 10^N labels in the margin */
+      g.save(); g.beginPath(); g.rect(padL, curveTop - 10, W - padL - padR, curveBot - curveTop + 20); g.clip();
       g.strokeStyle = ctx.colors.green; g.lineWidth = 2; g.beginPath();
       env.forEach((p, i) => { const x = xOf(p.t), y = yOfLog(Math.log10(p.v)); if (i === 0) g.moveTo(x, y); else g.lineTo(x, y); });
       if (env.length) g.stroke();
       for (const p of env) {
         const x = xOf(p.t), y = yOfLog(Math.log10(p.raw));
-        if (x < padL || x > W - padR) continue;
+        /* one marker half-width inside the band, so the clip never bisects a square */
+        if (x < padL + 5 || x > W - padR - 5) continue;
         g.fillStyle = p.est ? ctx.colors.bg : ctx.colors.green; g.strokeStyle = ctx.colors.green; g.lineWidth = 1.5;
         g.beginPath(); g.rect(x - 3, y - 3, 6, 6); g.fill(); g.stroke();
       }
+      g.restore();
       g.fillStyle = ctx.colors.green; g.textAlign = 'left'; g.font = '11px Inter, sans-serif';
       g.fillText(isP ? 'largest model in this timeline: parameters (log scale; line = record so far, hollow = estimate)'
         : 'training compute per run, FLOP (log scale; line = record so far, hollow = estimate)', padL + 6, curveTop - 6);
@@ -310,16 +330,13 @@
         g.fillStyle = TAGCOL[p.e.tag]; g.beginPath(); g.arc(p.x, p.y, isHov || isSel ? p.r + 2 : p.r, 0, Math.PI * 2); g.fill();
         if (isSel) { g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.arc(p.x, p.y, p.r + 5, 0, Math.PI * 2); g.stroke(); }
       }
-      // ---- titles beside the dots once there is room
-      if (pxPerYear() > 55) {
-        g.font = '10px Inter, sans-serif';
-        for (const p of placed) {
-          const txt = p.e.title.length > 34 ? p.e.title.slice(0, 33) + '…' : p.e.title;
-          const w = g.measureText(txt).width;
-          const right = p.x + 9 + w < W - padR;
-          g.textAlign = right ? 'left' : 'right';
-          g.fillStyle = TAGCOL[p.e.tag]; g.fillText(txt, p.x + (right ? 9 : -9), p.y + 3);
-        }
+      // ---- titles beside the dots once there is room (the lane packing above
+      //      already reserved the width each one needs)
+      g.font = TITLE_FONT;
+      for (const p of placed) {
+        if (!p.label) continue;
+        g.textAlign = p.label.right ? 'left' : 'right';
+        g.fillStyle = TAGCOL[p.e.tag]; g.fillText(p.label.txt, p.x + (p.label.right ? 9 : -9), p.y + 3);
       }
       // ---- tooltip for the hovered / selected entry
       const focus = hover || (selected ? placed.find(p => p.e === selected) : null);
@@ -340,10 +357,18 @@
         if (x1 - x0 < 1.5) continue;
         const bh = (histBot - histTop) * b.n / maxN;
         g.fillStyle = 'rgba(124,156,255,0.22)'; g.fillRect(x0, histBot - bh, Math.max(1, x1 - x0 - 1), bh);
-        if (x1 - x0 > 24) { g.fillStyle = ctx.colors.accent; g.font = '10px JetBrains Mono, monospace'; g.textAlign = 'center'; g.fillText(String(b.n), (x0 + x1) / 2, histBot - bh - 3); }
+        if (x1 - x0 > 24) {
+          /* the count sits above its bar, but the tallest bar reaches the top of
+             the strip, so that one is labelled inside itself instead of up in the
+             row of year labels */
+          g.fillStyle = ctx.colors.accent; g.font = '10px JetBrains Mono, monospace'; g.textAlign = 'center';
+          g.fillText(String(b.n), (x0 + x1) / 2, bh > 16 ? histBot - bh + 11 : histBot - bh - 3);
+        }
       }
+      /* the strip's own caption goes on the bottom line: at histTop it landed in
+         the middle of the year labels */
       g.fillStyle = ctx.colors.muted; g.font = '10px Inter, sans-serif'; g.textAlign = 'left';
-      g.fillText('entries per 5 years', padL, histTop - 3);
+      g.fillText('entries per 5 years', padL, HH - 6);
       g.textAlign = 'right';
       g.fillText(Math.round(t0) + ' – ' + Math.round(t1) + '  ·  drag to pan · wheel / pinch to zoom', W - padR, HH - 6);
     }
@@ -583,7 +608,7 @@
     const ro = ctx.readout();
 
     ctx.loop(() => {
-      g.clearRect(0, 0, 720, 340);
+      g.clearRect(0, 0, cv.W, cv.H);
       const q = Q[idx];
       g.font = 'bold ' + FONT; g.fillStyle = C.text;
       g.fillText('a confident prediction', 34, 26);
@@ -596,34 +621,53 @@
 
       /* the timeline strip */
       const X = 60, W = 600, Y = 160;
+      const TICKS = [1960, 1980, 2000, 2020, 2040];
       const tx = (yr) => X + (yr - 1955) / (2040 - 1955) * W;
+      /* an opaque chip cut out of the background, so a label on the strip is
+         read against the page rather than against whatever line runs under it */
+      const chip = (s, cx, base) => {
+        const w = g.measureText(s).width;
+        g.fillStyle = C.bg; g.fillRect(cx - w / 2 - 5, base - 13, w + 10, 18);
+      };
       g.strokeStyle = C.line; g.lineWidth = 2;
       g.beginPath(); g.moveTo(X, Y); g.lineTo(X + W, Y); g.stroke();
-      g.font = MONO; g.fillStyle = C.muted;
-      [1960, 1980, 2000, 2020, 2040].forEach(yr => {
-        g.beginPath(); g.moveTo(tx(yr), Y - 5); g.lineTo(tx(yr), Y + 5); g.stroke();
-        g.fillText(String(yr), tx(yr) - 14, Y + 22);
-      });
+      TICKS.forEach(yr => { g.beginPath(); g.moveTo(tx(yr), Y - 5); g.lineTo(tx(yr), Y + 5); g.stroke(); });
+      /* Every rule on the strip is drawn first and every label afterwards, so
+         the full-height guess line passes behind the year labels it crosses
+         instead of striking them out. */
+      g.font = MONO; g.textAlign = 'center';
+      if (!revealed) {
+        g.strokeStyle = C.accent; g.lineWidth = 2.5;
+        /* stops at the top of the year-label chips: a 3px stub poking out below
+           them reads as a broken line, not as a marker */
+        g.beginPath(); g.moveTo(tx(guess), Y - 30); g.lineTo(tx(guess), Y + 9); g.stroke();
+      } else if (q.actual) {
+        g.strokeStyle = 'rgba(251,191,36,0.6)'; g.lineWidth = 2; g.setLineDash([4, 4]);
+        g.beginPath(); g.moveTo(tx(q.predicted), Y - 8); g.lineTo(tx(q.actual), Y - 8); g.stroke(); g.setLineDash([]);
+        g.fillStyle = C.green;
+        g.beginPath(); g.arc(tx(q.actual), Y, 8, 0, 7); g.fill();
+      }
       /* predicted */
       g.fillStyle = C.warn;
       g.beginPath(); g.moveTo(tx(q.predicted), Y - 8); g.lineTo(tx(q.predicted) + 6, Y - 20); g.lineTo(tx(q.predicted) - 6, Y - 20); g.closePath(); g.fill();
-      g.font = MONO; g.fillText('promised', tx(q.predicted) - 24, Y - 26);
-      /* your guess */
+      chip('promised', tx(q.predicted), Y - 26);
+      g.fillStyle = C.warn; g.fillText('promised', tx(q.predicted), Y - 26);
+      /* the year labels, last of all */
+      TICKS.forEach(yr => {
+        chip(String(yr), tx(yr), Y + 22);
+        g.fillStyle = C.muted; g.fillText(String(yr), tx(yr), Y + 22);
+      });
+      /* and the reader's own marker, named on the row below the years */
       if (!revealed) {
-        g.strokeStyle = C.accent; g.lineWidth = 2.5;
-        g.beginPath(); g.moveTo(tx(guess), Y - 30); g.lineTo(tx(guess), Y + 30); g.stroke();
-        g.fillStyle = C.accent; g.fillText('you: ' + Math.round(guess), tx(guess) - 20, Y + 46);
+        g.fillStyle = C.accent; g.fillText('you: ' + Math.round(guess), tx(guess), Y + 46);
       } else if (q.actual) {
-        g.fillStyle = C.green;
-        g.beginPath(); g.arc(tx(q.actual), Y, 8, 0, 7); g.fill();
-        g.font = 'bold ' + MONO; g.fillText('actually ' + q.actual, tx(q.actual) - 28, Y + 44);
-        g.strokeStyle = 'rgba(251,191,36,0.6)'; g.lineWidth = 2; g.setLineDash([4, 4]);
-        g.beginPath(); g.moveTo(tx(q.predicted), Y - 8); g.lineTo(tx(q.actual), Y - 8); g.stroke(); g.setLineDash([]);
+        g.font = 'bold ' + MONO; g.fillStyle = C.green;
+        g.fillText('actually ' + q.actual, tx(q.actual), Y + 44);
       } else {
-        g.fillStyle = C.danger;
-        g.font = 'bold ' + MONO;
-        g.fillText('still has not happened', tx(2028) - 60, Y + 44);
+        g.font = 'bold ' + MONO; g.fillStyle = C.danger;
+        g.fillText('still has not happened', tx(2028), Y + 44);
       }
+      g.textAlign = 'left';
 
       if (revealed) {
         const err = q.actual ? q.actual - q.predicted : null;
@@ -651,7 +695,7 @@
   /* Interactive: what was actually possible in a given year             */
   /* ------------------------------------------------------------------ */
   function buildStateOfArt(ctx) {
-    const [cv, g] = ctx.canvas(720, 340);
+    const [cv, g] = ctx.canvas(720, 376);
     const C = ctx.colors;
     const FONT = '13px Inter, system-ui, sans-serif';
     const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
@@ -683,8 +727,11 @@
     const presets = [1998, 2014, 2020, 2025].map(y => ctx.button(String(y), () => { year = y; ySl.value = y; }));
     const ro = ctx.readout();
 
+    /* three columns: what you want to do | the best that could do it | since when.
+       The middle column stops at MIDW so it cannot run into the date on the right. */
+    const MIDX = 300, MIDW = 296, SINCEX = 686;
     ctx.loop(() => {
-      g.clearRect(0, 0, 720, 340);
+      g.clearRect(0, 0, cv.W, cv.H);
       g.font = 'bold 17px Inter, system-ui, sans-serif'; g.fillStyle = C.text;
       g.fillText('the best anyone could do in ' + Math.round(year), 34, 30);
       let solved = 0;
@@ -697,15 +744,16 @@
         g.font = MONO;
         if (!cur) {
           g.fillStyle = '#2a3444';
-          g.fillText('— nothing worth the name yet —', 300, y + 12);
+          g.fillText('— nothing worth the name yet —', MIDX, y + 12);
         } else {
           const latest = r.at[r.at.length - 1][0];
           const isLatest = cur[0] === latest;
           if (isLatest) solved++;
           g.fillStyle = isLatest ? C.green : C.warn;
-          wrapLines(g, cur[1], 370).slice(0, 2).forEach((ln, j) => g.fillText(ln, 300, y + 12 + j * 15));
-          g.fillStyle = C.line;
-          g.fillText('since ' + cur[0], 620, y + 12);
+          wrapLines(g, cur[1], MIDW).slice(0, 2).forEach((ln, j) => g.fillText(ln, MIDX, y + 12 + j * 15));
+          g.fillStyle = C.line; g.textAlign = 'right';
+          g.fillText('since ' + cur[0], SINCEX, y + 12);
+          g.textAlign = 'left';
         }
         g.strokeStyle = C.line; g.lineWidth = 1;
         g.beginPath(); g.moveTo(34, y + 34); g.lineTo(686, y + 34); g.stroke();
@@ -716,7 +764,7 @@
         : year < 2020
           ? 'Deep learning is eating the specialised techniques one field at a time, and each conquest still needs its own architecture.'
           : 'One architecture now does all five, and the remaining differences are mostly data and post-training. That convergence is the real story of the last decade.',
-        34, 326, 650, 16);
+        34, 332, 650, 16);
       ro.set({ year: Math.round(year), 'at the frontier': solved + ' / ' + ROWS.length });
     });
 
@@ -729,7 +777,7 @@
   /* Interactive: what a fixed capability costs over time                */
   /* ------------------------------------------------------------------ */
   function buildCapabilityPrice(ctx) {
-    const [cv, g] = ctx.canvas(720, 320);
+    const [cv, g] = ctx.canvas(720, 364);
     const C = ctx.colors;
     const FONT = '13px Inter, system-ui, sans-serif';
     const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
@@ -751,27 +799,37 @@
     const ro = ctx.readout();
 
     ctx.loop(() => {
-      g.clearRect(0, 0, 720, 320);
+      g.clearRect(0, 0, cv.W, cv.H);
       const P = { x: 70, y: 50, w: 400, h: 190 };
+      const R = 7;                       /* the marker's radius, kept inside the frame */
       g.font = 'bold ' + FONT; g.fillStyle = C.text;
       g.fillText('what it costs to train a GPT-2-class model', P.x, 30);
       g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(P.x, P.y, P.w, P.h);
-      const px = (y) => P.x + (y - 2019) / 7 * P.w;
+      /* the year range is inset by one marker radius so the dot at either end
+         sits whole inside the plot rather than half-eaten by the clip */
+      const px = (y) => P.x + R + (y - 2019) / 7 * (P.w - 2 * R);
       const py = (c) => P.y + P.h - (Math.log10(c) - 1) / 4 * P.h;
-      g.font = MONO; g.fillStyle = C.muted;
+      g.font = MONO; g.fillStyle = C.muted; g.textAlign = 'right';
       [10, 100, 1000, 10000, 100000].forEach(c => {
         g.beginPath(); g.moveTo(P.x, py(c)); g.lineTo(P.x + P.w, py(c)); g.stroke();
-        g.fillText('$' + (c >= 1000 ? (c / 1000) + 'k' : c), P.x - 40, py(c) + 4);
+        g.fillText('$' + (c >= 1000 ? (c / 1000) + 'k' : c), P.x - 8, py(c) + 4);
       });
-      [2019, 2021, 2023, 2025].forEach(y => g.fillText(String(y), px(y) - 14, P.y + P.h + 18));
+      g.textAlign = 'center';
+      [2019, 2021, 2023, 2025].forEach(y => g.fillText(String(y), px(y), P.y + P.h + 18));
+      g.textAlign = 'left';
+      /* everything that follows from the data is clipped to the plot box */
+      g.save(); g.beginPath(); g.rect(P.x, P.y, P.w, P.h); g.clip();
       g.strokeStyle = C.green; g.lineWidth = 2.5; g.beginPath();
       for (let i = 0; i <= 70; i++) { const y = 2019 + i / 70 * 7; i ? g.lineTo(px(y), py(costAt(y))) : g.moveTo(px(y), py(costAt(y))); }
       g.stroke();
       const c0 = costAt(year);
       g.fillStyle = C.accent;
       g.beginPath(); g.arc(px(year), py(c0), 6, 0, 7); g.fill();
+      g.restore();
+      /* the note lives in the empty bottom-left corner, clear of the curve and
+         of the marker's starting position */
       g.font = MONO; g.fillStyle = C.line;
-      g.fillText('log scale — each line is 10×', P.x + 8, P.y + 16);
+      g.fillText('log scale — each line is 10×', P.x + 8, P.y + P.h - 10);
 
       const TX = 510;
       g.font = FONT; g.fillStyle = C.muted; g.fillText('in ' + year.toFixed(2).replace(/\.00$/, '') + ' it costs', TX, 70);
@@ -781,11 +839,13 @@
       g.fillText('down ' + Math.round(50000 / c0) + '× since 2019', TX, 130);
       g.font = FONT; g.fillStyle = C.muted;
       wrapText(g, 'Same capability. Better hardware, better kernels, better recipes, and a far better understanding of how much data to use.', TX, 156, 180, 16);
+      /* two columns under the chart, with a gutter wide enough that the bold
+         statement on the left cannot run into the paragraph on the right */
       g.font = 'bold ' + FONT; g.fillStyle = C.text;
-      g.fillText('in 2019 this was the most capable', 34, 268);
-      g.fillText('language model on Earth.', 34, 286);
+      wrapLines(g, 'in 2019 this was the most capable language model on Earth.', 200)
+        .forEach((ln, i) => g.fillText(ln, 34, 292 + i * 18));
       g.font = FONT; g.fillStyle = C.muted;
-      wrapText(g, 'Order-of-magnitude figures only. The slope is the point: a capability that is a research milestone one year is a hobby project a few years later, and that is the clearest reason to be careful about calling anything permanently out of reach.', 280, 268, 400, 16);
+      wrapText(g, 'Order-of-magnitude figures only. The slope is the point: a capability that is a research milestone one year is a hobby project a few years later, and that is the clearest reason to be careful about calling anything permanently out of reach.', 262, 292, 420, 16);
       ro.set({ year: year.toFixed(2).replace(/\.00$/, ''), cost: '$' + Math.round(c0).toLocaleString(), 'cheaper than 2019': Math.round(50000 / c0) + '×' });
     });
 

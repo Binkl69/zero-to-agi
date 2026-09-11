@@ -92,10 +92,14 @@ module.exports = function instrumentSource() {
   };
   P.clearRect = function (x, y, w, h) {
     var s = S(this), cv = this.canvas;
-    /* every chapter starts a frame by clearing the whole canvas */
-    if (x <= 1 && y <= 1 && w >= cv.width * 0.9 / (cv.__dpr || 1) && h >= cv.height * 0.9 / (cv.__dpr || 1)) {
+    /* A chapter starts a frame by clearing. Anything anchored at the origin and
+       covering most of the canvas counts as that start — including a clear that
+       is too SMALL, which is the bug worth catching: the uncovered strip keeps
+       last frame's pixels forever. */
+    if (x <= 1 && y <= 1 && w >= cv.width * 0.5 && h >= cv.height * 0.5) {
       if (s.ops.length) s.last = s.ops;
       s.ops = []; s.seq = 0;
+      if (window.__ZTA_RECORD) s.ops.push({ kind: 'clear', box: { x0: x, y0: y, x1: x + w, y1: y + h }, alpha: 1, clip: null, seq: s.seq++ });
     }
     return O.clearRect.apply(this, arguments);
   };

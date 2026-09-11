@@ -428,7 +428,7 @@
       g.strokeStyle = 'rgba(148,163,184,0.12)'; g.lineWidth = 1;
       g.beginPath(); g.moveTo(0, oy); g.lineTo(W, oy); g.moveTo(ox, 0); g.lineTo(ox, H); g.stroke();
 
-      const place = labelPlacer();
+      const place = labelPlacer(W, H);
       // arithmetic arrows
       if (result) {
         anim = Math.min(1, anim + 0.03);
@@ -558,7 +558,7 @@
     }
     return t1 > t0;
   }
-  function labelPlacer() {
+  function labelPlacer(CW, CH) {
     const placed = [], lines = [];
     function place(g, text, x, y, draw) {
       const w = g.measureText(text).width, hh = 13;
@@ -567,6 +567,7 @@
       [w / 2 + 10, -28], [-w / 2 - 10, -28], [w / 2 + 10, 30], [-w / 2 - 10, 30]];
       for (const [dx, dy] of OFFS) {
         const b = { x0: x + dx - w / 2 - 1, y0: y + dy - hh / 2, x1: x + dx + w / 2 + 1, y1: y + dy + hh / 2 };
+        if (CW && (b.x0 < 2 || b.x1 > CW - 2 || b.y0 < 2 || b.y1 > CH - 2)) continue;  /* stay on the canvas */
         if (placed.some(p => p.x0 < b.x1 && b.x0 < p.x1 && p.y0 < b.y1 && b.y0 < p.y1)) continue;
         if (lines.some(L => segCrossesBox(L[0], L[1], b))) continue;
         placed.push(b);
@@ -835,7 +836,7 @@
         g.fillStyle = p.grp ? GC[p.grp] : 'rgba(148,163,184,0.55)';
         g.beginPath(); g.arc(p.x, p.y, p.grp ? 4 : 2.5, 0, Math.PI * 2); g.fill();
       }
-      const place = labelPlacer();
+      const place = labelPlacer(W, H);
       for (const p of pts.slice().sort((a, b) => (b.grp ? 1 : 0) - (a.grp ? 1 : 0))) {
         g.font = (p.grp ? '600 12px' : '10px') + ' Inter, system-ui, sans-serif';
         place(g, p.w, p.x, p.y, (lx, ly, far) => {
@@ -945,7 +946,7 @@
     const ro = ctx.readout();
 
     ctx.loop(() => {
-      g.clearRect(0, 0, 720, 330);
+      g.clearRect(0, 0, cv.W, cv.H);
       const ia = idOf(a), ib = idOf(b);
       const idGap = Math.abs(ia - ib);
       /* an ID scheme implies "close number = close meaning"; score it that way */
@@ -1037,7 +1038,7 @@
     const ro = ctx.readout();
 
     ctx.loop(() => {
-      g.clearRect(0, 0, 720, 350);
+      g.clearRect(0, 0, cv.W, cv.H);
       const liveCues = new Set();
       CONTEXTS.forEach((c, i) => { if (on[i]) c.cues.forEach(q => liveCues.add(q)); });
 
@@ -1108,7 +1109,7 @@
     const human = (n) => n >= 1e9 ? (n / 1e9).toFixed(2) + ' billion' : n >= 1e6 ? (n / 1e6).toFixed(1) + ' million' : (n / 1e3).toFixed(0) + ' thousand';
 
     ctx.loop(() => {
-      g.clearRect(0, 0, 720, 300);
+      g.clearRect(0, 0, cv.W, cv.H);
       const one = vocab * dim;
       const total = tied ? one : one * 2;
 
@@ -1192,7 +1193,7 @@
 
     ctx.loop((dt) => {
       if (playing) { acc += dt; if (acc > 0.35) { acc = 0; layer = layer >= LAYERS ? 0 : layer + 1; lSl.value = layer; } }
-      g.clearRect(0, 0, 720, 360);
+      g.clearRect(0, 0, cv.W, cv.H);
       const CX = 360, CY = 190, S = 130;
       const sx = (x) => CX + x * S * 1.9;
       const sy = (y) => CY - y * S;

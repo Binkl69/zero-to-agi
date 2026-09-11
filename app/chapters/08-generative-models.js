@@ -127,6 +127,10 @@
           const cx = W / 2, cy = H / 2 - 6, scale = Math.min(W, H - 40) / (2 * viewR) * 0.94;
           g.strokeStyle = C.line; g.strokeRect(cx - viewR * scale, cy - viewR * scale, viewR * scale * 2, viewR * scale * 2);
           const pts = currentPoints();
+          /* at high t a Gaussian sample can land well outside the view window, so clip the
+             cloud to the frame: nothing can paint over the caption line beneath it */
+          g.save();
+          g.beginPath(); g.rect(cx - viewR * scale, cy - viewR * scale, viewR * scale * 2, viewR * scale * 2); g.clip();
           for (const q of pts) {
             const sx = cx + q.x * scale, sy = cy - q.y * scale;
             g.beginPath(); g.arc(sx, sy, 2.6, 0, Math.PI * 2);
@@ -134,6 +138,7 @@
             g.globalAlpha = 0.88; g.fill();
           }
           g.globalAlpha = 1;
+          g.restore();
           const t = mode === 'reverse' ? R.t : manualT, ab = abar(t);
           g.fillStyle = C.text; g.font = FONT; g.textAlign = 'left';
           const lbl = mode === 'reverse' ? 'Reverse (learned denoising): ' : 'Forward (destroying with noise): ';
@@ -182,6 +187,10 @@
         const gauss = (x, m, s) => { const z = (x - m) / s; return Math.exp(-0.5 * z * z) / (s * Math.sqrt(2 * Math.PI)); };
         const RM1 = -2.2, RS1 = 0.55, RM2 = 2.2, RS2 = 0.55;
         const pdata = (x) => 0.5 * gauss(x, RM1, RS1) + 0.5 * gauss(x, RM2, RS2);
+        /* the optimal discriminator D*(x) = p_data / (p_data + p_gen). The two epsilons are
+           kept symmetric so that far out in the tails, where both densities underflow to
+           nothing, the judge reads a neutral 0.5 instead of diving to zero on rounding dust. */
+        const dStar = (x, mu, sigma) => { const pd = pdata(x), pg = gauss(x, mu, sigma); return (pd + 1e-12) / (pd + pg + 2e-12); };
 
         // a static histogram of "real" samples, drawn once
         const bins = 44, hist = new Array(bins).fill(0);
@@ -200,12 +209,13 @@
           let s = 0;
           for (const z of zs) {
             const x = mu + sigma * z;
-            const pd = pdata(x), pg = gauss(x, mu, sigma);
-            const D = pd / (pd + pg + 1e-9);
-            s += Math.log(D + 1e-9);
+            s += Math.log(dStar(x, mu, sigma) + 1e-9);
           }
           s /= zs.length;
-          if (!G.collapse) s += 0.35 * Math.log(Math.max(sigma, 1e-3)); // entropy bonus: a real anti-collapse trick
+          /* entropy bonus — a real anti-collapse trick. It has to be strong enough to actually
+             beat the mode-seeking pull of the game, or both settings collapse and the toggle
+             shows nothing: at this weight the generator reliably spreads to straddle both modes. */
+          if (!G.collapse) s += 2.0 * Math.log(Math.max(sigma, 1e-3));
           return s;
         }
 
@@ -217,16 +227,17 @@
           const cgMu = ctx.clamp(gMu, -8, 8), cgS = ctx.clamp(gS, -8, 8);
           const lrMu = 0.55, lrS = 0.22;
           let nmu = G.mu + lrMu * cgMu, nsig = G.sigma + lrS * cgS;
-          nsig = ctx.clamp(nsig, 0.12, 2.6); nmu = ctx.clamp(nmu, -4.5, 4.5);
+          nsig = ctx.clamp(nsig, 0.12, 3.2); nmu = ctx.clamp(nmu, -4.5, 4.5);
           if (!isFinite(nmu) || !isFinite(nsig)) { G = defaults(); return; }
           G.mu = nmu; G.sigma = nsig; G.iter++;
         }
 
-        const plot = { x: 46, y: 14, w: 660, h: 250 };
+        const plot = { x: 46, y: 30, w: 660, h: 234 };
         const xAt = (x) => plot.x + (x - X0) / (X1 - X0) * plot.w;
         function draw() {
           g.clearRect(0, 0, W, H);
           g.fillStyle = '#0f1520'; g.fillRect(plot.x, plot.y, plot.w, plot.h); g.strokeStyle = C.line; g.strokeRect(plot.x, plot.y, plot.w, plot.h);
+          g.save(); g.beginPath(); g.rect(plot.x, plot.y, plot.w, plot.h); g.clip();
           // real-data histogram
           const bw = plot.w / bins;
           g.fillStyle = 'rgba(124,156,255,0.35)';
@@ -245,16 +256,17 @@
           g.stroke();
           g.beginPath(); g.strokeStyle = C.warn; g.lineWidth = 1.8; g.setLineDash([5, 3]);
           for (let i = 0; i <= 200; i++) {
-            const x = X0 + (X1 - X0) * i / 200, pd = pdata(x), pg = gauss(x, G.mu, G.sigma);
-            const D = pd / (pd + pg + 1e-9), yy = plot.y + plot.h - D * plot.h * 0.9;
+            const x = X0 + (X1 - X0) * i / 200, D = dStar(x, G.mu, G.sigma);
+            const yy = plot.y + plot.h - D * plot.h * 0.9;
             i === 0 ? g.moveTo(xAt(x), yy) : g.lineTo(xAt(x), yy);
           }
           g.stroke(); g.setLineDash([]);
           // a handful of current generator samples along the baseline
           g.fillStyle = C.danger;
-          for (let i = 0; i < 28; i++) { const x = G.mu + G.sigma * ctx.randn(); g.beginPath(); g.arc(xAt(ctx.clamp(x, X0, X1)), plot.y + plot.h - 4, 2.4, 0, Math.PI * 2); g.fill(); }
+          for (let i = 0; i < 28; i++) { const x = G.mu + G.sigma * ctx.randn(); g.beginPath(); g.arc(xAt(ctx.clamp(x, X0 + 0.05, X1 - 0.05)), plot.y + plot.h - 4, 2.4, 0, Math.PI * 2); g.fill(); }
+          g.restore();
           g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'left';
-          g.fillText('blue bars = real data   red = generator’s density   dashed yellow = discriminator score D(x)', plot.x, plot.y - 2);
+          g.fillText('blue bars = real data   red = generator’s density   dashed yellow = discriminator score D(x)', plot.x, plot.y - 10);
           g.fillStyle = C.text; g.font = MONO; g.textAlign = 'left';
           g.fillText('iter ' + G.iter + '   μ=' + f2(G.mu) + '   σ=' + f2(G.sigma) + (G.collapse ? '   [mode collapse: ON]' : ''), plot.x, plot.y + plot.h + 18);
         }
@@ -303,16 +315,22 @@
             g1.beginPath(); g1.moveTo(0, py); g1.lineTo(PAD, py); g1.stroke();
           }
           g1.strokeStyle = C.muted; g1.strokeRect(0.5, 0.5, PAD - 1, PAD - 1);
-          const mark = (pt, color, label) => {
+          /* A and B can legitimately be dropped on the same spot, so give them different
+             radii and put their labels on opposite sides: both stay readable when they coincide. */
+          const mark = (pt, color, label, r, above) => {
             const px = padCenter.x + pt.x * padScale, py = padCenter.y - pt.y * padScale;
-            g1.beginPath(); g1.arc(px, py, 5, 0, Math.PI * 2); g1.strokeStyle = color; g1.lineWidth = 2; g1.stroke();
-            g1.fillStyle = color; g1.font = FONT; g1.textAlign = 'center'; g1.fillText(label, px, py - 10);
+            g1.beginPath(); g1.arc(px, py, r, 0, Math.PI * 2); g1.strokeStyle = color; g1.lineWidth = 2; g1.stroke();
+            g1.fillStyle = color; g1.font = FONT; g1.textAlign = 'center';
+            const ly = above ? Math.max(py - r - 6, 12) : Math.min(py + r + 13, PAD - 6);
+            g1.fillText(label, px, ly);
           };
-          mark(A, C.green, 'A'); mark(B, C.orange, 'B');
+          mark(A, C.green, 'A', 5, true); mark(B, C.orange, 'B', 9, false);
           const zx = padCenter.x + z.x * padScale, zy = padCenter.y - z.y * padScale;
           g1.beginPath(); g1.arc(zx, zy, 7, 0, Math.PI * 2); g1.fillStyle = C.accent; g1.fill(); g1.strokeStyle = '#0a0e16'; g1.lineWidth = 1.5; g1.stroke();
           g1.fillStyle = C.muted; g1.font = FONT; g1.textAlign = 'left';
-          g1.fillText('z1 →', 6, PAD - 6); g1.save(); g1.translate(12, 16); g1.rotate(-Math.PI / 2); g1.fillText('z2 →', 0, 0); g1.restore();
+          /* the rotated label reads upwards, so it is anchored low enough that its far end
+             (roughly 32px of text) stays on the canvas instead of running off the top */
+          g1.fillText('z1 →', 6, PAD - 6); g1.save(); g1.translate(15, PAD - 28); g1.rotate(-Math.PI / 2); g1.fillText('z2 →', 0, 0); g1.restore();
         }
         function drawFace() {
           g2.clearRect(0, 0, FACE, FACE);
@@ -414,7 +432,7 @@
           },
           gradient: () => { const gr = []; for (let r = 0; r < N; r++) { gr.push([]); for (let c = 0; c < N; c++) gr[r].push(Math.round((r + c) / (2 * N - 2) * (LEVELS - 1))); } return gr; },
         };
-        grid = randomGrid();
+        grid = randomGrid(); tries = 1; best = realness(grid);
 
         const drawBtn = ctx.button('Draw random pixels', () => { grid = randomGrid(); tries++; best = Math.max(best, realness(grid)); }, 'primary');
         const autoBtn = ctx.button('Keep trying', () => { auto = !auto; autoBtn.textContent = auto ? 'Stop' : 'Keep trying'; });
@@ -424,7 +442,7 @@
 
         ctx.loop((dt) => {
           if (auto) { acc += dt; if (acc > 0.05) { acc = 0; grid = randomGrid(); tries++; best = Math.max(best, realness(grid)); } }
-          g.clearRect(0, 0, 720, 340);
+          g.clearRect(0, 0, cv.W, cv.H);
           const r0 = realness(grid);
 
           /* the image */
@@ -455,7 +473,7 @@
           g.font = 'bold 22px Inter, system-ui, sans-serif'; g.fillStyle = C.text;
           g.fillText(tries.toLocaleString(), TX + 210, 120);
           g.font = MONO; g.fillStyle = C.muted;
-          g.fillText('best score so far:', TX, 144);
+          g.fillText('best random draw:', TX, 144);
           g.font = 'bold 22px Inter, system-ui, sans-serif'; g.fillStyle = best > 0.8 ? C.green : C.danger;
           g.fillText((best * 100).toFixed(1) + '%', TX + 210, 146);
 
@@ -468,7 +486,7 @@
           g.font = FONT; g.fillStyle = C.muted;
           wrapText(g, 'You will not find a photograph this way, and neither would every computer that has ever existed running until the sun burns out. The pictures are a vanishingly thin sliver inside that space. A generative model is a machine for landing inside the sliver on the first try.',
             40, 288, 640, 18);
-          ro.set({ tries, 'this image': (r0 * 100).toFixed(1) + '%', 'best ever': (best * 100).toFixed(1) + '%' });
+          ro.set({ tries, 'this image': (r0 * 100).toFixed(1) + '%', 'best random draw': (best * 100).toFixed(1) + '%' });
         });
 
         return ctx.figure(cv,
@@ -480,7 +498,8 @@
       /* Interactive: why an autoencoder needs the "V"                       */
       /* ================================================================== */
       function vaeLab() {
-        const [cv, g] = ctx.canvas(720, 360);
+        const W = 720, H = 432;
+        const [cv, g] = ctx.canvas(W, H);
         let mode = 'ae', zx = 0.15, zy = 0.1;
         /* 40 training images, each encoded to a latent point. A plain autoencoder is free to
            park them anywhere it likes, so they land in far-apart islands with dead space in
@@ -514,7 +533,7 @@
           const ang = Math.random() * Math.PI * 2, rad = Math.sqrt(Math.random()) * 0.85;
           zx = Math.cos(ang) * rad; zy = Math.sin(ang) * rad;
         });
-        const PAD = { x: 40, y: 56, s: 260 };
+        const PAD = { x: 40, y: 56, s: 260 }, ZMAX = 0.92;
         const toPad = (x, y) => ({ px: PAD.x + (x + 1) / 2 * PAD.s, py: PAD.y + (1 - y) / 2 * PAD.s });
         const fromPad = (px, py) => ({ x: (px - PAD.x) / PAD.s * 2 - 1, y: 1 - (py - PAD.y) / PAD.s * 2 });
         let drag = false;
@@ -522,7 +541,8 @@
           const q = cv.pos(e);
           if (q.x < PAD.x - 12 || q.x > PAD.x + PAD.s + 12 || q.y < PAD.y - 12 || q.y > PAD.y + PAD.s + 12) return false;
           const z = fromPad(q.x, q.y);
-          zx = ctx.clamp(z.x, -1, 1); zy = ctx.clamp(z.y, -1, 1);
+          /* inset by the ring's own radius so the marker never straddles the frame */
+          zx = ctx.clamp(z.x, -ZMAX, ZMAX); zy = ctx.clamp(z.y, -ZMAX, ZMAX);
           return true;
         };
         cv.addEventListener('pointerdown', (e) => { e.preventDefault(); drag = grab(e); });
@@ -531,15 +551,16 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 360);
+          g.clearRect(0, 0, W, H);
           const near = nearest(zx, zy);
           const dead = near.d > 0.30;
 
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
-          g.fillText('latent space — where each training image is filed', PAD.x, 34);
+          g.fillText('latent space — where each image is filed', PAD.x, 34);
           g.strokeStyle = C.line; g.lineWidth = 1;
           g.strokeRect(PAD.x, PAD.y, PAD.s, PAD.s);
           /* shade the region the decoder has actually been trained to explain */
+          g.save(); g.beginPath(); g.rect(PAD.x, PAD.y, PAD.s, PAD.s); g.clip();
           for (let i = 0; i < 34; i++) for (let j = 0; j < 34; j++) {
             const q = fromPad(PAD.x + (i + 0.5) * PAD.s / 34, PAD.y + (j + 0.5) * PAD.s / 34);
             const nd = nearest(q.x, q.y).d;
@@ -557,6 +578,7 @@
           const zq = toPad(zx, zy);
           g.strokeStyle = dead ? C.danger : C.green; g.lineWidth = 2.5;
           g.beginPath(); g.arc(zq.px, zq.py, 9, 0, 7); g.stroke();
+          g.restore();
           g.font = MONO; g.fillStyle = C.muted;
           g.fillText('drag the ring anywhere', PAD.x, PAD.y + PAD.s + 20);
           g.fillText('shaded = the decoder was trained here', PAD.x, PAD.y + PAD.s + 38);
@@ -566,6 +588,7 @@
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
           g.fillText('what the decoder produces there', OX, 34);
           g.fillStyle = '#0d1320'; g.fillRect(OX, OY, OS, OS);
+          g.save(); g.beginPath(); g.rect(OX, OY, OS, OS); g.clip();
           if (dead) {
             /* nothing was ever trained here, so the output is incoherent */
             for (let i = 0; i < 26; i++) for (let j = 0; j < 26; j++) {
@@ -576,7 +599,7 @@
           } else {
             /* a smooth shape whose parameters vary continuously with z */
             const cxp = OX + OS / 2, cyp = OY + OS / 2;
-            const rr = 34 + zx * 22 + zy * 8;
+            const rr = 32 + zx * 20 + zy * 7;
             const squash = 1 + zy * 0.45;
             g.fillStyle = COLS[near.kind];
             g.globalAlpha = 0.85;
@@ -589,16 +612,18 @@
             }
             g.closePath(); g.fill(); g.globalAlpha = 1;
           }
+          g.restore();
           g.strokeStyle = C.line; g.strokeRect(OX, OY, OS, OS);
 
           g.font = 'bold 15px Inter, system-ui, sans-serif';
           g.fillStyle = dead ? C.danger : C.green;
-          g.fillText(dead ? 'dead space — the decoder has never been here' : 'a coherent output', OX, OY + OS + 24);
+          (dead ? ['dead space —', 'the decoder has never been here'] : ['a coherent output'])
+            .forEach((ln, i) => g.fillText(ln, OX, OY + OS + 24 + i * 19));
           g.font = FONT; g.fillStyle = C.muted;
           wrapText(g, mode === 'ae'
             ? 'A plain autoencoder is only ever asked to rebuild the images it was shown. Nothing requires the space between those codes to mean anything, so it fills with dead zones — and sampling randomness lands in one almost every time.'
             : 'The VAE encodes each image to a small cloud rather than a point, and a second loss term pulls every cloud toward one shared standard normal. The islands merge, the gaps close, and fresh randomness now lands somewhere the decoder understands.',
-            OX - 330, 316, 660, 17);
+            PAD.x, 382, W - 2 * PAD.x, 17);
           ro.set({ mode: mode === 'ae' ? 'plain autoencoder' : 'VAE', z: '(' + zx.toFixed(2) + ', ' + zy.toFixed(2) + ')', landed: dead ? 'dead space' : 'trained region' });
         });
 
@@ -635,7 +660,7 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 330);
+          g.clearRect(0, 0, cv.W, cv.H);
           const S = samples();
           const CX = 210, CY = 165, SC = 120;
           const sx = (x) => CX + x * SC, sy = (y) => CY - y * SC;
@@ -653,9 +678,8 @@
           g.beginPath(); g.arc(sx(TARGET.x), sy(TARGET.y), 26, 0, 7); g.fill();
           g.strokeStyle = C.green; g.lineWidth = 2;
           g.beginPath(); g.arc(sx(TARGET.x), sy(TARGET.y), 26, 0, 7); g.stroke();
-          g.fillStyle = C.green; g.font = MONO;
-          g.fillText('"a cat in sunglasses"', sx(TARGET.x) - 20, sy(TARGET.y) - 34);
-          /* the samples */
+          /* the samples — clipped so no batch can spill into the scoreboard column */
+          g.save(); g.beginPath(); g.rect(0, 38, 400, 292); g.clip();
           let onPrompt = 0;
           S.forEach(s => {
             const hit = Math.hypot(s.x - TARGET.x, s.y - TARGET.y) < 0.22;
@@ -663,6 +687,13 @@
             g.fillStyle = hit ? 'rgba(56,217,169,0.9)' : 'rgba(124,156,255,0.8)';
             g.beginPath(); g.arc(sx(s.x), sy(s.y), 3, 0, 7); g.fill();
           });
+          g.restore();
+          /* the prompt label goes on last, over an opaque patch, so stray samples
+             behind it can never sit inside the lettering */
+          g.font = MONO;
+          const plab = '"a cat in sunglasses"', plx = sx(TARGET.x) - 20, ply = sy(TARGET.y) - 34;
+          g.fillStyle = '#0a0e16'; g.fillRect(plx - 4, ply - 11, g.measureText(plab).width + 8, 15);
+          g.fillStyle = C.green; g.fillText(plab, plx, ply);
 
           /* variety = mean pairwise spread */
           let mx = 0, my = 0; S.forEach(s => { mx += s.x / n; my += s.y / n; });
@@ -678,7 +709,8 @@
             g.font = MONO; g.fillStyle = C.muted; g.fillText(note, TX, y + 38);
           };
           bar('follows the prompt', onPrompt / n, C.green, 'samples inside the green circle', 54);
-          bar('variety', ctx.clamp(spread / 0.55, 0, 1), C.warn, 'how spread out the batch is', 126);
+          const variety = ctx.clamp(spread / 0.55, 0, 1);
+          bar('variety', variety, C.warn, 'how spread out the batch is', 126);
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
           g.fillText('guidance = ' + guide.toFixed(1), TX, 216);
           g.font = FONT; g.fillStyle = C.muted;
@@ -688,7 +720,7 @@
               ? 'Cranked up, every image obeys — and every image is nearly the same image. This is why over-guided generations look stiff and repetitive.'
               : 'The usual working range. Most samples obey the prompt while the batch still contains genuinely different pictures.',
             TX, 238, 250, 17);
-          ro.set({ guidance: guide.toFixed(1), 'on prompt': ((onPrompt / n) * 100).toFixed(0) + '%', variety: ((spread / 0.55) * 100).toFixed(0) + '%' });
+          ro.set({ guidance: guide.toFixed(1), 'on prompt': ((onPrompt / n) * 100).toFixed(0) + '%', variety: (variety * 100).toFixed(0) + '%' });
         });
 
         return ctx.figure(cv,

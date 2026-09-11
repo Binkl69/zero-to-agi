@@ -96,8 +96,10 @@
           g.restore();
           for (const i of S.train) { const s = toPx(S.xs[i], S.ys[i]); g.beginPath(); g.arc(s.x, s.y, 4, 0, Math.PI * 2); g.fillStyle = C.accent; g.fill(); }
           for (const i of S.held) { const s = toPx(S.xs[i], S.ys[i]); g.beginPath(); g.arc(s.x, s.y, 4.4, 0, Math.PI * 2); g.fillStyle = C.orange; g.fill(); g.lineWidth = 1.2; g.strokeStyle = '#0a0e16'; g.stroke(); }
+          /* two rows: the whole key on one line is wider than the canvas */
           g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'left';
-          g.fillText('blue = training points   orange = held-out points   grey dashed = true hidden sine   green = fitted degree-' + S.deg + ' polynomial', plot.x, H - 4);
+          g.fillText('blue = training points   orange = held-out points', plot.x, H - 24);
+          g.fillText('grey dashed = true hidden sine   green = fitted degree-' + S.deg + ' polynomial', plot.x, H - 6);
         }
         function drawErr() {
           const LW = 720, LH = 150, px = 44, py = 12, pw = 660, ph = 98;
@@ -117,7 +119,8 @@
           eg.font = MONO; eg.fillStyle = C.muted; eg.textAlign = 'left'; eg.fillText('degree 1 →→→ ' + MAXD, px, py + ph + 14);
           eg.font = FONT; eg.fillStyle = C.accent; eg.textAlign = 'left'; eg.fillText('● training error (always falls)', px + 150, py + ph + 14);
           eg.fillStyle = C.danger; eg.fillText('● held-out error (U-shaped)', px + 400, py + ph + 14);
-          eg.fillStyle = C.green; eg.textAlign = 'right'; eg.fillText('best degree = ' + (best + 1), px + pw, 24);
+          /* held off the right-hand border so the degree marker line cannot sit on it */
+          eg.fillStyle = C.green; eg.textAlign = 'right'; eg.fillText('best degree = ' + (best + 1), px + pw - 10, 24);
         }
         const ro = ctx.readout();
         function updateRO() { ro.set({ degree: S.deg, points: S.n, 'train error': S.curveTrain[S.deg - 1] != null ? S.curveTrain[S.deg - 1].toFixed(3) : '–', 'held-out error': S.curveVal[S.deg - 1] != null ? S.curveVal[S.deg - 1].toFixed(3) : '–' }); }
@@ -185,7 +188,14 @@
           s.x = ctx.clamp(s.x, GX0 - 0.2, GX1 + 0.2); s.y = ctx.clamp(s.y, GY0 - 0.2, GY1 + 0.2);
           if (!isFinite(s.x) || !isFinite(s.y)) Object.assign(s, fresh());
           s.step++;
-          s.trail.push({ x: s.x, y: s.y }); if (s.trail.length > 500) s.trail.shift();
+          /* Record movement, not time. A converged optimizer standing on the
+             minimum used to keep pushing identical points and scroll its own
+             descent path out of the buffer, so momentum's overshoot and Adam's
+             glide vanished a few seconds after they arrived. */
+          const last = s.trail[s.trail.length - 1];
+          if (!last || Math.hypot(s.x - last.x, s.y - last.y) > 0.002) {
+            s.trail.push({ x: s.x, y: s.y }); if (s.trail.length > 1500) s.trail.shift();
+          }
         }
         function draw() {
           g.clearRect(0, 0, W, H);
@@ -267,7 +277,9 @@
           for (let e = 0; e < shown; e++) { const p = toPx(e, S.val[e]); if (!e) g.moveTo(p.x, p.y); else g.lineTo(p.x, p.y); } g.stroke();
           if (shown > S.best) {
             const p = toPx(S.best, S.val[S.best]);
-            g.strokeStyle = C.green; g.setLineDash([4, 3]); g.lineWidth = 1.3; g.beginPath(); g.moveTo(p.x, plot.y); g.lineTo(p.x, plot.y + plot.h); g.stroke(); g.setLineDash([]);
+            /* start the marker line below the caption band so it does not run
+               straight through the "best epoch N" label */
+            g.strokeStyle = C.green; g.setLineDash([4, 3]); g.lineWidth = 1.3; g.beginPath(); g.moveTo(p.x, plot.y + 24); g.lineTo(p.x, plot.y + plot.h); g.stroke(); g.setLineDash([]);
             g.beginPath(); g.arc(p.x, p.y, 5.5, 0, Math.PI * 2); g.fillStyle = C.green; g.fill();
             g.fillStyle = C.green; g.font = FONT; g.textAlign = 'center'; g.fillText('best epoch ' + S.best + ' — stop here', ctx.clamp(p.x, plot.x + 74, plot.x + plot.w - 92), plot.y + 14);
           }
@@ -337,7 +349,7 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 400);
+          g.clearRect(0, 0, cv.W, cv.H);
           /* ---- the three piles ---- */
           const BX = 40, BW = 640, BY = 30, BH = 34;
           const piles = [
@@ -345,16 +357,40 @@
             ['validation', nVal, C.warn, 'you tune against this'],
             ['test', nTest(), C.green, 'touched once, at the very end'],
           ];
+          /* A row of labels, placed left to right, each sliding leftwards only as
+             far as it must to stay on the canvas and off its neighbour. */
+          function packRow(items) {
+            let limit = 720 - 8;
+            for (let i = items.length - 1; i >= 0; i--) {
+              items[i].x = Math.max(BX, Math.min(items[i].x, limit - items[i].w));
+              limit = items[i].x - 12;
+            }
+          }
+          /* pass 1: the bars themselves, so no later bar can paint over a label */
           let x = BX;
-          piles.forEach(([name, n, col, note]) => {
+          const laid = piles.map(([name, n, col, note]) => {
             const w = n / TOTAL * BW;
             g.fillStyle = col; g.globalAlpha = 0.75; g.fillRect(x, BY, w - 2, BH); g.globalAlpha = 1;
-            g.font = 'bold ' + FONT; g.fillStyle = '#0a0e16';
-            if (w > 70) g.fillText(name + '  ' + n, x + 8, BY + 22);
-            g.font = MONO; g.fillStyle = C.muted;
-            if (w > 110) g.fillText(note, x + 8, BY + BH + 16);
+            const seat = { label: name + '  ' + n, col, note, x, w };
             x += w;
+            return seat;
           });
+          /* pass 2: name and count inside the bar when they fit there, and in the
+             pile's own colour just above it when the bar is too narrow to hold them */
+          g.font = 'bold ' + FONT;
+          const above = [];
+          laid.forEach(s => {
+            const tw = g.measureText(s.label).width;
+            if (tw + 16 <= s.w) { g.fillStyle = '#0a0e16'; g.fillText(s.label, s.x + 8, BY + 22); }
+            else above.push({ text: s.label, col: s.col, x: s.x, w: tw });
+          });
+          packRow(above);
+          above.forEach(a => { g.fillStyle = a.col; g.fillText(a.text, a.x, BY - 8); });
+          /* pass 3: the one-line note under each pile wide enough to caption */
+          g.font = MONO; g.fillStyle = C.muted;
+          const notes = laid.filter(s => s.w > 110).map(s => ({ text: s.note, x: s.x + 8, w: g.measureText(s.note).width }));
+          packRow(notes);
+          notes.forEach(nt => g.fillText(nt.text, nt.x, BY + BH + 16));
 
           /* ---- the tuning chart ---- */
           const P = { x: 60, y: 110, w: 430, h: 230 };
@@ -394,16 +430,18 @@
             const b = best[best.length - 1];
             const lie = (b.valObs - b.trueQ) * 100;
             g.font = 'bold 15px Inter, system-ui, sans-serif'; g.fillStyle = C.text;
-            g.fillText('after ' + best.length + ' settings', X, 278);
+            g.fillText('after ' + best.length + ' settings', X, 262);
             g.font = MONO;
-            g.fillStyle = C.warn; g.fillText('validation says ' + (b.valObs * 100).toFixed(1) + '%', X, 300);
-            g.fillStyle = C.text; g.fillText('truth is      ' + (b.trueQ * 100).toFixed(1) + '%', X, 318);
-            g.fillStyle = C.green; g.fillText('test says     ' + (b.testObs * 100).toFixed(1) + '%', X, 336);
+            g.fillStyle = C.warn; g.fillText('validation says ' + (b.valObs * 100).toFixed(1) + '%', X, 284);
+            g.fillStyle = C.text; g.fillText('truth is      ' + (b.trueQ * 100).toFixed(1) + '%', X, 302);
+            g.fillStyle = C.green; g.fillText('test says     ' + (b.testObs * 100).toFixed(1) + '%', X, 320);
+            /* the verdict can run to four lines, so it starts high enough that the
+               last one still lands on the canvas */
             g.font = 'bold ' + FONT; g.fillStyle = lie > 2 ? C.danger : C.muted;
             wrapLines(g, lie > 2
               ? 'Validation has flattered you by ' + lie.toFixed(1) + ' points. The test set has not.'
-              : 'Keep tuning and watch the yellow line pull away from the white one.', 175)
-              .forEach((ln, j) => g.fillText(ln, X, 362 + j * 16));
+              : 'Keep tuning and watch the yellow line pull away from the white one.', 178)
+              .forEach((ln, j) => g.fillText(ln, X, 344 + j * 16));
             ro.set({ tried: best.length, validation: (b.valObs * 100).toFixed(1) + '%', truth: (b.trueQ * 100).toFixed(1) + '%', test: (b.testObs * 100).toFixed(1) + '%' });
           } else {
             g.font = FONT; g.fillStyle = C.muted;
@@ -434,11 +472,16 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 340);
+          g.clearRect(0, 0, cv.W, cv.H);
           /* ---- left: 40 sampled mini-batch gradients fanning around the true one ---- */
           const O = { x: 175, y: 195 }, SC = 52;
+          const L = { x: 24, y: 40, w: 332, h: 290 };   // the left panel owns this box
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
           g.fillText('where one mini-batch thinks downhill is', 30, 28);
+          /* At batch 1 a single example can point anywhere and be several times
+             longer than the true gradient, so the fan is clipped to its own panel:
+             nothing here may paint over the cost chart on the right. */
+          g.save(); g.beginPath(); g.rect(L.x, L.y, L.w, L.h); g.clip();
           g.strokeStyle = C.line; g.lineWidth = 1;
           g.beginPath(); g.moveTo(30, O.y); g.lineTo(320, O.y); g.stroke();
           g.beginPath(); g.moveTo(O.x, 45); g.lineTo(O.x, 320); g.stroke();
@@ -456,8 +499,13 @@
           }
           g.strokeStyle = C.text; g.lineWidth = 3;
           g.beginPath(); g.moveTo(O.x, O.y); g.lineTo(O.x + TRUE[0] * SC, O.y - TRUE[1] * SC); g.stroke();
+          g.restore();
+          /* the label belongs to the arrow but must stay clear of the cost chart,
+             so it is drawn unclipped and on two short lines */
+          const tipX = O.x + TRUE[0] * SC, tipY = O.y - TRUE[1] * SC;
           g.fillStyle = C.text; g.font = MONO;
-          g.fillText('true gradient (all ' + N + ')', O.x + TRUE[0] * SC + 6, O.y - TRUE[1] * SC - 6);
+          g.fillText('true gradient', tipX + 8, tipY - 20);
+          g.fillText('(all ' + N.toLocaleString() + ' examples)', tipX + 8, tipY - 6);
           const avgAng = angSum / SAMPLES;
           g.font = 'bold 15px Inter, system-ui, sans-serif'; g.fillStyle = avgAng < 12 ? C.green : avgAng < 30 ? C.warn : C.danger;
           g.fillText('average error: ' + avgAng.toFixed(1) + '°', 30, 310);
@@ -500,8 +548,11 @@
         let mode = 'next';
         const out = h('div', { class: 'figure-body' });
         const ta = ctx.textarea({ label: 'Type any sentence at all', value: text, onChange: (v) => { text = v; draw(); } });
-        const nextBtn = ctx.button('predict the next word', () => { mode = 'next'; draw(); }, 'primary');
-        const maskBtn = ctx.button('fill in the blank', () => { mode = 'mask'; draw(); });
+        /* the highlight follows the mode, so the emphasised button is always the
+           one whose table is on screen */
+        const setMode = (m) => { mode = m; nextBtn.classList.toggle('primary', m === 'next'); maskBtn.classList.toggle('primary', m === 'mask'); draw(); };
+        const nextBtn = ctx.button('predict the next word', () => setMode('next'), 'primary');
+        const maskBtn = ctx.button('fill in the blank', () => setMode('mask'));
         const ro = ctx.readout();
 
         function draw() {
@@ -568,14 +619,18 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 360);
+          g.clearRect(0, 0, cv.W, cv.H);
           const { tp, fp, fn, tn } = counts();
           const acc = (tp + tn) / N;
           const prec = tp + fp ? tp / (tp + fp) : NaN;
           const rec = tp + fn ? tp / (tp + fn) : NaN;
 
           /* ---- histogram of scores ---- */
-          const P = { x: 45, y: 46, w: 380, h: 180 };
+          /* two columns: the histogram owns everything left of COL, the matrix and
+             the metric bars everything right of it. COL is far enough left that the
+             longest metric note still ends inside the canvas. */
+          const COL = 430;
+          const P = { x: 40, y: 46, w: 370, h: 180 };
           const BINS = 26;
           const hs = Array.from({ length: BINS }, () => [0, 0]);
           mail.forEach(m => { const b = Math.min(BINS - 1, (m.score * BINS) | 0); hs[b][m.spam ? 1 : 0]++; });
@@ -593,15 +648,26 @@
           }
           g.strokeStyle = C.line; g.lineWidth = 1;
           g.beginPath(); g.moveTo(P.x, P.y + P.h / 2); g.lineTo(P.x + P.w, P.y + P.h / 2); g.stroke();
-          g.font = MONO; g.fillStyle = C.green; g.fillText('real mail ↑', P.x + 4, P.y + 12);
-          g.fillStyle = C.danger; g.fillText('spam ↓', P.x + 4, P.y + P.h - 4);
           g.strokeStyle = C.warn; g.lineWidth = 2.5;
           g.beginPath(); g.moveTo(P.x + thr * P.w, P.y - 6); g.lineTo(P.x + thr * P.w, P.y + P.h + 6); g.stroke();
+          /* These two label the halves of the histogram from inside the plot, and the
+             threshold line sweeps across every x the reader can choose — so they are
+             drawn after it, each on its own opaque plate. */
+          g.font = MONO;
+          const plate = (s, tx, ty, col) => {
+            const tw = g.measureText(s).width;
+            g.fillStyle = '#0a0e16'; g.fillRect(tx - 3, ty - 11, tw + 6, 15);
+            g.fillStyle = col; g.fillText(s, tx, ty);
+          };
+          plate('real mail ↑', P.x + 4, P.y + 12, C.green);
+          plate('spam ↓', P.x + 4, P.y + P.h - 4, C.danger);
           g.fillStyle = C.warn; g.font = MONO;
-          g.fillText('flag →', P.x + thr * P.w + 6, P.y + P.h + 20);
+          /* the threshold line runs to the right edge of the plot, so its label is
+             held inside the plot instead of sliding under the metric column */
+          g.fillText('flag →', Math.min(P.x + thr * P.w + 6, P.x + P.w - g.measureText('flag →').width), P.y + P.h + 20);
 
           /* ---- confusion matrix ---- */
-          const M = { x: 470, y: 56, c: 105, r: 48 };
+          const M = { x: COL, y: 56, c: 105, r: 48 };
           g.font = MONO; g.fillStyle = C.muted;
           g.fillText('really spam', M.x + 6, M.y - 20);
           g.fillText('really fine', M.x + M.c + 6, M.y - 20);
@@ -619,13 +685,14 @@
 
           /* ---- metric bars ---- */
           let y = 200;
+          const BARW = 200;
           const bar = (lab, v, col, note) => {
-            g.font = FONT; g.fillStyle = C.muted; g.fillText(lab, 470, y);
-            g.fillStyle = C.line; g.fillRect(470, y + 6, 200, 10);
-            if (!isNaN(v)) { g.fillStyle = col; g.fillRect(470, y + 6, v * 200, 10); }
+            g.font = FONT; g.fillStyle = C.muted; g.fillText(lab, COL, y);
+            g.fillStyle = C.line; g.fillRect(COL, y + 6, BARW, 10);
+            if (!isNaN(v)) { g.fillStyle = col; g.fillRect(COL, y + 6, v * BARW, 10); }
             g.font = 'bold ' + FONT; g.fillStyle = col;
-            g.fillText(isNaN(v) ? 'n/a' : (v * 100).toFixed(0) + '%', 678, y + 15);
-            if (note) { g.font = MONO; g.fillStyle = C.muted; g.fillText(note, 470, y + 30); }
+            g.fillText(isNaN(v) ? 'n/a' : (v * 100).toFixed(0) + '%', COL + BARW + 8, y + 15);
+            if (note) { g.font = MONO; g.fillStyle = C.muted; g.fillText(note, COL, y + 30); }
             y += note ? 54 : 38;
           };
           bar('accuracy', acc, C.accent, 'fraction of all mail judged correctly');
@@ -639,10 +706,10 @@
           wrapText(g, trapped
             ? 'Look at that: ' + (acc * 100).toFixed(0) + '% accuracy while catching zero spam. Accuracy on its own is a liar.'
             : 'Drag the yellow line and watch precision and recall trade against each other.',
-            45, 268, 400, 17);
+            P.x, 264, 370, 17);
           g.font = MONO; g.fillStyle = C.muted;
           wrapText(g, 'Out of ' + N + ' emails, ' + (tp + fn) + ' are really spam. The filter flags ' + (tp + fp) + '; ' + tp + ' of those are right, ' + fp + ' good emails get caught, and ' + fn + ' spam slip through.',
-            45, 312, 400, 16);
+            P.x, 310, 370, 16);
           ro.set({ accuracy: (acc * 100).toFixed(0) + '%', precision: isNaN(prec) ? 'n/a' : (prec * 100).toFixed(0) + '%', recall: isNaN(rec) ? 'n/a' : (rec * 100).toFixed(0) + '%' });
         });
 

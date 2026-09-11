@@ -184,7 +184,11 @@ class Recorder {
        drawing stayed inside its box. */
     this.ops.push({ kind: 'frame', box: bboxOf(p), alpha: alpha, clip: this.clipRect, seq: this.seq++ });
   }
-  clearRect() {}
+  clearRect(x, y, w, h) {
+    if (!this.recording) return;
+    const b = bboxOf([apply(this.m, x, y), apply(this.m, x + w, y), apply(this.m, x + w, y + h), apply(this.m, x, y + h)]);
+    this.ops.push({ kind: 'clear', box: b, alpha: 1, clip: this.clipRect, seq: this.seq++ });
+  }
   stroke() {
     if (!this.recording) return;
     this._segments(this.path, this.globalAlpha * styleAlpha(this.strokeStyle), this.lineWidth);

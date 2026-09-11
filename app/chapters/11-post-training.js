@@ -150,7 +150,9 @@
           const bw = pw / 5;
           for (let i = 0; i < 5; i++) {
             const cx = px + bw * (i + 0.5);
-            const barH = Math.min(ph / 2 - 4, (Math.abs(S.w[i]) / maxAbs) * (ph / 2 - 4));
+            /* the half-height is reserved for the value label, so the tallest bar's number stays
+               inside the frame instead of landing on the header above it */
+            const barH = (Math.abs(S.w[i]) / maxAbs) * (ph / 2 - 18);
             const up = S.w[i] >= 0;
             g.fillStyle = up ? C.green : C.danger;
             g.fillRect(cx - bw * 0.28, up ? mid - barH : mid, bw * 0.56, barH);
@@ -161,7 +163,9 @@
           }
           g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'left';
           g.fillText('learned weight w_i (this is the reward model: r(response) = Σ w_i · feature_i)', px, py - 4);
-          if (!S.clicks) { g.fillStyle = C.text; g.font = FONT; g.textAlign = 'center'; g.fillText('all weights start at 0 — click a response below to begin training', px + pw / 2, mid - 4); }
+          /* the empty-state hint sits in the unused lower half, clear of the five 0.00 labels
+             that all sit just above the zero line while every weight is still 0 */
+          if (!S.clicks) { g.fillStyle = C.text; g.font = FONT; g.textAlign = 'center'; g.fillText('all weights start at 0 — click a response below to begin training', px + pw / 2, mid + 32); }
         }
         function renderRerank() {
           rerankList.innerHTML = '';
@@ -300,11 +304,12 @@
           const W = 720, H = 300;
           g.clearRect(0, 0, W, H);
           // left panel: distributions
-          const Lx = 50, Ly = 20, Lw = 290, Lh = 220, X0 = -4, X1 = 4;
+          const Lx = 50, Ly = 20, Lw = 290, Lh = 220, X0 = -4, X1 = 7.5;   // X1 > max mu (=1/0.25=4) so the policy peak never reaches the frame
           g.strokeStyle = C.line; g.strokeRect(Lx, Ly, Lw, Lh);
           const toX = (x) => Lx + (x - X0) / (X1 - X0) * Lw;
           const ymax = 0.42;
           const toY = (y) => Ly + Lh - Math.min(1, y / ymax) * Lh;
+          g.save(); g.beginPath(); g.rect(Lx, Ly, Lw, Lh); g.clip();   // nothing data-driven may paint outside the panel
           g.strokeStyle = C.muted; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(toX(0), Ly); g.lineTo(toX(0), Ly + Lh); g.stroke(); g.setLineDash([]);
           // reference (dashed)
           g.strokeStyle = C.muted; g.lineWidth = 1.5; g.setLineDash([5, 3]); g.beginPath();
@@ -319,28 +324,38 @@
           g.strokeStyle = C.accent; g.lineWidth = 2; g.beginPath();
           for (let i = 0; i <= 160; i++) { const x = X0 + (X1 - X0) * i / 160, yy = toY(gauss(x, m)); i ? g.lineTo(toX(x), yy) : g.moveTo(toX(x), yy); }
           g.stroke();
+          g.restore();
+          /* the legend is split over two rows so it stays clear of the right panel's axis label */
           g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'left';
-          g.fillText('dashed = reference π_ref (the SFT model)  ·  filled = policy π_β', Lx, Ly + Lh + 16);
-          g.fillText('response space x (arbitrary units)', Lx, Ly + Lh + 30);
-          g.fillStyle = C.accent; g.textAlign = 'right'; g.fillText('μ = 1/β = ' + f2(m), Lx + Lw, Ly + 12);
+          g.fillText('dashed = reference π_ref (the SFT model)', Lx, Ly + Lh + 16);
+          g.fillText('filled = policy π_β  ·  response space x (arbitrary units)', Lx, Ly + Lh + 30);
+          /* μ rides the header row, not the plot, so the policy peak can never cross it */
+          g.fillStyle = C.accent; g.textAlign = 'right'; g.fillText('μ = 1/β = ' + f2(m), Lx + Lw, Ly - 6);
 
           // right panel: reward vs KL trade-off
-          const Rx = 400, Ry = 20, Rw = 270, Rh = 220, KX0 = 0, KX1 = 8, KY0 = 0, KY1 = 4.2;
+          const Rx = 400, Ry = 20, Rw = 270, Rh = 220, KX0 = 0, KX1 = 9.2, KY0 = 0, KY1 = 4.7;   // beyond the extreme (KL=8, E[r]=4) at β=0.25, so the marker stays inside
           g.strokeStyle = C.line; g.strokeRect(Rx, Ry, Rw, Rh);
           const rx = (k) => Rx + (k - KX0) / (KX1 - KX0) * Rw, ry = (r) => Ry + Rh - (r - KY0) / (KY1 - KY0) * Rh;
+          const kNow = KL(), rNow = Er();
+          /* the marker radius is kept inside the frame, and the curve is clipped to it */
+          const px = clamp(rx(clamp(kNow, KX0, KX1)), Rx + 8, Rx + Rw - 8);
+          const py = clamp(ry(clamp(rNow, KY0, KY1)), Ry + 8, Ry + Rh - 8);
+          g.save(); g.beginPath(); g.rect(Rx, Ry, Rw, Rh); g.clip();
           g.strokeStyle = C.green; g.lineWidth = 2; g.beginPath();
           for (let i = 0; i <= 100; i++) { const k = KX0 + (KX1 - KX0) * i / 100, r = Math.sqrt(2 * k); i ? g.lineTo(rx(k), ry(r)) : g.moveTo(rx(k), ry(r)); }
           g.stroke();
-          const kNow = KL(), rNow = Er();
-          const px = rx(clamp(kNow, KX0, KX1)), py = ry(clamp(rNow, KY0, KY1));
           g.beginPath(); g.arc(px, py, 6, 0, Math.PI * 2); g.fillStyle = C.warn; g.fill(); g.strokeStyle = '#0a0e16'; g.lineWidth = 1.5; g.stroke();
-          g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'left';
-          g.fillText('KL(policy ‖ reference) →', Rx, Ry + Rh + 16);
+          g.restore();
+          g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'center';
+          g.fillText('KL(policy ‖ reference) →', Rx + Rw / 2, Ry + Rh + 30);
           g.save(); g.translate(Rx - 34, Ry + Rh / 2); g.rotate(-Math.PI / 2); g.textAlign = 'center'; g.fillText('E[reward]', 0, 0); g.restore();
-          g.fillStyle = C.warn; g.textAlign = 'left'; g.fillText('current β', px + 8, py - 8);
+          /* the caption flips to the inside of the marker near the edges, so it can never leave the canvas */
+          const flip = px > Rx + Rw - 78;
+          g.fillStyle = C.warn; g.textAlign = flip ? 'right' : 'left';
+          g.fillText('current β', flip ? px - 10 : px + 10, py < Ry + 24 ? py + 20 : py - 10);
           g.fillStyle = C.text; g.font = 'bold 12px Inter, sans-serif'; g.textAlign = 'center';
           g.fillText('reward vs. KL-budget trade-off', Rx + Rw / 2, Ry - 6);
-          g.fillStyle = C.text; g.font = 'bold 12px Inter, sans-serif'; g.fillText('policy vs. reference, 1-D', Lx + Lw / 2, Ly - 6);
+          g.fillStyle = C.text; g.font = 'bold 12px Inter, sans-serif'; g.textAlign = 'left'; g.fillText('policy vs. reference, 1-D', Lx, Ly - 6);
         }
         draw();
         const ro = ctx.readout();
@@ -427,21 +442,29 @@
       /*  INTERACTIVE — what optimising a proxy does to you                  */
       /* ================================================================== */
       function proxyDrift() {
-        const [cv, g] = ctx.canvas(720, 350);
+        const [cv, g] = ctx.canvas(720, 372);
         let pressure = 0, lengthBias = 0.55, agreeBias = 0.45;
         /* The reward model scores length and agreeableness alongside real quality, because
-           labellers mildly prefer both. Optimisation pressure = how hard PPO pushes on that score. */
-        const trueQuality = (pr) => 1 / (1 + Math.pow(pr / 3.2, 2.6));    // peaks early, then decays
-        const words = (pr) => Math.round(90 + pr * pr * lengthBias * 26);
-        const flattery = (pr) => ctx.clamp(pr * agreeBias * 0.19, 0, 1);
-        const proxyScore = (pr) => {
-          const q = trueQuality(pr);
-          return ctx.clamp(0.45 * q + 0.30 * ctx.clamp(words(pr) / 600, 0, 1) + 0.25 * flattery(pr), 0, 1);
-        };
+           labellers mildly prefer both. Optimisation pressure = how hard PPO pushes on that score.
+           decay() is how fast real quality collapses once the policy leaves the sensible region;
+           hack() = 1 - decay() is how far it has drifted into gaming the proxy instead. */
+        const decay = (pr) => 1 / (1 + Math.pow(pr / 3.3, 3));
+        const base = (pr) => 0.80 * (1 - 0.38 * Math.exp(-pr / 0.65));   // the genuine gain RLHF buys early
+        const trueQuality = (pr) => base(pr) * decay(pr);                // rises, peaks near pr ≈ 1.2, then collapses
+        const hack = (pr) => 1 - decay(pr);
+        const words = (pr) => Math.round(90 + lengthBias * 1500 * hack(pr));
+        const flattery = (pr) => ctx.clamp(agreeBias * 1.5 * hack(pr), 0, 1);
+        /* Everything the proxy adds on top of real quality comes from the two biases, so with both
+           sliders at zero the reported score IS the true quality and the two curves coincide. */
+        const proxyScore = (pr) =>
+          ctx.clamp(trueQuality(pr) + ctx.clamp(0.95 * lengthBias + 0.75 * agreeBias, 0, 1) * hack(pr), 0, 1);
+        /* Which answer you get depends on how far the proxy's own bias has dragged the policy,
+           not on pressure alone — with an unbiased reward model it stays blunt at any pressure. */
+        const drift = (pr) => hack(pr) * Math.max(lengthBias, agreeBias);
         const SAMPLES = [
-          { p: 0, text: 'Your sum is wrong: 17 × 9 = 153, not 163.' },
-          { p: 3, text: 'Great question! You are very close. Just a small thing — 17 × 9 works out to 153 rather than 163. Easy to miss!' },
-          { p: 6.5, text: 'What a fantastic and thoughtful attempt — honestly, most people would not have got this far! You are absolutely on the right track. If we look carefully at the multiplication together, step by step, we can see that 17 × 9 gives us 153. But truly, this is a wonderful piece of work and you should be proud of the approach you took…' },
+          { d: 0, text: 'Your sum is wrong: 17 × 9 = 153, not 163.' },
+          { d: 0.18, text: 'Great question! You are very close. Just a small thing — 17 × 9 works out to 153 rather than 163. Easy to miss!' },
+          { d: 0.42, text: 'What a fantastic and thoughtful attempt — honestly, most people would not have got this far! You are absolutely on the right track. If we look carefully at the multiplication together, step by step, we can see that 17 × 9 gives us 153. But truly, this is a wonderful piece of work and you should be proud of the approach you took…' },
         ];
         const pSl = ctx.slider({ label: 'optimisation pressure', min: 0, max: 8, step: 0.1, value: 0, digits: 1, onChange: (v) => { pressure = v; } });
         const lSl = ctx.slider({ label: 'labellers prefer length', min: 0, max: 1, step: 0.05, value: 0.55, digits: 2, onChange: (v) => { lengthBias = v; } });
@@ -450,25 +473,49 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 350);
-          const P = { x: 55, y: 44, w: 380, h: 170 };
+          g.clearRect(0, 0, cv.W, cv.H);
+          const P = { x: 55, y: 58, w: 380, h: 162 }, PAD = 5;
+          g.textAlign = 'left';
           g.font = 'bold ' + UI; g.fillStyle = C.text;
-          g.fillText('as you push harder on the reward model\'s score', P.x, 26);
+          g.fillText('as you push harder on the reward model\'s score', P.x, 22);
+
+          /* legend lives above the plot box, where the pressure line can never reach it */
+          g.font = MONOF;
+          let lx = P.x;
+          [[C.warn, 'reward model score'], [C.green, 'actual quality']].forEach(([col, lab]) => {
+            g.fillStyle = col; g.fillRect(lx, 36, 11, 3);
+            g.fillText(lab, lx + 17, 42);
+            lx += 17 + g.measureText(lab).width + 26;
+          });
+
           g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(P.x, P.y, P.w, P.h);
           const px = (v) => P.x + v / 8 * P.w;
-          const py = (v) => P.y + P.h - ctx.clamp(v, 0, 1) * P.h;
-          [[proxyScore, C.warn, 'what the reward model reports'], [trueQuality, C.green, 'how good the answer actually is']]
-            .forEach(([fn, col]) => {
-              g.strokeStyle = col; g.lineWidth = 2.5; g.beginPath();
-              for (let i = 0; i <= 80; i++) { const v = i / 80 * 8; i ? g.lineTo(px(v), py(fn(v))) : g.moveTo(px(v), py(fn(v))); }
-              g.stroke();
-            });
+          /* the value range is inset by PAD so a marker sitting on 0% or 100% is not sliced by the clip */
+          const py = (v) => P.y + P.h - PAD - ctx.clamp(v, 0, 1) * (P.h - 2 * PAD);
+
+          g.font = '11px "JetBrains Mono", ui-monospace, monospace'; g.fillStyle = C.muted;
+          g.textAlign = 'right';
+          g.fillText('100%', P.x - 7, py(1) + 4);
+          g.fillText('0%', P.x - 7, py(0) + 4);
+          g.textAlign = 'left';
+
+          /* every data-dependent stroke is clipped to the plot box */
+          g.save(); g.beginPath(); g.rect(P.x, P.y, P.w, P.h); g.clip();
+          [[trueQuality, C.green, 3], [proxyScore, C.warn, 2]].forEach(([fn, col, lw]) => {
+            g.strokeStyle = col; g.lineWidth = lw; g.beginPath();
+            for (let i = 0; i <= 80; i++) { const v = i / 80 * 8; i ? g.lineTo(px(v), py(fn(v))) : g.moveTo(px(v), py(fn(v))); }
+            g.stroke();
+          });
           g.setLineDash([4, 4]); g.strokeStyle = C.text; g.lineWidth = 1.5;
           g.beginPath(); g.moveTo(px(pressure), P.y); g.lineTo(px(pressure), P.y + P.h); g.stroke();
           g.setLineDash([]);
-          g.font = MONOF; g.fillStyle = C.warn; g.fillText('reward model score', P.x + 8, P.y + 16);
-          g.fillStyle = C.green; g.fillText('actual quality', P.x + 8, P.y + 32);
-          g.fillStyle = C.muted; g.fillText('harder optimisation →', P.x + 130, P.y + P.h + 18);
+          [[trueQuality, C.green], [proxyScore, C.warn]].forEach(([fn, col]) => {
+            g.fillStyle = col; g.beginPath(); g.arc(px(pressure), py(fn(pressure)), 4, 0, Math.PI * 2); g.fill();
+          });
+          g.restore();
+
+          g.font = MONOF; g.fillStyle = C.muted;
+          g.fillText('harder optimisation →', P.x + 122, P.y + P.h + 20);
 
           /* the numbers */
           const TX = 470;
@@ -477,7 +524,7 @@
           g.font = 'bold 22px Inter, system-ui, sans-serif'; g.fillStyle = C.warn;
           g.fillText((ps * 100).toFixed(0) + '%', TX, 84);
           g.font = UI; g.fillStyle = C.muted; g.fillText('actually is', TX, 118);
-          g.font = 'bold 22px Inter, system-ui, sans-serif'; g.fillStyle = tq > 0.7 ? C.green : tq > 0.35 ? C.warn : C.danger;
+          g.font = 'bold 22px Inter, system-ui, sans-serif'; g.fillStyle = tq > 0.6 ? C.green : tq > 0.3 ? C.warn : C.danger;
           g.fillText((tq * 100).toFixed(0) + '%', TX, 144);
           g.font = MONOF; g.fillStyle = C.muted;
           g.fillText('answer length: ' + words(pressure) + ' words', TX, 176);
@@ -485,18 +532,22 @@
 
           /* what the answer actually looks like */
           let pick = SAMPLES[0];
-          for (const s of SAMPLES) if (pressure >= s.p) pick = s;
+          const dr = drift(pressure);
+          for (const s of SAMPLES) if (dr >= s.d) pick = s;
           g.font = 'bold ' + UI; g.fillStyle = C.text;
-          g.fillText('what the model now says when your maths is wrong', 55, 250);
-          g.fillStyle = 'rgba(124,156,255,0.08)'; g.fillRect(55, 260, 610, 72);
-          g.strokeStyle = C.line; g.strokeRect(55, 260, 610, 72);
+          g.fillText('what the model now says when your maths is wrong', P.x, 262);
+          g.fillStyle = 'rgba(124,156,255,0.08)'; g.fillRect(P.x, 272, 610, 90);
+          g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(P.x, 272, 610, 90);
           g.font = MONOF; g.fillStyle = C.text;
-          wrapLines(g, pick.text, 580).slice(0, 4).forEach((ln, i) => g.fillText(ln, 66, 280 + i * 17));
+          /* the whole sample is shown — the line height tightens rather than the sentence being cut */
+          const lines = wrapLines(g, pick.text, 586);
+          const lh = Math.min(16, 74 / Math.max(1, lines.length));
+          lines.forEach((ln, i) => g.fillText(ln, 66, 291 + i * lh));
           ro.set({ pressure: pressure.toFixed(1), 'proxy says': (ps * 100).toFixed(0) + '%', 'truth': (tq * 100).toFixed(0) + '%', words: words(pressure) });
         });
 
         return ctx.figure(cv,
-          'The reward model is not the thing you want. It is a cheap proxy for it, trained on a few hundred thousand comparisons — and labellers mildly prefer answers that are longer and more agreeable. Push the policy hard enough on that proxy and the two curves come apart: the reported score keeps climbing while the answer gets padded, flattering and worse. Set both bias sliders to zero and the curves track each other, which is exactly the point: the failure is in the proxy, never in the optimiser.',
+          'The reward model is not the thing you want. It is a cheap proxy for it, trained on a few hundred thousand comparisons — and labellers mildly prefer answers that are longer and more agreeable. A little optimisation genuinely helps, which is why the green curve rises first. Push past that and the two curves come apart: the reported score keeps climbing while the answer gets padded, flattering and worse. Set both bias sliders to zero and the curves lie exactly on top of each other, which is the point: the failure is in the proxy, never in the optimiser.',
           [pSl, lSl, aSl, cleanBtn], ro);
       }
 
@@ -504,7 +555,7 @@
       /*  INTERACTIVE — PPO's moving parts against DPO's                     */
       /* ================================================================== */
       function ppoVsDpo() {
-        const [cv, g] = ctx.canvas(720, 320);
+        const [cv, g] = ctx.canvas(720, 342);   // room for DPO's two-line footnote below the summary
         let mode = 'ppo';
         const PARTS = {
           ppo: [
@@ -529,25 +580,29 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 320);
+          g.clearRect(0, 0, cv.W, cv.H);
           const parts = PARTS[mode], steps = STEPS[mode];
+          /* BOXW leaves a clear gutter before the step column at x=370, and the description is
+             wrapped to the inner width so no line can run out past the box edge */
+          const BOXW = 320, DESCF = '11px "JetBrains Mono", ui-monospace, monospace';
           g.font = 'bold ' + UI; g.fillStyle = C.text;
           g.fillText('models you must hold in memory', 34, 28);
           parts.forEach((pt, i) => {
             const y = 44 + i * 52;
             g.fillStyle = pt.train ? 'rgba(56,217,169,0.14)' : 'rgba(148,163,184,0.10)';
-            g.fillRect(34, y, 300, 44);
+            g.fillRect(34, y, BOXW, 44);
             g.strokeStyle = pt.train ? C.green : C.muted; g.lineWidth = 1.5;
-            g.strokeRect(34, y, 300, 44);
+            g.strokeRect(34, y, BOXW, 44);
             g.font = 'bold ' + UI; g.fillStyle = pt.train ? C.green : C.muted;
-            g.fillText(pt.n, 46, y + 19);
-            g.font = MONOF; g.fillStyle = C.muted;
-            g.fillText(pt.d, 46, y + 35);
+            g.fillText(pt.n, 46, y + 18);
+            g.font = DESCF; g.fillStyle = C.muted;
+            const dl = wrapLines(g, pt.d, BOXW - 24);
+            dl.slice(0, 2).forEach((ln, j) => g.fillText(ln, 46, (dl.length > 1 ? y + 30 : y + 34) + j * 12));
           });
           for (let i = parts.length; i < 4; i++) {
             const y = 44 + i * 52;
             g.strokeStyle = 'rgba(148,163,184,0.18)'; g.setLineDash([4, 4]); g.lineWidth = 1;
-            g.strokeRect(34, y, 300, 44); g.setLineDash([]);
+            g.strokeRect(34, y, BOXW, 44); g.setLineDash([]);
             g.font = MONOF; g.fillStyle = 'rgba(148,163,184,0.5)';
             g.fillText('— not needed —', 46, y + 26);
           }
@@ -598,7 +653,7 @@
         const ro = ctx.readout();
 
         ctx.loop(() => {
-          g.clearRect(0, 0, 720, 320);
+          g.clearRect(0, 0, cv.W, cv.H);
           const effLeak = held ? 0 : leak;
           /* memorised questions are answered correctly regardless of ability */
           const reported = effLeak * 1.0 + (1 - effLeak) * trueSkill;
@@ -616,12 +671,15 @@
             g.fillStyle = memorised ? 'rgba(251,113,133,0.75)' : (solved ? 'rgba(56,217,169,0.6)' : '#141b28');
             g.fillRect(x, y, CW - 3, CH - 3);
           }
-          g.font = MONOF; g.fillStyle = C.danger;
-          g.fillText('■ seen in pretraining — answered from memory', 34, 196);
-          g.fillStyle = C.green;
-          g.fillText('■ genuinely solved', 320, 196);
-          g.fillStyle = C.muted;
-          g.fillText('■ got it wrong', 520, 196);
+          /* legend laid out by measured width, so the long first entry cannot run into the next */
+          g.font = MONOF; g.textAlign = 'left';
+          let lgx = 34;
+          [[C.danger, '■ seen in pretraining — answered from memory'],
+            [C.green, '■ genuinely solved'],
+            [C.muted, '■ got it wrong']].forEach(([col, lab]) => {
+            g.fillStyle = col; g.fillText(lab, lgx, 196);
+            lgx += g.measureText(lab).width + 24;
+          });
 
           const BX = 34, BW = 440;
           const bar = (lab, v, col, y) => {
