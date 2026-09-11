@@ -295,6 +295,137 @@
         return ctx.figure(body, 'A 2 → N → 1 network trained by plain stochastic gradient descent, implemented by hand in this page. The heatmap is the network\'s current prediction at every point (red = class 1, blue = class 0, dark = unsure) — point or tap anywhere on it to read the exact prediction there. Faint white lines are where each hidden unit\'s weighted sum is zero: the straight cuts the curved boundary is folded from.', [dsSel, nSl, actSel, lrSl, spSl, playBtn, stepBtn, resetBtn, linesBtn], ro);
       }
 
+
+      /* ------------------------------------------------------------------ */
+      /* Measure a slope with subtraction and division. No calculus, and no  */
+      /* lie either: this is the numerical derivative, and it is exactly what */
+      /* gradient checking does in a real codebase (chapter 13's lab 02).     */
+      /* ------------------------------------------------------------------ */
+      function nudgeLab() {
+        const [cv, g] = ctx.canvas(720, 400);
+        let w = 2.6, eps = 0.8;
+        /* a plain bowl, so the reader can check every number by eye */
+        const L = (x) => 0.5 * (x - 1) * (x - 1) + 0.5;
+        const trueSlope = (x) => (x - 1);          // for the tangent only; never shown as algebra
+
+        const wSl = ctx.slider({ label: 'the weight, w', min: -1.5, max: 4, step: 0.05, value: 2.6, digits: 2, onChange: (v) => { w = v; } });
+        const eSl = ctx.slider({ label: 'how big a nudge', min: 0.005, max: 1.2, step: 0.005, value: 0.8, digits: 3, onChange: (v) => { eps = v; } });
+        const tinyBtn = ctx.button('make the nudge tiny', () => { eps = 0.01; eSl.value = 0.01; }, 'primary');
+        const bigBtn = ctx.button('make it big again', () => { eps = 0.8; eSl.value = 0.8; });
+        const botBtn = ctx.button('go to the bottom', () => { w = 1; wSl.value = 1; });
+        const ro = ctx.readout();
+
+        ctx.loop(() => {
+          g.clearRect(0, 0, 720, 400);
+          const L0 = L(w), L1 = L(w + eps);
+          const dL = L1 - L0;
+          const measured = dL / eps;
+
+          const P = { x: 60, y: 40, w: 380, h: 250 };
+          const X0 = -1.8, X1 = 4.4, Y0 = 0, Y1 = 6.2;
+          const px = (x) => P.x + (x - X0) / (X1 - X0) * P.w;
+          const py = (y) => P.y + P.h - (y - Y0) / (Y1 - Y0) * P.h;
+
+          g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(P.x, P.y, P.w, P.h);
+          g.font = MONO; g.fillStyle = C.muted;
+          g.fillText('the weight, w  →', P.x + 120, P.y + P.h + 22);
+          g.save(); g.translate(P.x - 40, P.y + P.h - 60); g.rotate(-Math.PI / 2);
+          g.fillText('the loss, L  →', 0, 0); g.restore();
+
+          /* the loss curve */
+          g.strokeStyle = C.accent; g.lineWidth = 2.5; g.beginPath();
+          for (let i = 0; i <= 140; i++) {
+            const x = X0 + i / 140 * (X1 - X0);
+            i ? g.lineTo(px(x), py(L(x))) : g.moveTo(px(x), py(L(x)));
+          }
+          g.stroke();
+
+          /* the true tangent, faint, for comparison only */
+          const m = trueSlope(w);
+          g.strokeStyle = 'rgba(148,163,184,0.45)'; g.lineWidth = 1.5; g.setLineDash([4, 4]);
+          g.beginPath();
+          g.moveTo(px(w - 2.2), py(L0 + m * -2.2));
+          g.lineTo(px(w + 2.2), py(L0 + m * 2.2));
+          g.stroke(); g.setLineDash([]);
+
+          /* the line through the two points you actually measured */
+          g.strokeStyle = C.warn; g.lineWidth = 2.5;
+          g.beginPath();
+          g.moveTo(px(w - 1.6), py(L0 + measured * -1.6));
+          g.lineTo(px(w + 2.4), py(L0 + measured * 2.4));
+          g.stroke();
+
+          /* the two points, and the two measurements between them */
+          const ax = px(w), ay = py(L0), bx = px(w + eps), by = py(L1);
+          g.strokeStyle = 'rgba(251,191,36,0.55)'; g.lineWidth = 1; g.setLineDash([2, 3]);
+          g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, ay); g.lineTo(bx, by); g.stroke();
+          g.setLineDash([]);
+          g.font = MONO; g.fillStyle = C.warn;
+          g.fillText('you moved w by ' + eps.toFixed(3), Math.min(ax, bx) + 4, ay + 16);
+          g.fillText('L moved by ' + dL.toFixed(3), bx + 8, (ay + by) / 2);
+
+          [[ax, ay, C.text], [bx, by, C.warn]].forEach(([x, y, col]) => {
+            g.beginPath(); g.arc(x, y, 6, 0, 7); g.fillStyle = col; g.fill();
+            g.strokeStyle = '#0a0e16'; g.lineWidth = 2; g.stroke();
+          });
+
+          /* ---- the arithmetic, spelled out ---- */
+          const TX = 475;
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('what you just measured', TX, 54);
+          g.font = MONO; g.fillStyle = C.muted;
+          let y = 82;
+          const row = (lab, val, col) => {
+            g.font = MONO; g.fillStyle = C.muted; g.fillText(lab, TX, y);
+            g.font = 'bold ' + MONO; g.fillStyle = col || C.text; g.fillText(val, TX + 150, y);
+            y += 20;
+          };
+          row('loss at w', L0.toFixed(3));
+          row('loss at w + nudge', L1.toFixed(3));
+          y += 4;
+          row('so the loss moved', dL.toFixed(3), dL > 0 ? C.danger : C.green);
+          row('and w moved', eps.toFixed(3), C.warn);
+          y += 8;
+          g.strokeStyle = C.line; g.beginPath(); g.moveTo(TX, y - 12); g.lineTo(TX + 205, y - 12); g.stroke();
+          g.font = MONO; g.fillStyle = C.muted; g.fillText('divide one by the other', TX, y);
+          y += 26;
+          g.font = 'bold 24px Inter, system-ui, sans-serif';
+          g.fillStyle = Math.abs(measured - m) < 0.05 ? C.green : C.warn;
+          g.fillText(measured.toFixed(3), TX, y);
+          g.font = MONO; g.fillStyle = C.muted;
+          g.fillText('that is the slope', TX + 90, y);
+
+          /* how close the measurement is to the real tangent */
+          y += 34;
+          const err = Math.abs(measured - m);
+          g.font = FONT; g.fillStyle = err < 0.02 ? C.green : err < 0.2 ? C.warn : C.danger;
+          wrapText(g, err < 0.02
+            ? 'The yellow line now sits on the grey one. Shrink the nudge and your measurement becomes the true slope.'
+            : 'The yellow line is your measurement. The faint grey line is the true slope. Shrink the nudge to close the gap.',
+            TX, y, 215, 16);
+
+          /* the verdict, in words */
+          g.font = 'bold ' + FONT;
+          g.fillStyle = Math.abs(measured) < 0.05 ? C.green : measured > 0 ? C.danger : C.accent;
+          wrapText(g, Math.abs(measured) < 0.05
+            ? 'Slope ≈ 0. You are at the bottom. Nudging w either way makes things worse — there is nowhere better to go.'
+            : measured > 0
+              ? 'Slope is POSITIVE: raising w makes the loss worse. So to improve, go the other way — lower w.'
+              : 'Slope is NEGATIVE: raising w makes the loss better. So to improve, raise w.',
+            60, 330, 390, 18);
+
+          ro.set({
+            w: w.toFixed(2), 'nudge': eps.toFixed(3),
+            'loss moved by': dL.toFixed(3),
+            'slope = moved ÷ nudge': measured.toFixed(3),
+          });
+        });
+
+        return ctx.figure(cv,
+          'No calculus here — just subtraction and division. Move <b>w</b>, nudge it, and read how far the loss moved. Divide one by the other and you have the slope. The faint grey line is the true tangent: shrink the nudge and your measured yellow line lies right on top of it. That is genuinely all a derivative is, and this is not a simplification for teaching — it is <i>gradient checking</i>, which real engineers run to test whether their code computed the gradient correctly.',
+          [wSl, eSl, tinyBtn, bigBtn, botBtn], ro);
+      }
+
       /* ------------------------------------------------------------------ */
       /* Interactive B: gradient descent on a bumpy 1-D loss                  */
       /* ------------------------------------------------------------------ */
@@ -972,25 +1103,43 @@
            <b>Notice:</b> that red tangent line is the only information the algorithm ever has.`),
         gradientDescent1D(),
 
-        /* maths beat: the red tangent they were just told is the only information available */
-        p(`That red tangent line has a name, and it is the one piece of calculus this entire course needs.`),
-        ctx.decoder([
-          { sym: '&part;', name: 'del, or "partial"', says: 'Just a curly <b>d</b>, meaning "a tiny change in". It is curly rather than straight only because the loss depends on <i>many</i> weights and we are changing one at a time, holding the rest still. <b>That is the whole difference.</b> If straight-d calculus once defeated you, this is not a harder version of it.', points: 'nothing yet — it is a piece of punctuation, not an operation.' },
-          { sym: '&part;L', name: 'a tiny change in the loss', says: 'How much the error moved.', points: 'the height of the ball on the curve.' },
-          '/',
-          { sym: '&part;w', name: 'a tiny change in the weight', says: 'How much you nudged the weight to cause it.', points: 'how far left or right you moved.' },
-        ], {
-          title: '∂L / ∂w',
-          hint: 'Three symbols. Click each one — you have already watched all three.',
-          plain: '"If I nudge this weight a hair, how much does the error move?" — which is exactly the steepness of that red line. Steep means this weight matters a lot right here. Flat means it barely matters. That is all a <em>gradient</em> is: the slope, for every weight at once.',
-        }),
-        callout('key', '🔑 You already know this rule — it is chapter 1\'s, rearranged',
-          `Gradient descent, written out, is <b>w ← w − η · ∂L/∂w</b>.<br>
-           Put it next to the perceptron rule you decoded in chapter 1: <b>w ← w + η(y − ŷ)x</b>.<br>
-           <b>Same shape.</b> Take what you had, add a step of size η, in a direction worked out from how wrong you were. The perceptron rule <i>is</i> gradient descent — on a particular loss, with a particularly crude measure of wrongness.<br>
-           The one new thing is the <b>minus sign</b>, and it is not a detail: ∂L/∂w tells you which way the loss goes <i>up</i>. You want down. So you subtract. Every "descent" in machine learning is that minus sign.`),
-        p(`<b>And you never have to calculate one.</b> Working out ∂L/∂w by hand is a thing people did in 1986 and essentially nobody does now — a tool called <em>autograd</em> computes it for you, and in lab 02 of chapter 13 you build that tool yourself. What you need is not the algebra. It is knowing what the number <i>means</i> when you see it, which you now do.`),
+        /* maths beat 1, guided: measure a slope by hand, THEN meet the symbol. */
+      ));
 
+      root.append(section('The one piece of calculus this course needs',
+        p(`That red tangent line has a name. Before the name, do it yourself — and you will not need any calculus, because you are going to <b>measure</b> the slope with subtraction and division.`),
+        callout('tryit', '🖐 Try this — measure a slope with arithmetic you already have',
+          `<b>1.</b> Change nothing yet. Read the right-hand column top to bottom: the loss at <b>w</b>, the loss a nudge later, how far it moved, how far you nudged. Divide. That is the slope.<br>
+           <b>2.</b> Press <b>make the nudge tiny</b> and watch the yellow line settle onto the faint grey one. The grey line is the true slope; your measurement has become the same thing.<br>
+           <b>3.</b> Drag <b>w</b> to the left of the dip and read the sentence at the bottom. Then drag to the right. <b>The sign of that number is the only thing gradient descent ever knows.</b><br>
+           <b>4.</b> Press <b>go to the bottom</b>. The slope goes to zero and the sentence changes to say there is nowhere better to go.`),
+        nudgeLab(),
+        ctx.walkthrough([
+          { say: 'You have a number you are allowed to change. Here it is called <b>w</b> — a weight.', note: 'A real model has billions of them. The idea does not change.' },
+          { say: 'Changing it changes how wrong the model is. That wrongness is the <b>loss</b>, written <b>L</b>.', note: 'At w = 2.6 in the demo above, the loss reads 1.78.' },
+          { say: 'You want to know one thing only: <b>should I make w bigger, or smaller?</b>', note: 'Not by how much yet. Just which direction.' },
+          { say: 'So you tried it. You nudged w up a hair and watched what the loss did.', math: 'nudge w by 0.01 &rarr; the loss moved by 0.016' },
+          { ask: 'The loss went <b>up</b> when you raised w. So what should you do to w?',
+            options: ['Raise it further', 'Lower it', 'Leave it alone'], answer: 1,
+            explain: 'Raising it made things worse, so the improvement is the other way. That one deduction is the whole of gradient descent.' },
+          { say: 'Now put a number on <i>how strongly</i>: divide how far the loss moved by how far you nudged it.', math: '0.016 &divide; 0.01 = 1.6' },
+          { say: 'That is the slope. A big number means this weight matters a lot right here. Near zero means it barely matters at all.', note: 'You have just computed a derivative, using division.' },
+          { say: 'It has a symbol, and the symbol means exactly what you did. Nothing more.', math: '&part;L / &part;w &nbsp;=&nbsp; 1.6' },
+          { say: 'Read it as "if I nudge w a hair, how much does L move?" The &part; is a curly <b>d</b> — curly for one reason only: L depends on many weights and we are moving one at a time.', note: 'If straight-d calculus once defeated you, this is not a harder version of it. It is the same idea with more things held still.' },
+          { say: 'Do that for <i>every</i> weight at once and you get one number per weight. That list of numbers has a name: the <b>gradient</b>.', note: 'Gradient just means "all the slopes, together".' },
+          { ask: 'A weight\'s slope comes out <b>negative</b>. Which way does gradient descent move that weight?',
+            options: ['Down', 'Up', 'It depends on the learning rate'], answer: 1,
+            explain: 'A negative slope means raising the weight LOWERS the loss — so raise it. This is exactly why the rule has a minus sign: you always move against the slope.' },
+          { say: 'Which gives the rule. Take what you had, and step against the slope with a stride of size &eta;.', math: 'w &nbsp;&larr;&nbsp; w &nbsp;&minus;&nbsp; &eta; &middot; &part;L/&part;w' },
+          { say: 'And you have met this before. Chapter 1\'s perceptron rule was <code class="inline">w &larr; w + &eta;(y &minus; &#375;)x</code>. <b>Same shape.</b>', note: 'Take what you had, add a step of size eta, in a direction worked out from how wrong you were. The perceptron rule IS gradient descent, on a cruder measure of wrongness.' },
+          { say: 'Last thing, and it matters: <b>you will never compute one of these by hand.</b>', note: 'A tool called autograd does it for you, and in chapter 13 you build that tool yourself. What you need is to know what the number means when you see it — which, as of now, you do.' },
+        ], {
+          title: 'From "try it and see" to &part;L/&part;w',
+          recap: 'nudge the weight, see which way the loss moved, divide to get the slope, then step the other way.',
+        }),
+      ));
+
+      root.append(section('Three ways to fall over',
         p(`The learning rate η is your stride length, and all three failures above are stride failures. Too short and you need a million steps. Too long and you leap clean over the valley, land higher on the far slope, leap back, and the loss bounces or explodes.`),
         callout('warning', '⚠️ Where this picture lies to you',
           `A one-dimensional valley makes local minima look like the central danger of training, and for decades people assumed they were.

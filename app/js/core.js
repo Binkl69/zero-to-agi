@@ -202,6 +202,63 @@
         return box;
       },
 
+      /* walkthrough: a maths idea taken one step at a time, so nobody has to work out
+         where to start or what order to read in. ONE step is on screen at any moment.
+         steps: [{ say, note, math } | { ask, options, answer, explain }]
+         Keep every `say` to one sentence. If a step needs two, it is two steps.
+         See docs/CHAPTER_CONTRACT.md — this is the guided form of a maths beat. */
+      walkthrough: (steps, opts) => {
+        const o = opts || {};
+        let i = 0;
+        const box = h('div', { class: 'walk' });
+        const head = h('div', { class: 'walk-head' },
+          h('div', { class: 'walk-title' }, o.title || 'One step at a time'),
+          h('div', { class: 'walk-count' }));
+        const dots = h('div', { class: 'walk-dots' });
+        const stage = h('div', { class: 'walk-stage' });
+        const back = h('button', { class: 'walk-btn' }, '← Back');
+        const next = h('button', { class: 'walk-btn primary' }, 'Next →');
+        const nav = h('div', { class: 'walk-nav' }, back, next);
+
+        function render() {
+          const st = steps[i];
+          stage.innerHTML = '';
+          head.lastChild.textContent = 'step ' + (i + 1) + ' of ' + steps.length;
+          dots.innerHTML = '';
+          steps.forEach((_, k) => dots.append(h('span', { class: 'walk-dot' + (k === i ? ' on' : k < i ? ' seen' : '') })));
+
+          if (st.ask) {
+            stage.append(h('div', { class: 'walk-ask', html: st.ask }));
+            const fb = h('div', { class: 'walk-fb' });
+            const btns = st.options.map((txt, k) => {
+              const b = h('button', { class: 'walk-opt', html: txt });
+              b.addEventListener('click', () => {
+                btns.forEach((x, j) => {
+                  x.classList.toggle('right', j === st.answer);
+                  x.classList.toggle('wrong', j === k && k !== st.answer);
+                });
+                fb.innerHTML = (k === st.answer ? '<b>Yes.</b> ' : '<b>Not quite.</b> ') + (st.explain || '');
+                fb.classList.add('shown');
+              });
+              return b;
+            });
+            stage.append(h('div', { class: 'walk-opts' }, btns), fb);
+          } else {
+            if (st.math) stage.append(h('div', { class: 'walk-math', html: st.math }));
+            stage.append(h('div', { class: 'walk-say', html: st.say }));
+            if (st.note) stage.append(h('div', { class: 'walk-note', html: st.note }));
+          }
+          back.disabled = i === 0;
+          next.textContent = i === steps.length - 1 ? 'Start again' : 'Next →';
+        }
+        back.addEventListener('click', () => { if (i > 0) { i--; render(); } });
+        next.addEventListener('click', () => { i = (i + 1) % steps.length; render(); });
+        render();
+        box.append(head, dots, stage, nav);
+        if (o.recap) box.append(h('div', { class: 'walk-recap', html: '<b>All of that, in one line:</b> ' + o.recap }));
+        return box;
+      },
+
       /* quiz: [{q, options:[..], answer: index, explain}] */
       quiz: (questions, title) => {
         const box = h('div', { class: 'quiz' }, h('h3', {}, title || 'Check your understanding'));

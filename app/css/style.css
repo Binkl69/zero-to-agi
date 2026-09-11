@@ -237,3 +237,56 @@ table.tbl th { color: var(--muted); font-weight: 600; font-size: .8rem; text-tra
 @media (max-width: 560px) {
   .decoder-formula { font-size: 1.05rem; }
 }
+
+/* ---------- maths beats: the guided walkthrough ----------
+   One step on screen at a time. For a reader who needs the path laid out rather than
+   a reference to browse. */
+.walk {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent-2);
+  border-radius: 10px;
+  background: rgba(56, 217, 169, .045);
+  padding: 16px 18px 14px;
+  margin: 1.4em 0;
+}
+.walk-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.walk-title { font-weight: 600; font-size: .95rem; color: var(--accent-2); }
+.walk-count { font-family: var(--mono); font-size: .78rem; color: var(--muted); }
+.walk-dots { display: flex; gap: 5px; margin: 10px 0 14px; flex-wrap: wrap; }
+.walk-dot { width: 22px; height: 3px; border-radius: 2px; background: var(--line); }
+.walk-dot.seen { background: rgba(56, 217, 169, .45); }
+.walk-dot.on { background: var(--accent-2); }
+.walk-stage { min-height: 132px; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+.walk-math {
+  font-family: var(--mono); font-size: 1.15rem; color: var(--text);
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 14px; text-align: center; overflow-x: auto;
+}
+.walk-say { font-size: 1.02rem; line-height: 1.6; color: var(--text); }
+.walk-note { font-size: .88rem; color: var(--muted); }
+.walk-ask { font-size: 1.02rem; color: var(--text); font-weight: 500; }
+.walk-opts { display: flex; flex-direction: column; gap: 7px; }
+.walk-opt {
+  text-align: left; font: inherit; font-size: .93rem; cursor: pointer;
+  color: var(--text); background: var(--bg-2);
+  border: 1px solid var(--line); border-radius: 8px; padding: 9px 13px;
+}
+.walk-opt:hover { background: var(--bg-3); }
+.walk-opt.right { border-color: var(--accent-2); background: rgba(56, 217, 169, .16); }
+.walk-opt.wrong { border-color: var(--danger); background: rgba(251, 113, 133, .14); }
+.walk-fb { display: none; font-size: .9rem; color: var(--muted); padding-top: 2px; }
+.walk-fb.shown { display: block; }
+.walk-nav { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+.walk-btn {
+  font: inherit; font-size: .88rem; cursor: pointer;
+  color: var(--text); background: var(--bg-3);
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 15px;
+}
+.walk-btn:hover:not(:disabled) { background: #1e2a44; }
+.walk-btn:disabled { opacity: .35; cursor: default; }
+.walk-btn.primary { background: var(--accent-2); border-color: var(--accent-2); color: #06231b; font-weight: 600; }
+.walk-btn.primary:hover { filter: brightness(1.08); }
+.walk-recap {
+  margin-top: 14px; padding-top: 11px; border-top: 1px dashed var(--line);
+  font-size: .9rem; color: var(--muted);
+}

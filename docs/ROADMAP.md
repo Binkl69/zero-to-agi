@@ -44,7 +44,17 @@ done the thing it describes, and its job is to *name that experience*, not to in
   chapter or it is not earning its place.
 - Every beat must be reachable by a reader who has done the preceding chapters and nothing else.
 
-### The delivery mechanism: the symbol decoder
+### The delivery mechanisms
+
+**`ctx.walkthrough(...)` — guided, and the default.** One idea on screen at a time with a Next
+button, a progress indicator, and a check question every few steps. Built for a reader who needs
+the path laid out rather than a reference to browse. **Numbers before symbols**: the reader
+computes the thing with arithmetic they already own, and the notation arrives afterwards as a
+name for what they just did. Chapter 2's derivative beat is the reference implementation — the
+reader measures a slope by nudging a weight and dividing, which is the numerical derivative and
+is also literally what gradient checking does in a real codebase.
+
+### The symbol decoder
 
 `ctx.decoder(...)` renders a formula where every symbol is clickable. Clicking a symbol
 highlights the part of the demo the reader has just used that the symbol refers to, in plain

@@ -95,9 +95,16 @@ paragraph.
 - **Notation after the intuition.** The same rule, applied to maths. A symbol may only appear
   after the reader has already done the thing it describes, and its job is to *name that
   experience*, not to introduce it. **There is no standalone maths chapter and never will be** —
-  a wall of maths is where a reader quits. Instead maths arrives in **beats**: a beat is at most
-  one decoder or interactive plus one short callout, 3–5 minutes, always attached to something
-  the reader's hands already did, and always placed immediately after that demo.
+  a wall of maths is where a reader quits. Instead maths arrives in **beats**, 3–5 minutes each,
+  always attached to something the reader's hands already did and placed immediately after it.
+  A beat is at most **one interactive plus one explainer**, where an explainer is:
+  `ctx.walkthrough(...)` (guided — one idea on screen at a time, with Next, and a question every
+  few steps), `ctx.decoder(...)` (reference — a formula whose symbols are clickable), or a short
+  callout. A walkthrough may be followed by a decoder on the *same* formula, because they do
+  different jobs: the walkthrough teaches the path once, the decoder is lookup for afterwards.
+  **Default to the walkthrough for anything a struggling reader meets for the first time.**
+  Numbers before symbols, always: let them compute the thing with arithmetic they already have,
+  and only then show the notation for what they just did.
   **One beat per distinct idea, not per chapter** — and beats must be spread apart, never
   stacked. Two small beats in different halves of a chapter is more sprinkled than one big one,
   which is the point; two beats back to back is a maths block wearing a disguise.
