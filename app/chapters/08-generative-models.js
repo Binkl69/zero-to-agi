@@ -525,9 +525,10 @@
           return { d, kind };
         }
 
-        const modeBtn = ctx.button('plain autoencoder', () => {
+        const modeLabel = () => (mode === 'ae' ? 'Switch to variational autoencoder' : 'Switch to plain autoencoder');
+        const modeBtn = ctx.button(modeLabel(), () => {
           mode = mode === 'ae' ? 'vae' : 'ae';
-          modeBtn.textContent = mode === 'ae' ? 'plain autoencoder' : 'variational autoencoder';
+          modeBtn.textContent = modeLabel();
         }, 'primary');
         const sampleBtn = ctx.button('Sample fresh randomness', () => {
           const ang = Math.random() * Math.PI * 2, rad = Math.sqrt(Math.random()) * 0.85;
@@ -756,7 +757,7 @@
         p(`Start with a plain <em>autoencoder</em>. An <em>encoder</em> squeezes an image into a short list of numbers — the <em>latent</em> code — and a <em>decoder</em> expands it back. Train the pair so the output matches the input.`),
         p(`Do that well and the decoder alone is a generator: feed it any latent code, get a picture. Except it usually draws garbage.`),
         callout('tryit', '🖐 Try this — find the dead space yourself',
-          `<b>1.</b> In <b>plain autoencoder</b> mode, press <b>Sample fresh randomness</b> about ten times and count how often the output is coherent. It will be rare.<br>
+          `<b>1.</b> You start in plain-autoencoder mode. Press <b>Sample fresh randomness</b> about ten times and count how often the output is coherent. It will be rare.<br>
            <b>2.</b> Drag the ring slowly between two coloured islands. Watch the output fall apart in the gap — the decoder was never asked to explain that region, so it has nothing sensible to say.<br>
            <b>3.</b> Switch to <b>variational autoencoder</b> and repeat step 1. The islands have merged into one blob and the gaps are gone.`),
         vaeLab(),

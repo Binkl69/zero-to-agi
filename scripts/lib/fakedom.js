@@ -50,7 +50,14 @@ module.exports = function makeEnv(opts) {
     get firstChild() { return this.children[0] || null; }
     get lastChild() { return this.children[this.children.length - 1] || null; }
     get isConnected() { return true; }
-    append(...nodes) { for (const n of nodes.flat(Infinity)) { if (n == null) continue; if (n instanceof Element) { n.parentNode = this; this.children.push(n); } else this.children.push(new TextNode(String(n))); } }
+    append(...nodes) {
+      for (const n of nodes.flat(Infinity)) {
+        if (n == null) continue;
+        if (n instanceof Element) { n.parentNode = this; this.children.push(n); }
+        else if (n instanceof TextNode) this.children.push(n);   /* already a node: wrapping it again stringifies to [object Object] */
+        else this.children.push(new TextNode(String(n)));
+      }
+    }
     appendChild(n) { this.append(n); return n; }
     prepend(...nodes) { const saved = this.children.splice(0); this.append(...nodes); this.children.push(...saved); }
     removeChild(n) { const i = this.children.indexOf(n); if (i >= 0) this.children.splice(i, 1); return n; }

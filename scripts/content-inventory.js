@@ -90,15 +90,65 @@ for (const f of files) {
     }
   }
 
+  /* Controls the reader can actually touch, and the controls the prose tells them
+     to touch. A "try this" step that names a button nobody built is a dead end
+     the reader blames on themselves. */
+  const controls = [];
+  walk(root, el => {
+    if (el.tagName === 'BUTTON') controls.push(el.textContent);
+    else if (el.tagName === 'OPTION') controls.push(el.textContent);
+    else if (el.classList.contains('control')) {
+      const lab = el.querySelector('label');
+      if (lab) controls.push(lab.textContent);
+    }
+  });
+  const norm = (t) => String(t).toLowerCase().replace(/[\u{1F300}-\u{1FAFF}\u{2190}-\u{27BF}]/gu, ' ')
+    .replace(/[^a-z0-9+\-. ]/g, ' ').replace(/\s+/g, ' ').trim();
+  const controlSet = controls.map(norm).filter(Boolean);
+  const IMPERATIVE = /\b(press|click|hit|tap|drag|set|choose|select|switch to|turn on|toggle|tick|slide)\b[^<]{0,24}?<b>([^<]{2,44})<\/b>/gi;
+  const dangling = [];
+  /* innerHTML only holds the node's own markup, and a callout keeps its body in
+     a child, so gather the whole subtree's markup before matching. */
+  const subtreeHtml = (el) => {
+    let out = el.innerHTML || '';
+    walk(el, c => { out += ' ' + (c.innerHTML || ''); });
+    return out;
+  };
+  walk(root, el => {
+    if (!el.classList.contains('callout')) return;
+    const html = subtreeHtml(el);
+    let mm; IMPERATIVE.lastIndex = 0;
+    while ((mm = IMPERATIVE.exec(html))) {
+      const phrase = norm(mm[2]);
+      if (!phrase || phrase.split(' ').length > 6) continue;
+      if (!/[a-z]/.test(phrase)) continue;                      /* "drag to 0.62" names a value, not a control */
+      /* a control label must be substantial before "the phrase contains it"
+         counts — otherwise a button labelled "b" matches every phrase with a b */
+      if (controlSet.some(c => c === phrase || c.includes(phrase) || (c.length >= 5 && phrase.includes(c)))) continue;
+      /* the prose rarely quotes a label word for word — "switch to card fraud"
+         should find the option "Is this card payment fraud?" — so a control whose
+         label contains every significant word of the phrase counts as a match */
+      const words = phrase.split(' ').filter(w => w.length > 2 && !['the', 'and', 'for', 'with', 'this', 'that'].includes(w));
+      if (words.length && controlSet.some(c => words.every(w => c.includes(w)))) continue;
+      dangling.push({ phrase: mm[2].trim(), verb: mm[1], context: html.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').slice(0, 110) });
+    }
+  });
+
   const entry = {
     id, title: ch.title, part: ch.part, num: ch.num,
     counts: { prose: prose.length, captions: captions.length, links: links.length,
-      quizQuestions: quizzes.reduce((n, q) => n + q.questions.length, 0), numericClaims: numbers.length },
-    prose, captions, links, quizzes, numbers,
+      quizQuestions: quizzes.reduce((n, q) => n + q.questions.length, 0), numericClaims: numbers.length,
+      controls: controls.length, danglingControlRefs: dangling.length },
+    prose, captions, links, quizzes, numbers, controls, dangling,
   };
   report.push(entry);
 
   if (CHECK) {
+    for (const d of dangling) {
+      problems++;
+      console.log('CONTROL ' + id + ': the prose says ' + JSON.stringify(d.verb + ' ' + d.phrase)
+        + ' but no control is labelled that\n         — ' + d.context);
+    }
     /* structural checks on the quizzes — cheap, deterministic, and a wrong
        answer index silently teaches the reader the wrong thing */
     for (const qz of quizzes) {
