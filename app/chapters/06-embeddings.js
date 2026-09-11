@@ -1,4 +1,10 @@
-/* Chapter 6 — Meaning as geometry: embeddings */
+/* Zero → AGI · Chapter 06 · Meaning as geometry: embeddings
+   DESIGN RULE: the reader scores two words three ways and watches the two obvious schemes fail
+   before any theory arrives. Every paragraph explains something they already did.
+   Interactives, in order: three-ways word comparison (ID vs one-hot vs learned); the
+   distributional hypothesis as a guessing game over five contexts; PCA map with analogy
+   arithmetic; cosine-similarity arrows; live skip-gram training; embedding-table parameter cost
+   with weight tying; contextual embeddings pulling one word into two meanings. */
 (function () {
   const ZTA = window.ZTA;
 
@@ -108,177 +114,151 @@
     num: 6,
     part: 'II',
     title: 'Meaning as geometry: embeddings',
-    tagline: 'How a computer turns "king" into 300 numbers, and why that makes king minus man plus woman come out as queen.',
+    tagline: 'Score two words three ways, watch the obvious approaches fail, then see why turning meaning into geometry is the most reusable idea in modern AI.',
 
     render(root, ctx) {
       const h = ctx.h, C = ctx.colors;
+      const p = ctx.p, section = ctx.section, callout = ctx.callout, ul = ctx.ul;
 
-      /* ============================ HOOK ============================ */
+      /* ---------- open with the reader breaking the obvious approach ---------- */
       root.append(
-        ctx.p(`Type <b>"comfortable running shoes"</b> into a shopping site and it shows you trainers that never use the word "comfortable" anywhere on the page. Ask a music app for something like the song you just played and it finds a track by an artist you have never heard of, in a different decade, that somehow fits. Neither system understands English. Both are doing the same trick, and it is the single most reusable idea in modern AI.`),
-        ctx.p(`The trick is this: <em>turn every thing into a point in space, and arrange the space so that similar things end up near each other</em>. Once meaning is geometry, the hard question "are these two things alike?" collapses into the easy question "how far apart are these two points?" Computers are extremely good at the second question.`),
-        ctx.p(`Those points are called <em>embeddings</em>. Every model in this course from here on runs on them. The very first thing a language model does with your prompt is look up an embedding for each token; the very last thing it does is compare a vector against every word it knows. This chapter is about where those numbers come from and why they behave so strangely well.`),
+        callout('tryit', '🖐 Do this first — measure how alike two words are, three different ways',
+          `A computer cannot store the word "cat". It stores numbers. Below are the three ways of choosing those numbers, scored side by side.<br>
+           <b>1.</b> Press <b>cat vs catalogue</b>. The numbering scheme calls them <b>almost identical</b>. They share four letters and nothing else.<br>
+           <b>2.</b> Press <b>cat vs dog</b>. Now the numbering calls them miles apart, and one-hot calls them exactly as unrelated as <b>cat vs democracy</b>.<br>
+           <b>3.</b> Work down the preset buttons and watch only the bottom row ever agree with your own judgement.`),
+        buildThreeWays(ctx),
+        p(`Two different failures there, and they fail in opposite directions.`),
       );
 
-      /* ======================= THE NAIVE WAY ======================= */
-      root.append(ctx.section('First attempt: give every word a number',
-        ctx.p(`A computer cannot store the word "cat". It stores numbers. So the obvious first move is a lookup table: <code class="inline">aardvark = 1, apple = 2, … cat = 3312, … zebra = 50000</code>. This fails instantly and instructively. It claims that <code class="inline">cat</code> (3312) is nearly the same as <code class="inline">catalogue</code> (3313), and that <code class="inline">apple</code> is 3310 units away from <code class="inline">cat</code> but only 1 unit from <code class="inline">apply</code>. The numbers carry an order that has nothing to do with meaning.`),
-        ctx.p(`The standard fix is <em>one-hot encoding</em>: give every word its own axis. With a 50,000-word vocabulary, "cat" becomes a list of 50,000 zeros with a single 1 in slot 3312. Now no word is accidentally close to another. But look at what that costs: <b>every pair of distinct words is now exactly equally far apart</b>. "cat" and "dog" are as unrelated as "cat" and "bureaucracy". We removed the false information and replaced it with no information.`),
-        ctx.callout('key', '🔑 The key idea',
-          `Both failures come from us <b>choosing</b> the numbers. The answer is to stop choosing and start <b>learning</b> them: let the numbers be parameters, and let a training task push them into a useful arrangement. Meaning is not something we encode. It is something that falls out of prediction.`),
+      root.append(section('Why both obvious ideas break',
+        p(`Numbering the words alphabetically — <code class="inline">aardvark = 1, … cat = 3312, catalogue = 3313, … zebra = 50000</code> — smuggles in an order that has nothing to do with meaning. It asserts that <code class="inline">cat</code> is nearly <code class="inline">catalogue</code>, and that <code class="inline">apple</code> is 3,310 units from <code class="inline">cat</code> but 1 unit from <code class="inline">apply</code>. That is false information, confidently stated.`),
+        p(`The standard fix is <em>one-hot encoding</em>: give every word its own axis. With a 50,000-word vocabulary, "cat" becomes 50,000 zeros with a single 1 in slot 3312. Now nothing is accidentally close to anything.`),
+        p(`But look at the cost. <b>Every pair of distinct words is now exactly equally far apart.</b> "cat" and "dog" are as unrelated as "cat" and "bureaucracy". We removed the false information and replaced it with <i>no</i> information.`),
+        callout('key', '🔑 The key idea',
+          `Both failures come from <b>us choosing</b> the numbers. The answer is to stop choosing and start <b>learning</b> them:
+           let the numbers be parameters, and let a training task push them into a useful arrangement.<br>
+           Meaning is not something we encode. It is something that falls out of prediction.`),
       ));
 
-      /* ==================== DISTRIBUTIONAL HYPOTHESIS ==================== */
-      root.append(ctx.section('You shall know a word by the company it keeps',
-        ctx.p(`In 1957 the linguist J. R. Firth wrote the sentence that this whole field rests on: you shall know a word by the company it keeps. It is a claim about how meaning works. If I show you a word you have never seen, in enough sentences, you will work out what it means from context alone:`),
-        ctx.code(`I poured the tesgüino into a glass.\nEveryone drinks tesgüino at the festival.\nToo much tesgüino makes you sleepy.\nTesgüino is made from corn.`),
-        ctx.p(`You now know roughly what tesgüino is: an alcoholic drink made from corn. Nobody defined it. You inferred it purely from the <em>distribution</em> of contexts it appears in. Notice also that you can tell it is more like "beer" than like "hammer", because beer appears in the same kinds of sentences. That is the <em>distributional hypothesis</em>: words that appear in similar contexts have similar meanings.`),
-        ctx.p(`This turns a philosophical problem into an engineering one. We do not need to teach a machine what "beer" means. We need only give it a prediction task involving context, and force it to compress what it learns into a short list of numbers. Whatever arrangement of numbers makes the prediction easiest will necessarily place beer near wine, because they are interchangeable in text.`),
-        ctx.callout('history', '📜 Where this came from',
-          `In 2013 Tomáš Mikolov and colleagues at Google published <b>word2vec</b>, which made this practical at scale. The training task was almost insultingly simple: given a word, predict the words around it (skip-gram), or the reverse (CBOW). Trained on billions of words, it produced 300-number vectors whose geometry stunned people. Earlier work had similar ideas (latent semantic analysis in the late 1980s, Bengio's neural language model in 2003), but word2vec was fast enough to run on enormous corpora, and its results were vivid enough that the whole field noticed at once.`),
+      root.append(section('You already do this, and you do it from context alone',
+        p(`In 1957 the linguist J. R. Firth wrote the sentence this whole field rests on: <i>you shall know a word by the company it keeps.</i>`),
+        callout('tryit', '🖐 Try this — work out a word you have never seen',
+          `<b>1.</b> Start with only the <b>first</b> context sentence switched on. Look at the bar chart: several candidates are plausible and the model has no idea.<br>
+           <b>2.</b> Switch the sentences on one at a time. Watch the bars separate as the contexts pile up.<br>
+           <b>3.</b> With all five on, one answer is clearly ahead — and <b>nobody ever defined the word.</b> You inferred it purely from the company it keeps, and so did the bar chart.`),
+        buildTesguino(ctx),
+        p(`That is the <em>distributional hypothesis</em>: words appearing in similar contexts have similar meanings. Notice you could also tell that tesgüino is more like <i>beer</i> than like <i>hammer</i>, because beer turns up in the same kinds of sentences.`),
+        p(`This turns a philosophical problem into an engineering one. We do not need to teach a machine what "beer" means. We need only give it a prediction task involving context, and force it to compress what it learns into a short list of numbers.`),
+        p(`Whatever arrangement of numbers makes that prediction easiest will necessarily put beer near wine — because they are interchangeable in text.`),
+        callout('history', '📜 Where this came from',
+          `In 2013 Tomáš Mikolov and colleagues at Google published <b>word2vec</b>, which made this practical at scale.
+           The training task was almost insultingly simple: given a word, predict the words around it (skip-gram), or the reverse (CBOW).
+           Trained on billions of words it produced 300-number vectors whose geometry stunned people.
+           Earlier work had similar ideas — latent semantic analysis in the late 1980s, Bengio's neural language model in 2003 — but word2vec was fast enough, and the results legible enough, to change what everyone built next.`),
       ));
 
-      /* ==================== INTERACTIVE 1: THE MAP ==================== */
-      root.append(ctx.sub('The map of meaning',
-        ctx.p(`Below is a small, hand-built embedding space: 44 words, each one a list of 10 numbers. The picture is a genuine <em>PCA projection</em> of those 10-dimensional vectors down to the 2 dimensions your screen has, computed in your browser when this page loaded. PCA finds the two directions along which the points are most spread out, so it keeps as much of the structure as a flat picture can hold.`),
-        ctx.callout('tryit', '🖐 Try this',
-          `<b>1.</b> Hover a word to see its five nearest neighbours by cosine similarity. Notice the clusters formed themselves out of the numbers; nobody drew the groups.<br>
+      root.append(section('The map, and the famous piece of arithmetic',
+        p(`Below is a small hand-built embedding space: 36 words, each a list of 10 numbers. The picture is a genuine <em>PCA projection</em> of those 10-dimensional vectors down to the 2 your screen has, computed in your browser when this page loaded. PCA finds the two directions along which the points spread out most, so it keeps as much structure as a flat picture can hold.`),
+        callout('tryit', '🖐 Try this',
+          `<b>1.</b> Hover a word to see its five nearest neighbours by cosine similarity. The clusters formed themselves out of the numbers — nobody drew the groups.<br>
            <b>2.</b> Drag to pan, scroll or pinch to zoom.<br>
            <b>3.</b> Now the famous part. In the arithmetic row, run <b>king − man + woman</b>. Watch the arrows. The answer is not looked up anywhere; it is the nearest word to a point computed by adding and subtracting vectors.<br>
-           <b>4.</b> Try <b>Paris − France + Italy</b>. The same geometric move that turns a man into a woman turns a country into its capital.`),
+           <b>4.</b> Try the other presets, then build your own.`),
+        buildMap(ctx),
+        p(`What happens in that arithmetic is worth stating precisely, because it is easy to over-mystify. <b>Nothing in training said "encode gender."</b>`),
+        p(`But if the space is arranged so that context is predictable, then whatever distinguishes <i>king</i> from <i>queen</i> must also distinguish <i>man</i> from <i>woman</i> — those pairs are swapped in the same kinds of sentences. The difference gets stored as a <b>direction</b>.`),
+        p(`Subtracting <i>man</i> and adding <i>woman</i> is a translation along that direction. Directions in the space turn out to mean things: there is a gender direction, a plural direction, a past-tense direction, a capital-city direction.`),
+        callout('warning', '⚠️ An honest caveat',
+          `The analogy result is real but often oversold. In published word2vec results the query vector's own inputs are excluded from the answer, and many analogies fail outside a curated set.
+           The space here is hand-designed so the preset analogies come out exactly; a trained space is messier.
+           The <b>directions-carry-meaning</b> insight is solid. The <b>arithmetic always works</b> claim is not.`),
       ));
 
-      root.append(buildMap(ctx));
-
-      root.append(
-        ctx.p(`What is happening in that arithmetic is worth stating precisely, because it is easy to over-mystify. Nothing in the training process said "encode gender". But if the space is arranged so that context is predictable, then whatever distinguishes <i>king</i> from <i>queen</i> must also distinguish <i>man</i> from <i>woman</i>, because those pairs are swapped in the same kinds of sentences. The difference gets stored as a <b>direction</b>. Subtracting <i>man</i> and adding <i>woman</i> is a translation along that direction. Directions in the space turn out to mean things: there is a gender direction, a plural direction, a past-tense direction, a capital-city direction.`),
-        ctx.callout('warning', '⚠️ An honest caveat',
-          `The analogy result is real but often oversold. In published word2vec results the query vector's own inputs are excluded from the answer, and many analogies fail outside a curated set. The space here is hand-designed so the four preset analogies come out exactly; a trained space is messier. The <b>directions-carry-meaning</b> insight is solid. The <b>arithmetic always works</b> claim is not.`),
-      );
-
-      /* ==================== COSINE ==================== */
-      root.append(ctx.section('Measuring closeness: cosine similarity',
-        ctx.p(`"Near each other" needs a definition. The one nearly everyone uses is <em>cosine similarity</em>: the cosine of the angle between two vectors. It ignores length entirely and asks only whether two vectors point the same way. That matters because in text a common word gets a long vector and a rare word a short one, and we do not want frequency masquerading as meaning.`),
-        ctx.code(`cos(a, b) = (a · b) / (|a| × |b|)\n\nworked example, in 2 dimensions:\n  a = [3, 4]      b = [4, 3]\n  a · b = 3×4 + 4×3            = 24\n  |a|   = sqrt(9 + 16)         = 5\n  |b|   = sqrt(16 + 9)         = 5\n  cos   = 24 / (5 × 5)         = 0.96      → 16 degrees apart, very similar\n\n  a = [3, 4]      c = [-4, 3]\n  a · c = 3×(-4) + 4×3         = 0\n  cos   = 0 / (5 × 5)          = 0.00      → 90 degrees, unrelated`),
-        ctx.p(`The scale runs from <b>+1</b> (same direction, same meaning) through <b>0</b> (perpendicular, unrelated) to <b>−1</b> (opposite). In a real embedding space, "cat" and "dog" sit around 0.8, "cat" and "democracy" around 0.05. Drag the arrows below to feel it.`),
-        ctx.callout('tryit', '🖐 Try this',
-          `Drag either arrowhead. Watch how the cosine depends only on the <b>angle</b>: make one arrow twice as long and the number does not move. Then set them 90° apart and note the score of exactly zero. That is what "unrelated" means numerically.`),
-      ));
-      root.append(buildCosine(ctx));
-
-      /* ==================== INTERACTIVE 3: LIVE TRAINING ==================== */
-      root.append(ctx.section('Watching an embedding space assemble itself',
-        ctx.p(`Everything so far used vectors I wrote by hand. Now let a model discover them. Below is a real <em>skip-gram</em> model, the word2vec training task, running in your browser: it takes a centre word, tries to predict the words around it, and adjusts each word's 2 numbers by gradient descent when it is wrong.`),
-        ctx.p(`The training corpus is a set of template sentences. Crucially, <b>the model is never told which words are foods or vehicles</b>. It only ever sees which words appear near which. The clusters that appear are entirely a consequence of shared context.`),
-        ctx.callout('tryit', '🖐 Try this',
-          `Press <b>Train</b> and watch. The words begin scattered at random. Within a few thousand steps the fruits pull together, the animals pull together, the vehicles pull together, because each group is interchangeable in the corpus. Push the learning rate up to see the points thrash and overshoot; drop it low to see progress crawl. Press <b>Reset</b> and run it again: the clusters re-form, but in different positions and orientations. <b>The absolute coordinates are meaningless. Only the relative arrangement carries information.</b>`),
-      ));
-      root.append(buildWord2Vec(ctx));
-
-      /* ==================== BEYOND WORDS ==================== */
-      root.append(ctx.section('The idea generalises to absolutely everything',
-        ctx.p(`Nothing in the recipe was about language. The recipe was: <b>define a prediction task, force the thing through a narrow layer of numbers, and the geometry of that layer becomes a similarity space.</b> Swap in any kind of object and it still works.`),
-        ctx.cards([
-          { title: 'Songs and videos', body: 'Predict what a listener plays next. Songs that get played in the same sessions land near each other. This is how "recommended for you" works at Spotify, Netflix and TikTok, usually alongside an embedding for <i>you</i> in the same space, so recommendation becomes a nearest-neighbour lookup.' },
-          { title: 'Images', body: 'CLIP (2021) trained image and text encoders together so that a photo of a dog and the caption "a dog" land at the same point. One shared space for two modalities is what lets you search photos in plain English, and what lets an image generator understand a prompt.' },
-          { title: 'Faces and voices', body: 'Face unlock does not store your face. It stores an embedding, and checks whether the new photo lands within a small distance of it. Same trick for speaker identification.' },
-          { title: 'Proteins and molecules', body: 'Amino-acid sequences embedded by the same machinery power structure prediction and drug screening. AlphaFold 2 (2021) leaned heavily on representations learned from evolutionary context.' },
-        ]),
-        ctx.callout('example', '🌍 Where you have used this today',
-          `<b>Semantic search.</b> Traditional search matches keywords; a page about "affordable laptops" will not match a query for "cheap notebooks". Embedding search converts both to vectors and compares angles, so it matches on meaning. This is the retrieval half of <b>RAG</b> (chapter 12): documents are embedded once and stored in a <em>vector database</em>; your question is embedded at query time, and the nearest documents are pasted into the model's context. Every "chat with your PDF" product is this and little else.`),
+      root.append(section('Measuring "near"',
+        p(`"Near each other" needs a definition. The one nearly everyone uses is <em>cosine similarity</em>: the cosine of the angle between two vectors. It ignores length entirely and asks only whether two vectors point the same way.`),
+        p(`That matters because in text a common word gets a long vector and a rare word a short one, and we do not want frequency masquerading as meaning.`),
+        callout('tryit', '🖐 Try this',
+          `Drag either arrowhead. The cosine depends only on the <b>angle</b>: make one arrow twice as long and the number does not move.<br>
+           Then set them 90° apart and note the score of exactly zero. That is what "unrelated" means numerically.`),
+        buildCosine(ctx),
+        p(`The scale runs from <b>+1</b> (same direction, same meaning) through <b>0</b> (perpendicular, unrelated) to <b>−1</b> (opposite). In a real embedding space "cat" and "dog" sit around 0.8, "cat" and "democracy" around 0.05.`),
       ));
 
-      /* ==================== INSIDE AN LLM ==================== */
-      root.append(ctx.section('Where embeddings live inside a language model',
-        ctx.p(`Open up any GPT-style model and the very first component is an <em>embedding table</em>: a big matrix with one row per token. For GPT-2 small that is 50,257 rows of 768 numbers, about 38.6 million parameters spent on nothing but "what does each token mean before we look at context?". Turning a token ID into a vector is not a computation at all; it is a row lookup.`),
-        ctx.p(`Then something important happens that plain word2vec could never do. Word2vec gives "bank" exactly one vector, blending the riverbank and the financial sense into an unhappy average. A transformer's attention layers (chapter 7) update each token's vector using its neighbours, so by the middle layers "bank" in <i>"sat on the bank of the river"</i> has moved somewhere quite different from "bank" in <i>"the bank approved the loan"</i>. These are <em>contextual embeddings</em>, introduced at scale by ELMo and BERT in 2018, and they are why modern models handle ambiguity that word2vec could not.`),
-        ctx.p(`At the other end, the model has to turn its final vector back into a word. It compares that vector against every row of a vocabulary matrix, producing one score per token; softmax turns the scores into probabilities. Many models <em>tie</em> this matrix to the input embedding table, reusing the same weights, which saves memory and usually helps. So a language model is bracketed by embeddings: a lookup on the way in, a comparison against the same table on the way out.`),
-        ctx.callout('key', '🔑 Why this matters for everything after here',
-          `Embeddings are the interface between the messy world and the maths. Text, images, audio, clicks, molecules: whatever you want a model to handle, the job is to get it into a vector space. Everything downstream, attention included, is operations on those vectors. If you understand that a model manipulates <b>positions in a meaning space</b>, the transformer in the next chapter is a much smaller step than it looks.`),
+      root.append(section('Now let a model find the numbers itself',
+        p(`Everything so far used vectors written by hand. Below is a real <em>skip-gram</em> model — the word2vec training task — running in your browser. It takes a centre word, tries to predict the words around it, and adjusts each word's 2 numbers by gradient descent when it is wrong.`),
+        callout('tryit', '🖐 Try this',
+          `<b>1.</b> Press <b>Train</b>. The words start scattered at random. Within a few thousand steps the fruits pull together, the animals pull together, the vehicles pull together.<br>
+           <b>2.</b> Push the learning rate up and watch the points thrash and overshoot; drop it low and watch progress crawl. Those are chapter 3's failures, in a real training run.<br>
+           <b>3.</b> Press <b>Reset</b> and run again. The clusters re-form, <b>but in different positions and orientations</b> — the absolute coordinates mean nothing, only the relative geometry does.`),
+        buildWord2Vec(ctx),
+        p(`Crucially, <b>the model is never told which words are foods or vehicles.</b> It only ever sees which words appear near which. The clusters are entirely a consequence of shared context.`),
+        p(`And nothing in that recipe was about language. The recipe was: <b>define a prediction task, force the thing through a narrow layer of numbers, and the geometry of that layer becomes a similarity space.</b> Swap in songs, products, molecules or users and it still works.`),
       ));
 
-      /* ==================== BIAS ==================== */
-      root.append(ctx.section('The space learns our prejudices too',
-        ctx.p(`If directions in the space capture real regularities in text, they also capture the unpleasant ones. The 2016 paper <i>Man is to Computer Programmer as Woman is to Homemaker?</i> showed that word2vec vectors trained on Google News produced exactly that analogy. The same geometry that gives you king − man + woman = queen gives you doctor − man + woman = nurse.`),
-        ctx.p(`This is not a bug in the algorithm. The algorithm faithfully recorded a statistical regularity in how people write. That is precisely why it matters: an embedding is a measurement of a corpus, and if you use it to screen CVs or rank job ads, you have automated and laundered the bias in the text. Debiasing techniques exist, most of them projecting out an identified direction, and none of them fully work. The durable lesson is that <b>a model's values are downstream of its data</b>, which is the same problem chapter 11 tackles with an enormous amount of deliberate human feedback.`),
+      root.append(section('How a language model actually uses this',
+        p(`Open any GPT-style model and the very first component is an <em>embedding table</em>: a big matrix with one row per token. Turning a token ID into a vector is not a computation at all — it is a row lookup.`),
+        callout('tryit', '🖐 Try this',
+          `<b>1.</b> The defaults are GPT-2 small: 50,257 tokens × 768 numbers. Read the total — about <b>38.6 million</b> parameters spent purely on "what does each token mean <i>before</i> we look at context?"<br>
+           <b>2.</b> Drag the dimension up to 4,096 and the vocabulary to 128,000, roughly a modern frontier model. The table alone passes half a billion.<br>
+           <b>3.</b> Toggle <b>tie input and output</b> and watch the total halve. That is a real trick used in real models.`),
+        buildEmbedTable(ctx),
+        p(`At the other end the model must turn its final vector back into a word. It compares that vector against every row of a vocabulary matrix, producing one score per token, and softmax turns the scores into probabilities. Many models <em>tie</em> that matrix to the input table, reusing the same weights.`),
+        p(`So a language model is bracketed by embeddings: a lookup on the way in, a comparison against the same table on the way out.`),
       ));
 
-      /* ==================== VISUALISING HIGH-D ==================== */
-      root.append(ctx.section('A note on 300 dimensions',
-        ctx.p(`Real embeddings have 300 to 4,096 dimensions and nobody can picture that. Three tools help. <em>PCA</em>, used in the map above, is a rigid rotation that keeps the directions of greatest spread; it preserves global structure and is fully reversible in spirit. <em>t-SNE</em> (2008) and <em>UMAP</em> (2018) are non-linear and optimise for keeping <b>neighbours</b> together, which produces gorgeous, cluster-rich pictures.`),
-        ctx.callout('warning', '⚠️ Read t-SNE plots with suspicion',
-          `In a t-SNE or UMAP picture the distances <b>between</b> clusters mean very little, cluster sizes mean very little, and changing the perplexity or seed changes the picture. They are excellent for spotting that structure exists, and unreliable for claims about how far apart two groups are. High-dimensional space is also just strange: in 300 dimensions almost every pair of random vectors is nearly perpendicular, which is exactly why there is room for so many distinct meanings.`),
+      root.append(section('The upgrade word2vec could never make',
+        p(`Word2vec gives "bank" exactly one vector, blending the riverbank and the financial sense into an unhappy average. That is a hard ceiling: the word has one row in the table, so it has one meaning.`),
+        callout('tryit', '🖐 Try this — watch one word become two',
+          `<b>1.</b> At <b>layer 0</b> the two "bank" dots sit exactly on top of each other. They must: both are the same row of the same table, and nothing has looked at the sentence yet.<br>
+           <b>2.</b> Drag <b>layer</b> upward. The dots separate, each drifting toward the company it keeps.<br>
+           <b>3.</b> By the top layers one sits near <i>river</i> and <i>water</i>, the other near <i>loan</i> and <i>money</i>. Same word, same starting row, two different meanings — <b>resolved entirely by context</b>.`),
+        buildContextBank(ctx),
+        p(`A transformer's attention layers (chapter 7) update each token's vector using its neighbours, so by the middle layers "bank" in <i>"sat on the bank of the river"</i> has moved somewhere quite different from "bank" in <i>"the bank approved the loan"</i>.`),
+        p(`These are <em>contextual embeddings</em>, introduced at scale by ELMo and BERT in 2018, and they are why modern models handle ambiguity that word2vec simply could not. It is also the cleanest one-line statement of what attention <i>does</i>: it moves each word's vector based on the words around it.`),
       ));
 
-      /* ==================== QUIZ ==================== */
+      root.append(section('The uncomfortable part',
+        p(`If directions in the space capture real regularities in text, they also capture the unpleasant ones. The 2016 paper <i>Man is to Computer Programmer as Woman is to Homemaker?</i> showed that word2vec vectors trained on Google News produced exactly that analogy.`),
+        p(`The same geometry that gives you king − man + woman = queen gives you doctor − man + woman = nurse. It is the identical mechanism; you cannot keep one and discard the other by adjusting the algorithm.`),
+        p(`This is not a bug. The algorithm faithfully recorded a statistical regularity in how people write. That is precisely why it matters: an embedding is a <b>measurement of a corpus</b>, and if you use it to screen CVs or rank job ads, you have automated and laundered the bias in the text.`),
+        p(`Debiasing techniques exist, most of them projecting out an identified direction, and none of them fully work — the information tends to survive in other directions. The durable lesson is that <b>a model's values are downstream of its data</b>, which is the same problem chapter 11 tackles with an enormous amount of deliberate human feedback.`),
+      ));
+
+      root.append(section('Why this matters for everything after here',
+        callout('example', '🌍 Where you have used this today',
+          `<b>Semantic search.</b> Keyword search will not match "cheap notebooks" to a page about "affordable laptops"; embedding search converts both to vectors and compares angles, so it matches on meaning.
+           This is the retrieval half of <b>RAG</b> (chapter 12): documents are embedded once and stored in a <em>vector database</em>, your question is embedded at query time, and the nearest documents are pasted into the model's context.<br>
+           <b>Recommendations.</b> Songs, films and products get embedded from who consumes them together, so "more like this" is a nearest-neighbour lookup.<br>
+           <b>Deduplication, moderation, clustering.</b> Anywhere you need "are these two things basically the same?", it is a cosine away.`),
+        p(`Real embeddings have 300 to 4,096 dimensions and nobody can picture that. Three tools help. <em>PCA</em>, used in the map above, is a rigid rotation keeping the directions of greatest spread, so it preserves global structure. <em>t-SNE</em> (2008) and <em>UMAP</em> (2018) are non-linear and optimise for keeping <b>neighbours</b> together, which produces gorgeous, cluster-rich pictures.`),
+        callout('warning', '⚠️ Read t-SNE plots with suspicion',
+          `In a t-SNE or UMAP picture, the distances <b>between</b> clusters mean very little, cluster sizes mean very little, and changing the perplexity or the random seed changes the picture.
+           They are excellent for spotting that structure exists and unreliable for claims about how far apart two groups are.<br>
+           High-dimensional space is also just strange: in 300 dimensions almost every pair of random vectors is nearly perpendicular, which is exactly why there is room for so many distinct meanings to sit without colliding.`),
+        callout('key', '🔑 Why this matters for everything after here',
+          `Embeddings are the interface between the messy world and the maths. Text, images, audio, clicks, molecules: whatever you want a model to handle, the job is to get it into a vector space.
+           Everything downstream, attention included, is operations on those vectors.
+           If you understand that a model manipulates <b>positions in a meaning space</b>, the transformer in the next chapter is a much smaller step than it looks.`),
+        p(`One picture to keep: <b>an embedding turns "are these alike?" into "how far apart are these?", and every model from here on is moving points around in that space.</b>`),
+      ));
+
       root.append(ctx.quiz([
-        {
-          q: 'Why is one-hot encoding a poor representation of word meaning?',
-          options: [
-            'It uses too much memory to store on modern hardware',
-            'Every pair of distinct words is exactly equally far apart, so it encodes no similarity at all',
-            'It cannot represent words that appear more than once in a sentence',
-            'The numbers are too large for a neural network to process',
-          ],
-          answer: 1,
-          explain: 'One-hot vectors are all mutually perpendicular. "cat" is exactly as close to "dog" as it is to "bureaucracy", so the representation carries no information about meaning. Memory is a secondary annoyance, not the core problem.',
-        },
-        {
-          q: 'What does the distributional hypothesis claim?',
-          options: [
-            'Words are distributed evenly across a language',
-            'Every word has exactly one meaning that can be looked up',
-            'Words appearing in similar contexts tend to have similar meanings',
-            'Meaning is distributed across the layers of a neural network',
-          ],
-          answer: 2,
-          explain: 'Firth\'s 1957 formulation: "you shall know a word by the company it keeps." It is what makes learning meaning from raw text possible, because context is observable and meaning is not.',
-        },
-        {
-          q: 'Cosine similarity ignores the length of the vectors. Why is that useful?',
-          options: [
-            'Because it makes the computation faster',
-            'Because vector length mostly reflects things like word frequency, not meaning',
-            'Because all embedding vectors have the same length anyway',
-            'Because negative numbers cannot be handled otherwise',
-          ],
-          answer: 1,
-          explain: 'A frequent word tends to acquire a longer vector. Cosine asks only about direction, so a rare word and a common word with the same meaning still score as similar.',
-        },
-        {
-          q: 'In the live skip-gram demo, why do the fruits cluster together even though the model is never told what a fruit is?',
-          options: [
-            'The words are alphabetically adjacent in the vocabulary',
-            'A separate classifier labels them before training starts',
-            'They appear in the same contexts, so similar vectors make the prediction task easier',
-            'They have similar spelling, which the model reads character by character',
-          ],
-          answer: 2,
-          explain: 'The only signal is context. Because "apple", "banana" and "cherry" are interchangeable in the corpus, giving them similar vectors lowers the loss. Clustering is a consequence of the prediction objective, not a goal of it.',
-        },
-        {
-          q: 'What can a transformer\'s contextual embeddings do that word2vec vectors cannot?',
-          options: [
-            'Represent more than 50,000 words',
-            'Give the same word different vectors depending on the sentence it appears in',
-            'Run without any training data',
-            'Guarantee that analogy arithmetic always succeeds',
-          ],
-          answer: 1,
-          explain: 'Word2vec assigns one fixed vector per word, so "bank" is an average of all its senses. Attention layers update each token\'s vector using its neighbours, so the river bank and the financial bank end up in different places.',
-        },
+        { q: 'Why is numbering words alphabetically (cat = 3312, catalogue = 3313) worse than useless?', options: ['It uses too much memory', 'It asserts a similarity structure that is real but wrong — cat ends up adjacent to catalogue and far from dog', 'Numbers cannot represent words', 'It only works for English'], answer: 1, explain: 'You saw it in the opening demo: the numbering scheme confidently reports cat and catalogue as near-identical. One-hot encoding fixes that by making every pair equally distant — which removes the false information and leaves none at all.' },
+        { q: 'What is the distributional hypothesis?', options: ['Words are distributed evenly through a document', 'Words appearing in similar contexts have similar meanings', 'Every word needs its own dimension', 'Meaning is stored in a dictionary the model memorises'], answer: 1, explain: 'It is what let you work out "tesgüino" from five sentences without a definition. It also turns a philosophical question into an engineering one: give a model a context-prediction task, force it through a narrow layer, and similar words must end up near each other.' },
+        { q: 'Why does cosine similarity ignore vector length?', options: ['Lengths are too expensive to compute', 'Because in text a common word gets a long vector and a rare one a short vector, and frequency should not masquerade as meaning', 'Because all embeddings have length 1', 'It does not — cosine uses length'], answer: 1, explain: 'Cosine asks only whether two vectors point the same way. You can verify it on the arrows: double one arrow\'s length and the score does not move.' },
+        { q: 'In the contextual-embedding demo, why do the two "bank" dots sit exactly on top of each other at layer 0?', options: ['A bug in the visualisation', 'At layer 0 the word is just a row lookup from the embedding table — nothing has looked at the sentence yet, so both copies are identical', 'Because the two sentences are the same length', 'Because bank has only one meaning'], answer: 1, explain: 'That is the whole limitation of word2vec: one row per word, so one meaning per word. Attention is what moves each token\'s vector based on its neighbours, which is why the dots separate as you climb the layers.' },
+        { q: 'word2vec trained on news text produced "man is to computer programmer as woman is to homemaker". What does that tell you?', options: ['The algorithm has a bug that debiasing fixes completely', 'The algorithm faithfully recorded a statistical regularity in how people write — an embedding is a measurement of its corpus', 'Embeddings should not be used for search', 'The training ran for too long'], answer: 1, explain: 'It is the same mechanism that produces king − man + woman = queen, so you cannot keep one and drop the other by changing the algorithm. Debiasing methods project out an identified direction and none fully work. A model\'s values are downstream of its data.' },
       ]));
 
-      /* ==================== GO DEEPER ==================== */
-      root.append(ctx.section('Go deeper',
-        ctx.ul([
-          `<a href="https://arxiv.org/abs/1301.3781" target="_blank" rel="noopener">Efficient Estimation of Word Representations in Vector Space</a> — Mikolov et al., 2013. The original word2vec paper; short and very readable.`,
-          `<a href="https://jalammar.github.io/illustrated-word2vec/" target="_blank" rel="noopener">The Illustrated Word2vec</a> — Jay Alammar. The best visual walkthrough of skip-gram and negative sampling anywhere.`,
-          `<a href="https://arxiv.org/abs/2103.00020" target="_blank" rel="noopener">Learning Transferable Visual Models From Natural Language Supervision (CLIP)</a> — Radford et al., 2021. One shared embedding space for images and text.`,
-          `<a href="https://arxiv.org/abs/1607.06520" target="_blank" rel="noopener">Man is to Computer Programmer as Woman is to Homemaker?</a> — Bolukbasi et al., 2016. Bias in embeddings, and the difficulty of removing it.`,
-          `<a href="https://distill.pub/2016/misread-tsne/" target="_blank" rel="noopener">How to Use t-SNE Effectively</a> — Wattenberg et al., Distill. Interactive proof that t-SNE pictures can mislead you.`,
-        ]),
-      ));
+      root.append(section('Go deeper',
+        ul([
+          `<a href="https://jalammar.github.io/illustrated-word2vec/" target="_blank" rel="noopener">Jay Alammar, "The Illustrated Word2vec"</a> — the clearest visual walkthrough of the training task you just ran.`,
+          `<a href="https://arxiv.org/abs/1301.3781" target="_blank" rel="noopener">Mikolov et al. (2013), "Efficient Estimation of Word Representations in Vector Space"</a> — the original word2vec paper.`,
+          `<a href="https://nlp.stanford.edu/projects/glove/" target="_blank" rel="noopener">GloVe (Pennington, Socher &amp; Manning, 2014)</a> — the other great early embedding method, built from co-occurrence counts rather than prediction.`,
+          `<a href="https://arxiv.org/abs/1607.06520" target="_blank" rel="noopener">Bolukbasi et al. (2016), "Man is to Computer Programmer as Woman is to Homemaker?"</a> — the bias paper, including what debiasing can and cannot do.`,
+          `<a href="https://distill.pub/2016/misread-tsne/" target="_blank" rel="noopener">"How to Use t-SNE Effectively" (Distill)</a> — interactive proof of why those beautiful cluster plots mislead.`,
+        ])));
     },
   });
 
@@ -764,5 +744,362 @@
        ctx.button('1000 steps', () => { for (let i = 0; i < 1000; i++) trainStep(); }),
        lrS],
       readout);
+  }
+
+  /* ---------- shared canvas text helper ---------- */
+  function wrapLines2(gc, text, maxW) {
+    const words = String(text).split(' '); const out = []; let line = '';
+    for (const w of words) {
+      const t = line ? line + ' ' + w : w;
+      if (line && gc.measureText(t).width > maxW) { out.push(line); line = w; } else line = t;
+    }
+    if (line) out.push(line);
+    return out;
+  }
+  function wrapText2(gc, text, x, y, maxW, lh) {
+    wrapLines2(gc, text, maxW).forEach((ln, i) => gc.fillText(ln, x, y + i * lh));
+  }
+
+  /* ---------- Interactive: three ways to score two words ---------- */
+  function buildThreeWays(ctx) {
+    const [cv, g] = ctx.canvas(720, 330);
+    const C = ctx.colors;
+    const FONT = '13px Inter, system-ui, sans-serif';
+    const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
+    const byWord = new Map(WORDS.map(w => [w.w, w.v]));
+    /* a few extra words so the alphabetical-neighbour failure is visible */
+    const EXTRA = {
+      catalogue: V({ size: 0.2 }),
+      apply: V({ act: 0.8 }),
+      democracy: V({ size: 0.5, act: 0.2 }),
+    };
+    const vecOf = (w) => byWord.get(w) || EXTRA[w];
+    /* one alphabetical vocabulary, so an ID really is a position in a sorted word list */
+    const VOCAB = [...new Set([...WORDS.map(w => w.w), ...Object.keys(EXTRA)])].sort();
+    const idOf = (w) => VOCAB.indexOf(w) + 1;
+    let a = 'cat', b = 'catalogue';
+
+    const mkSel = (label, get, set) => {
+      const sel = ctx.h('select', {}, VOCAB.map(w => ctx.h('option', { value: w }, w)));
+      sel.value = get();
+      sel.addEventListener('change', () => set(sel.value));
+      const wrap = ctx.h('div', { class: 'control' }, ctx.h('label', {}, label), sel);
+      wrap.sync = () => { sel.value = get(); };
+      return wrap;
+    };
+    const selA = mkSel('word A', () => a, (v) => { a = v; });
+    const selB = mkSel('word B', () => b, (v) => { b = v; });
+    const preset = (x, y) => ctx.button(x + ' vs ' + y, () => { a = x; b = y; selA.sync(); selB.sync(); });
+    const ro = ctx.readout();
+
+    ctx.loop(() => {
+      g.clearRect(0, 0, 720, 330);
+      const ia = idOf(a), ib = idOf(b);
+      const idGap = Math.abs(ia - ib);
+      /* an ID scheme implies "close number = close meaning"; score it that way */
+      const idScore = 1 - Math.min(1, idGap / VOCAB.length);
+      const oneHot = a === b ? 1 : 0;           // distinct one-hot vectors are always perpendicular
+      const emb = cosine(vecOf(a), vecOf(b));
+
+      g.font = 'bold 15px Inter, system-ui, sans-serif'; g.fillStyle = C.text;
+      g.fillText('how alike are "' + a + '" and "' + b + '"?', 34, 32);
+
+      const rows = [
+        {
+          name: 'a number per word',
+          detail: a + ' = ' + ia + ', ' + b + ' = ' + ib + '  →  ' + idGap + ' apart in the sorted list',
+          v: idScore, col: C.danger,
+          verdict: idGap <= 2 ? 'calls them nearly the same word' : 'calls them unrelated',
+        },
+        {
+          name: 'one-hot (its own axis each)',
+          detail: 'two different slots set to 1, so the vectors are perpendicular',
+          v: oneHot, col: C.warn,
+          verdict: a === b ? 'identical' : 'every distinct pair scores exactly 0',
+        },
+        {
+          name: 'a learned embedding',
+          detail: '10 numbers per word, cosine of the angle between them',
+          v: emb, col: C.green,
+          verdict: emb > 0.6 ? 'closely related' : emb > 0.25 ? 'somewhat related' : 'unrelated',
+        },
+      ];
+      let y = 68;
+      rows.forEach((r) => {
+        g.font = 'bold ' + FONT; g.fillStyle = C.text;
+        g.fillText(r.name, 34, y);
+        g.font = MONO; g.fillStyle = C.muted;
+        g.fillText(r.detail, 34, y + 18);
+        const BX = 34, BW = 380, BY = y + 28;
+        g.fillStyle = C.line; g.fillRect(BX, BY, BW, 14);
+        const frac = ctx.clamp((r.v + 1) / 2, 0, 1);
+        g.fillStyle = r.col;
+        g.fillRect(BX + BW / 2, BY, (frac - 0.5) * BW, 14);
+        g.strokeStyle = C.muted; g.lineWidth = 1;
+        g.beginPath(); g.moveTo(BX + BW / 2, BY - 3); g.lineTo(BX + BW / 2, BY + 17); g.stroke();
+        g.font = 'bold 15px Inter, system-ui, sans-serif'; g.fillStyle = r.col;
+        g.fillText(r.v.toFixed(2), BX + BW + 14, BY + 13);
+        g.font = FONT; g.fillStyle = C.muted;
+        g.fillText(r.verdict, BX + BW + 62, BY + 13);
+        y += 82;
+      });
+      g.font = MONO; g.fillStyle = C.muted;
+      g.fillText('0', 34 + 190 - 4, 68 + 28 + 30);
+      g.font = FONT;
+      wrapText2(g, 'Only the bottom bar ever tracks what you actually mean by "alike". The top two are what you get when a human picks the numbers instead of letting a training task choose them.', 34, 312, 640, 17);
+      ro.set({ 'sorted-list gap': idGap, 'one-hot cosine': oneHot.toFixed(2), 'embedding cosine': emb.toFixed(2) });
+    });
+
+    return ctx.figure(cv,
+      'The same pair of words scored by all three schemes at once. The middle bar never moves off zero, because two distinct one-hot vectors are always exactly perpendicular — "cat" is as far from "dog" as it is from "democracy". The top bar moves, but for the wrong reason: it is measuring alphabetical adjacency. Only the learned embedding produces a number you would agree with.',
+      [selA, selB, preset('cat', 'catalogue'), preset('cat', 'dog'), preset('cat', 'democracy'), preset('king', 'queen')], ro);
+  }
+
+  /* ---------- Interactive: the distributional hypothesis ---------- */
+  function buildTesguino(ctx) {
+    const [cv, g] = ctx.canvas(720, 350);
+    const C = ctx.colors;
+    const FONT = '13px Inter, system-ui, sans-serif';
+    const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
+    /* each context sentence contributes a set of cue words */
+    const CONTEXTS = [
+      { text: 'A bottle of ▁▁▁ is on the table.', cues: ['bottle', 'table'] },
+      { text: 'Everybody likes ▁▁▁.', cues: ['likes'] },
+      { text: 'Do not have ▁▁▁ before you drive.', cues: ['drive', 'drink'] },
+      { text: 'We make ▁▁▁ out of corn.', cues: ['corn', 'make'] },
+      { text: '▁▁▁ makes you drunk.', cues: ['drunk', 'drink'] },
+    ];
+    /* which cues each candidate is genuinely seen with, in ordinary text */
+    const CANDIDATES = [
+      { w: 'beer', cues: ['bottle', 'table', 'likes', 'drive', 'drink', 'drunk'] },
+      { w: 'wine', cues: ['bottle', 'table', 'likes', 'drive', 'drink', 'drunk'] },
+      { w: 'corn', cues: ['table', 'likes', 'corn', 'make'] },
+      { w: 'water', cues: ['bottle', 'table', 'likes', 'drink'] },
+      { w: 'hammer', cues: ['table', 'make'] },
+      { w: 'democracy', cues: ['likes'] },
+    ];
+    const on = CONTEXTS.map((_, i) => i === 0);
+    const toggles = CONTEXTS.map((c, i) => ctx.button('sentence ' + (i + 1), () => { on[i] = !on[i]; }, i === 0 ? 'primary' : ''));
+    const allBtn = ctx.button('Show all five', () => on.forEach((_, i) => { on[i] = true; }), 'primary');
+    const noneBtn = ctx.button('Back to one', () => on.forEach((_, i) => { on[i] = (i === 0); }));
+    const ro = ctx.readout();
+
+    ctx.loop(() => {
+      g.clearRect(0, 0, 720, 350);
+      const liveCues = new Set();
+      CONTEXTS.forEach((c, i) => { if (on[i]) c.cues.forEach(q => liveCues.add(q)); });
+
+      g.font = 'bold ' + FONT; g.fillStyle = C.text;
+      g.fillText('the only evidence you get about "tesgüino"', 30, 26);
+      let y = 52;
+      CONTEXTS.forEach((c, i) => {
+        g.font = MONO;
+        g.fillStyle = on[i] ? C.text : '#2a3444';
+        g.fillText((on[i] ? '●  ' : '○  ') + c.text, 30, y);
+        y += 22;
+      });
+
+      /* score each candidate by how much of the live context it also occurs with */
+      const scored = CANDIDATES.map(c => {
+        let hit = 0;
+        liveCues.forEach(q => { if (c.cues.indexOf(q) >= 0) hit++; });
+        return { w: c.w, score: liveCues.size ? hit / liveCues.size : 0 };
+      }).sort((x, z) => z.score - x.score);
+
+      g.font = 'bold ' + FONT; g.fillStyle = C.text;
+      g.fillText('how well each candidate fits that company', 30, 188);
+      const BX = 130, BW = 420;
+      scored.forEach((s, i) => {
+        const yy = 210 + i * 23;
+        g.font = MONO; g.fillStyle = C.muted; g.fillText(s.w, 30, yy + 11);
+        g.fillStyle = C.line; g.fillRect(BX, yy, BW, 15);
+        g.fillStyle = i === 0 && s.score > scored[1].score ? C.green : C.accent;
+        g.fillRect(BX, yy, s.score * BW, 15);
+        g.fillStyle = C.muted; g.fillText((s.score * 100).toFixed(0) + '%', BX + BW + 10, yy + 12);
+      });
+
+      const tiedTop = scored.filter(s => s.score === scored[0].score).map(s => s.w);
+      const nOn = on.filter(Boolean).length;
+      const decided = nOn >= 4;
+      g.font = 'bold ' + FONT;
+      g.fillStyle = decided ? C.green : C.warn;
+      /* two near-synonyms tying at the top is the right answer, not an unfinished one */
+      wrapText2(g, nOn <= 1
+        ? 'One sentence is not enough: ' + tiedTop.join(', ') + ' all fit equally well and the ranking means nothing yet.'
+        : !decided
+          ? 'Getting sharper, but ' + tiedTop.join(' and ') + ' still fit equally. Switch on more sentences.'
+          : tiedTop.length > 1
+            ? tiedTop.join(' and ') + ' lead together — and that is the correct answer, not a failure: they are near-synonyms, so no amount of context separates them. Both are far ahead of hammer and democracy.'
+            : '"' + scored[0].w + '" fits the company best — inferred from context alone, with no definition anywhere.',
+        30, 336, 660, 16);
+      ro.set({ 'contexts shown': nOn, 'cue words': liveCues.size, 'best fit': scored[0].w });
+    });
+
+    return ctx.figure(cv,
+      'A word you have never seen, and five sentences it appears in. Each sentence contributes cue words, and each candidate is scored by how much of that company it keeps in ordinary text. With one sentence the ranking is meaningless; by five, "beer" and "wine" separate from "hammer" and "democracy" — and note they do not separate from <i>each other</i>, which is exactly right, since tesgüino is a corn beer. Nothing here knows what any word means. It only knows what turns up nearby.',
+      [...toggles, allBtn, noneBtn], ro);
+  }
+
+  /* ---------- Interactive: what the embedding table costs ---------- */
+  function buildEmbedTable(ctx) {
+    const [cv, g] = ctx.canvas(720, 300);
+    const C = ctx.colors;
+    const FONT = '13px Inter, system-ui, sans-serif';
+    const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
+    let vocab = 50257, dim = 768, tied = false;
+    const vSl = ctx.slider({ label: 'vocabulary (tokens)', min: 8000, max: 256000, step: 1000, value: 50257, onChange: (v) => { vocab = v; } });
+    const dSl = ctx.slider({ label: 'embedding dimension', min: 64, max: 8192, step: 64, value: 768, onChange: (v) => { dim = v; } });
+    const tieBtn = ctx.button('tie input and output', () => { tied = !tied; tieBtn.textContent = tied ? 'untie input and output' : 'tie input and output'; });
+    const gpt2 = ctx.button('GPT-2 small', () => { vocab = 50257; vSl.value = 50257; dim = 768; dSl.value = 768; }, 'primary');
+    const frontier = ctx.button('frontier-ish', () => { vocab = 128000; vSl.value = 128000; dim = 4096; dSl.value = 4096; });
+    const ro = ctx.readout();
+    const human = (n) => n >= 1e9 ? (n / 1e9).toFixed(2) + ' billion' : n >= 1e6 ? (n / 1e6).toFixed(1) + ' million' : (n / 1e3).toFixed(0) + ' thousand';
+
+    ctx.loop(() => {
+      g.clearRect(0, 0, 720, 300);
+      const one = vocab * dim;
+      const total = tied ? one : one * 2;
+
+      g.font = 'bold ' + FONT; g.fillStyle = C.text;
+      g.fillText('the embedding table: one row per token', 34, 28);
+
+      /* a schematic of the matrix */
+      const X = 34, Y = 52, W = 250, H = 150;
+      g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(X, Y, W, H);
+      const rows = 14;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < 18; c++) {
+          const v = Math.sin(r * 1.7 + c * 0.9) * 0.5 + 0.5;
+          g.fillStyle = 'rgba(124,156,255,' + (0.08 + v * 0.5) + ')';
+          g.fillRect(X + 4 + c * ((W - 8) / 18), Y + 4 + r * ((H - 8) / rows), (W - 8) / 18 - 1, (H - 8) / rows - 1);
+        }
+      }
+      g.font = MONO; g.fillStyle = C.muted;
+      g.fillText('←  ' + dim.toLocaleString() + ' numbers  →', X + 40, Y + H + 18);
+      g.save(); g.translate(X - 10, Y + H / 2 + 40); g.rotate(-Math.PI / 2);
+      g.fillText(vocab.toLocaleString() + ' tokens', 0, 0); g.restore();
+
+      const TX = 330;
+      g.font = FONT; g.fillStyle = C.muted;
+      g.fillText('input table', TX, 62);
+      g.font = 'bold 20px Inter, system-ui, sans-serif'; g.fillStyle = C.accent;
+      g.fillText(human(one), TX, 86);
+      g.font = MONO; g.fillStyle = C.muted;
+      g.fillText(vocab.toLocaleString() + ' × ' + dim.toLocaleString(), TX, 104);
+
+      g.font = FONT; g.fillStyle = C.muted;
+      g.fillText('output (un-embedding) table', TX, 140);
+      g.font = 'bold 20px Inter, system-ui, sans-serif'; g.fillStyle = tied ? C.green : C.warn;
+      g.fillText(tied ? 'reuses the same weights' : human(one), TX, 164);
+
+      g.font = 'bold ' + FONT; g.fillStyle = C.text;
+      g.fillText('spent on meaning-before-context', TX, 208);
+      g.font = 'bold 26px Inter, system-ui, sans-serif'; g.fillStyle = C.green;
+      g.fillText(human(total), TX, 238);
+      g.font = FONT; g.fillStyle = C.muted;
+      wrapText2(g, 'And none of it is a computation. Turning a token ID into a vector is a row lookup — the model simply reads row number 3312.', TX, 262, 350, 17);
+      ro.set({ vocab: vocab.toLocaleString(), dim, tied: tied ? 'yes' : 'no', parameters: human(total) });
+    });
+
+    return ctx.figure(cv,
+      'GPT-2 small spends about 38.6 million parameters — 50,257 tokens × 768 numbers — on the input table alone, before a single layer of actual computation runs. Tying the input and output tables reuses one matrix for both the lookup on the way in and the comparison on the way out, halving that cost and usually helping quality slightly. It is the cheapest real optimisation in the whole architecture.',
+      [vSl, dSl, gpt2, frontier, tieBtn], ro);
+  }
+
+  /* ---------- Interactive: one word, two meanings, resolved by context ---------- */
+  function buildContextBank(ctx) {
+    const [cv, g] = ctx.canvas(720, 360);
+    const C = ctx.colors;
+    const FONT = '13px Inter, system-ui, sans-serif';
+    const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
+    const LAYERS = 12;
+    let layer = 0, playing = false, acc = 0;
+    /* fixed anchor words, and the two destinations "bank" drifts toward */
+    const ANCHORS = [
+      { w: 'river', x: -0.72, y: 0.46 }, { w: 'water', x: -0.60, y: 0.66 },
+      { w: 'boat', x: -0.80, y: 0.18 },
+      { w: 'loan', x: 0.70, y: 0.50 }, { w: 'money', x: 0.62, y: 0.70 },
+      { w: 'interest', x: 0.82, y: 0.22 },
+    ];
+    const START = { x: 0.0, y: -0.55 };
+    const DEST = [{ x: -0.66, y: 0.44 }, { x: 0.66, y: 0.48 }];
+    const SENT = [
+      'sat on the <b>bank</b> of the river',
+      'the <b>bank</b> approved the loan',
+    ];
+    const ease = (t) => t * t * (3 - 2 * t);
+    const posAt = (i, L) => {
+      const t = ease(ctx.clamp(L / LAYERS, 0, 1));
+      return { x: START.x + (DEST[i].x - START.x) * t, y: START.y + (DEST[i].y - START.y) * t };
+    };
+
+    const lSl = ctx.slider({ label: 'transformer layer', min: 0, max: LAYERS, step: 1, value: 0, onChange: (v) => { layer = v; } });
+    const playBtn = ctx.button('▶ Climb the layers', () => { playing = !playing; playBtn.textContent = playing ? '⏸ Pause' : '▶ Climb the layers'; }, 'primary');
+    const resetBtn = ctx.button('Back to layer 0', () => { layer = 0; lSl.value = 0; playing = false; playBtn.textContent = '▶ Climb the layers'; });
+    const ro = ctx.readout();
+
+    ctx.loop((dt) => {
+      if (playing) { acc += dt; if (acc > 0.35) { acc = 0; layer = layer >= LAYERS ? 0 : layer + 1; lSl.value = layer; } }
+      g.clearRect(0, 0, 720, 360);
+      const CX = 360, CY = 190, S = 130;
+      const sx = (x) => CX + x * S * 1.9;
+      const sy = (y) => CY - y * S;
+
+      g.font = 'bold ' + FONT; g.fillStyle = C.text;
+      g.fillText('the same word, in two sentences', 34, 26);
+      SENT.forEach((s, i) => {
+        g.font = MONO; g.fillStyle = i === 0 ? C.accent : C.warn;
+        const plain = s.replace(/<[^>]+>/g, '');
+        g.fillText((i === 0 ? '▲  ' : '■  ') + plain, 34, 48 + i * 20);
+      });
+
+      g.strokeStyle = C.line; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(sx(-1.05), sy(0)); g.lineTo(sx(1.05), sy(0)); g.stroke();
+
+      ANCHORS.forEach(a => {
+        g.fillStyle = 'rgba(148,163,184,0.5)';
+        g.beginPath(); g.arc(sx(a.x), sy(a.y), 4, 0, 7); g.fill();
+        g.font = MONO; g.fillStyle = C.muted;
+        g.fillText(a.w, sx(a.x) - 12, sy(a.y) - 10);
+      });
+
+      /* the trails */
+      [0, 1].forEach(i => {
+        g.strokeStyle = i === 0 ? 'rgba(124,156,255,0.35)' : 'rgba(251,191,36,0.35)';
+        g.lineWidth = 1.5; g.setLineDash([3, 3]); g.beginPath();
+        for (let L = 0; L <= layer; L++) { const q = posAt(i, L); L ? g.lineTo(sx(q.x), sy(q.y)) : g.moveTo(sx(q.x), sy(q.y)); }
+        g.stroke(); g.setLineDash([]);
+      });
+      [0, 1].forEach(i => {
+        const q = posAt(i, layer);
+        g.fillStyle = i === 0 ? C.accent : C.warn;
+        if (i === 0) {
+          g.beginPath(); g.moveTo(sx(q.x), sy(q.y) - 8); g.lineTo(sx(q.x) + 7, sy(q.y) + 5); g.lineTo(sx(q.x) - 7, sy(q.y) + 5); g.closePath(); g.fill();
+        } else {
+          g.fillRect(sx(q.x) - 6, sy(q.y) - 6, 12, 12);
+        }
+        g.font = 'bold ' + MONO; g.fillStyle = i === 0 ? C.accent : C.warn;
+        g.fillText('bank', sx(q.x) + 12, sy(q.y) + 4);
+      });
+
+      const p0 = posAt(0, layer), p1 = posAt(1, layer);
+      const sep = Math.hypot(p0.x - p1.x, p0.y - p1.y);
+      g.font = 'bold 15px Inter, system-ui, sans-serif';
+      g.fillStyle = layer === 0 ? C.danger : sep > 1.0 ? C.green : C.warn;
+      g.fillText(layer === 0
+        ? 'layer 0: identical. Same row of the same table.'
+        : 'layer ' + layer + ': the two meanings are ' + sep.toFixed(2) + ' apart',
+        34, 330);
+      g.font = FONT; g.fillStyle = C.muted;
+      wrapText2(g, layer === 0
+        ? 'Before any attention runs, a word is just a lookup — so word2vec can never tell these two sentences apart.'
+        : 'Each attention layer nudges every token\'s vector using its neighbours. "river" pulls one copy left; "loan" pulls the other right.',
+        34, 350, 650, 16);
+      ro.set({ layer, separation: sep.toFixed(2), 'sense A': layer > 6 ? 'riverbank' : 'undecided', 'sense B': layer > 6 ? 'finance' : 'undecided' });
+    });
+
+    return ctx.figure(cv,
+      'A schematic of contextual embeddings, not a measurement of a specific model — but the behaviour it shows is real and was the key finding of ELMo and BERT in 2018. At layer 0 both copies of "bank" are the identical row of the embedding table, so they must coincide. Each attention layer then updates every token using the tokens around it, and the two copies drift apart toward the company each keeps. This is the single clearest statement of what attention does, and chapter 7 builds the mechanism.',
+      [lSl, playBtn, resetBtn], ro);
   }
 })();
