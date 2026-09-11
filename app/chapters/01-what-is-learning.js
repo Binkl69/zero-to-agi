@@ -70,9 +70,33 @@
           hint: 'Click any symbol. Every one of them is something you have already moved with your hands.',
           plain: '"Weigh up each thing by how much it matters, add a standing level of suspicion, and if the total clears zero, say yes."',
         }),
-        ctx.callout('key', '🔑 Two words worth keeping',
-          `A <em>weight</em> is how much one piece of evidence counts. A <em>bias</em> is how far the model leans before any evidence arrives.<br>
-           <b>These two words never change meaning again.</b> A frontier model has a trillion weights and biases. They are these ones, in unimaginable number, each still doing exactly this job — and the whole of training, in every chapter from here, is a search for good values for them.`),
+        ctx.walkthrough([
+          { say: 'Forget neurons for a moment. You are deciding whether to take an umbrella.', note: 'You do this without thinking. We are going to write down what you did.' },
+          { say: 'You look at two things: <b>how dark the clouds are</b>, and <b>what day of the week it is</b>.' },
+          { ask: 'Which of those should count toward "take an umbrella"?',
+            options: ['Both equally', 'Cloud darkness a lot, the day not at all', 'The day of the week'], answer: 1,
+            explain: 'Obviously the clouds. And "irrelevant" is a number here, not a shrug — it is zero.' },
+          { say: 'So give each one a multiplier saying how much it counts. <b>That multiplier is the weight.</b>', math: 'clouds &times; 3 &nbsp;&nbsp;+&nbsp;&nbsp; day &times; 0' },
+          { say: 'Weight 3 means it matters a lot. Weight 0 means the model has learned to ignore it. A <i>negative</i> weight means it counts <b>against</b>.', note: 'Nobody sets these by hand. Training is the search for them — that is what you watched the trainer doing.' },
+          { say: 'Now the second number. Two people look at the same slightly-grey sky. One takes an umbrella, one does not.', note: 'Same evidence. Different answer.' },
+          { ask: 'What is different between those two people?',
+            options: ['They weigh the clouds differently', 'How much they mind getting wet, before looking outside at all', 'One of them is simply wrong'], answer: 1,
+            explain: 'They start from different places. One is umbrella-inclined before any evidence arrives at all. That standing lean is the bias.' },
+          { say: '<b>That is the bias.</b> Where you start, before any evidence. And it is <b>added</b> at the end — never multiplied by anything.', math: 'clouds &times; 3 &nbsp;+&nbsp; day &times; 0 &nbsp;<b>+</b>&nbsp; 2' },
+          { say: 'Here is the proof that a bias has to exist. In the demo above, drag <b>bias</b> to exactly 0.', note: 'Then drag the two weight sliders around and watch what the line can and cannot do.' },
+          { say: 'With bias at zero the line can spin freely — but it is <b>stuck passing through the corner of the grid.</b> It can never move away from it.', note: 'The weights set the angle. The bias is the only thing that can slide the line across the page.' },
+          { ask: 'So what does the bias do, geometrically?',
+            options: ['Rotates the line', 'Slides the line away from the corner', 'Makes the line curve'], answer: 1,
+            explain: 'Weights turn it, the bias moves it. Without a bias, every decision boundary in every model would be pinned to the corner — and almost nothing useful lives there.' },
+          { say: 'These two words never change meaning again, in any chapter, at any size.', note: 'A frontier model holds on the order of a trillion weights and biases. They are these ones, in unimaginable number, each still doing exactly this job.' },
+        ], {
+          title: 'Weight and bias, with an umbrella',
+          recap: 'a weight is how much one thing counts. A bias is where you start before anything counts. Weights are multiplied; the bias is added.',
+        }),
+        ctx.callout('key', '🔑 "Is that really the whole field?"',
+          `A fair question, and the honest answer is <b>yes — at the level of the mechanism.</b> Multiply each input by how much it counts, add them up, add a bias, compare to zero, and adjust when wrong. There is no secret extra ingredient waiting in chapter 12.<br>
+           What is <i>not</i> simple is everything built on top: <b>how you wire billions of these together</b> (chapters 4–7), <b>what you feed them</b> (chapter 10), <b>what you point them at</b> (chapters 9 and 11), and <b>getting it to run at all</b> (chapter 12).<br>
+           A brick is fired clay in a rectangle. That genuinely is the whole of a brick, and it tells you nothing whatever about how to build a cathedral.`),
         ctx.p(`One thing worth noticing: the dot symbol is just multiplication, and the whole left-hand side is "multiply each measurement by its importance, then add everything up". You will meet that pattern so often it gets its own name in chapter 6 — the <em>dot product</em> — and it is already the single most common operation in all of AI.`),
       ));
 
@@ -133,7 +157,7 @@
         ], {
           title: 'w ← w + η (y − ŷ) x',
           hint: 'Click any symbol. This is the entire learning algorithm — every one of these is something you watched happen.',
-          plain: '"Take what you had. If the truth and the guess disagree, nudge each number a little, in the direction that would have helped, by an amount proportional to how much that input was to blame."',
+          plain: 'You got one wrong. Nudge each number a little, so that if the same example came round again you would be closer to right. Nudge the numbers attached to <b>big</b> inputs more, because those inputs did more of the damage.',
         }),
         ctx.callout('key', '🔑 The bit worth sitting with: (y − ŷ)',
           `That bracket can only be three things. <b>y − ŷ = 0</b> when the guess was right — and then the whole correction is zero, so <b>nothing changes at all</b>.
@@ -170,6 +194,14 @@
           `Drag the slider from 1 line to 2 lines and watch the impossible puzzle become possible.`),
         buildTwoLines(ctx),
         ctx.p(`Each line is one neuron. To combine them you need a third neuron that watches the first two and answers "am I between them?". That stack is a <em>network</em>, and the middle row is a <em>hidden layer</em>. Add more layers and you can cut out any shape at all, which is where the "deep" in deep learning comes from.`),
+        ctx.p(`Which raises a fair objection: <b>there are only two lines on that picture. Where is the third one?</b>`),
+        ctx.callout('tryit', '🖐 Try this — go and find the third line',
+          `It is real, but it is not in that square — and a third line drawn <i>there</i> could not help anyway, because this chapter opened by proving no straight line in that square works.<br>
+           <b>1.</b> Press <b>▶ Watch them move</b> and read the commentary as it goes.<br>
+           <b>2.</b> Stop at the end and look at the dots. <b>One pair has landed on the same spot</b>, leaving three positions instead of four. Nothing was lost — A and B simply could not tell those two apart, so they ended up in the same place.<br>
+           <b>3.</b> Now look at the green line. In <i>this</i> space, one straight line does the job.`),
+        buildThirdNeuron(ctx),
+        ctx.p(`So a hidden layer does not solve the problem. <b>It rearranges the problem until a straight line can solve it.</b> That is the most important sentence in this chapter, and it is what "deep" means: do it again, and again, each layer handing the next an easier version of the question.`),
         ctx.callout('key', '🔑 So why did this take until the 2010s?',
           `Nobody doubted more layers were more powerful. The problem was <b>training</b> them: with a hidden layer, it is no longer obvious which weight to blame for a mistake. The answer, <em>backpropagation</em>, is chapter 2. It needed the maths to be popularised in 1986, then twenty more years of faster chips and bigger datasets before it paid off.`),
       ));
@@ -548,6 +580,158 @@
     return ctx.figure(cv,
       'The same two handles, the same one line — but now every dot is a real decision with a cost attached. Two things change. There is no 4 out of 4 any more: real data overlaps, so <b>even the best possible line still gets some wrong</b>, and the demo brute-forces every line there is to tell you exactly where that ceiling sits. And the two kinds of mistake stop being interchangeable — letting fraud through and freezing an honest customer\'s card are very different failures, and the line you choose decides the balance between them.',
       [selWrap, flipBtn, bestBtn], ro);
+  }
+
+
+  /* ------------------------------------------------------------------ */
+  /* The third neuron's line — which is real, but lives in a different   */
+  /* space: the space of WHAT THE FIRST TWO SAID. Watching the four dots */
+  /* move into that space is the whole reason depth works, and the       */
+  /* chapter previously asserted this neuron without ever drawing it.    */
+  /* ------------------------------------------------------------------ */
+  function buildThirdNeuron(ctx) {
+    const [cv, g] = ctx.canvas(720, 400);
+    const C = ctx.colors;
+    const FONT = '13px Inter, system-ui, sans-serif';
+    const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
+    /* XOR: red when exactly one switch is on */
+    const PTS = [
+      { x: 0, y: 0, lab: 0 }, { x: 0, y: 1, lab: 1 },
+      { x: 1, y: 0, lab: 1 }, { x: 1, y: 1, lab: 0 },
+    ];
+    /* neuron A fires when at least one is on; neuron B when both are */
+    const A = (p) => (p.x + p.y > 0.5 ? 1 : 0);
+    const B = (p) => (p.x + p.y > 1.5 ? 1 : 0);
+    let t = 0, playing = false, acc = 0;
+
+    const tSl = ctx.slider({ label: 'move into the new space', min: 0, max: 1, step: 0.01, value: 0, digits: 2, onChange: (v) => { t = v; playing = false; playBtn.textContent = '▶ Watch them move'; } });
+    const playBtn = ctx.button('▶ Watch them move', () => {
+      playing = !playing;
+      playBtn.textContent = playing ? '⏸ Pause' : '▶ Watch them move';
+    }, 'primary');
+    const backBtn = ctx.button('Back to the start', () => { t = 0; tSl.value = 0; playing = false; playBtn.textContent = '▶ Watch them move'; });
+    const ro = ctx.readout();
+
+    const ease = (u) => u * u * (3 - 2 * u);
+
+    ctx.loop((dt) => {
+      if (playing) { acc += dt; t = Math.min(1, t + dt * 0.45); tSl.value = +t.toFixed(2); if (t >= 1) { playing = false; playBtn.textContent = '▶ Watch them move'; } }
+      g.clearRect(0, 0, 720, 400);
+      const u = ease(t);
+
+      const PAD = 62, SZ = 250, X0 = 55, Y0 = 62;
+      const sx = (v) => X0 + v * SZ;
+      const sy = (v) => Y0 + SZ - v * SZ;
+
+      /* ---- the plot frame, labelled for whichever space we are in ---- */
+      g.strokeStyle = C.line; g.lineWidth = 1;
+      g.strokeRect(X0, Y0, SZ, SZ);
+      g.font = 'bold ' + FONT;
+      g.fillStyle = u < 0.5 ? C.text : 'rgba(230,235,245,' + (1 - u * 1.6 > 0 ? 1 - u * 1.6 : 0) + ')';
+      if (u < 0.55) g.fillText('the original square — switch 1 and switch 2', X0, 40);
+      g.fillStyle = u > 0.45 ? C.accent2 || C.green : 'transparent';
+      if (u > 0.45) { g.fillStyle = C.green; g.fillText('the new space — what neuron A said, what neuron B said', X0, 40); }
+
+      g.font = MONO; g.fillStyle = C.muted;
+      g.fillText(u < 0.5 ? 'switch 1  →' : 'what A said  →', X0, Y0 + SZ + 24);
+      g.save(); g.translate(X0 - 20, Y0 + SZ - 30); g.rotate(-Math.PI / 2);
+      g.fillText(u < 0.5 ? 'switch 2  →' : 'what B said  →', 0, 0); g.restore();
+      g.fillText('0', X0 - 14, Y0 + SZ + 4); g.fillText('1', X0 - 14, Y0 + 4);
+      g.fillText('0', X0 - 4, Y0 + SZ + 18); g.fillText('1', X0 + SZ - 6, Y0 + SZ + 18);
+
+      /* ---- the two hidden neurons' lines, fading out as we leave their space ---- */
+      if (u < 0.75) {
+        const fade = 1 - u / 0.75;
+        [[0.5, C.warn, 'A'], [1.5, C.purple, 'B']].forEach(([c, col, name]) => {
+          g.strokeStyle = col; g.globalAlpha = fade * 0.9; g.lineWidth = 2;
+          g.beginPath();
+          g.moveTo(sx(-0.15), sy(c + 0.15));
+          g.lineTo(sx(c + 0.15), sy(-0.15));
+          g.stroke();
+          g.font = 'bold ' + MONO; g.fillStyle = col;
+          g.fillText(name, sx(c - 0.06), sy(-0.12));
+          g.globalAlpha = 1;
+        });
+      }
+
+      /* ---- the third neuron's line, fading IN, in the new space ---- */
+      if (u > 0.55) {
+        const fade = (u - 0.55) / 0.45;
+        g.strokeStyle = C.green; g.globalAlpha = fade; g.lineWidth = 3;
+        /* A − B > 0.5  →  the line A − B = 0.5 */
+        g.beginPath();
+        g.moveTo(sx(0.5), sy(-0.2));
+        g.lineTo(sx(1.7), sy(1.0));
+        g.stroke();
+        g.font = 'bold ' + MONO; g.fillStyle = C.green;
+        g.fillText('the third neuron', sx(0.62), sy(-0.13));
+        g.globalAlpha = 1;
+      }
+
+      /* ---- the four dots, travelling between the two spaces ---- */
+      const seen = {};
+      PTS.forEach((p) => {
+        const ax = A(p), by = B(p);
+        const px = p.x + (ax - p.x) * u;
+        const py = p.y + (by - p.y) * u;
+        const key = px.toFixed(2) + ',' + py.toFixed(2);
+        const dup = seen[key]; seen[key] = (seen[key] || 0) + 1;
+        const off = dup ? 9 : 0;
+        g.beginPath(); g.arc(sx(px) + off, sy(py) - off, 10, 0, 7);
+        g.fillStyle = p.lab ? C.danger : C.accent;
+        g.fill();
+        g.strokeStyle = '#0a0e16'; g.lineWidth = 2; g.stroke();
+      });
+
+      /* ---- the running commentary ---- */
+      const TX = 350;
+      g.font = 'bold ' + FONT; g.fillStyle = C.text;
+      g.fillText('where is the third line?', TX, 40);
+      g.font = FONT; g.fillStyle = C.muted;
+      let msg, colour = C.muted;
+      if (u < 0.1) {
+        msg = 'Right now you are looking at the original square. Neurons A and B have drawn their two lines. No third line is visible — and that is exactly the complaint, because a third line drawn HERE could not help. Any straight line in this square fails, which is what chapter 1 opened by proving.';
+      } else if (u < 0.75) {
+        msg = 'Watch the dots. They are not being rearranged for show — they are moving to new coordinates: how far right is "what A said", how far up is "what B said". The two hidden neurons are not decorations. They are building a new set of axes.';
+      } else {
+        msg = 'And there it is. One pair of dots has landed on the SAME SPOT — three positions where there were four — because A and B answered identically for both. That fold is what makes the problem easy: in this new space a single straight line separates red from blue, and the third neuron draws it.';
+        colour = C.green;
+      }
+      g.fillStyle = colour;
+      wrapText(g, msg, TX, 64, 320, 18);
+
+      /* the truth table, filling in as we move */
+      const rows = PTS.map(p => ({ in: p.x + ',' + p.y, a: A(p), b: B(p), lab: p.lab }));
+      g.font = 'bold ' + FONT; g.fillStyle = C.text;
+      g.fillText('what each neuron says', TX, 226);
+      g.font = MONO; g.fillStyle = C.muted;
+      g.fillText('switches', TX, 250); g.fillText('A', TX + 84, 250); g.fillText('B', TX + 118, 250);
+      g.fillText('third says', TX + 158, 250); g.fillText('want', TX + 250, 250);
+      let yy = 272;
+      rows.forEach(r => {
+        const out = (r.a - r.b > 0.5) ? 1 : 0;
+        g.font = MONO; g.fillStyle = r.lab ? C.danger : C.accent;
+        g.fillText(r.in, TX, yy);
+        g.fillStyle = u > 0.2 ? C.warn : '#2a3444'; g.fillText(String(r.a), TX + 86, yy);
+        g.fillStyle = u > 0.2 ? C.purple : '#2a3444'; g.fillText(String(r.b), TX + 120, yy);
+        g.fillStyle = u > 0.8 ? C.green : '#2a3444'; g.fillText(u > 0.8 ? String(out) : '·', TX + 182, yy);
+        g.fillStyle = C.muted; g.fillText(String(r.lab), TX + 262, yy);
+        yy += 24;
+      });
+      if (u > 0.8) {
+        g.font = 'bold ' + FONT; g.fillStyle = C.green;
+        g.fillText('4 / 4 — and every line here is straight.', TX, yy + 16);
+      }
+
+      ro.set({
+        'looking at': u < 0.5 ? 'the original square' : 'the space A and B built',
+        'distinct positions': u > 0.9 ? '3, not 4' : '4',
+      });
+    });
+
+    return ctx.figure(cv,
+      'Your question was where the third line is, and the answer is that it exists but not in this picture — it lives in a <b>different space</b>. Slide across and watch the four dots take new coordinates: how far right becomes "what neuron A said", how far up becomes "what neuron B said". Two dots land on top of each other, because A and B could not tell them apart. That fold is the entire point of a hidden layer: <b>it does not solve the problem, it rearranges the problem until one straight line can.</b> Every deep network is this move, repeated.',
+      [tSl, playBtn, backBtn], ro);
   }
 
   function makeBoard(cv, g, C, pad) {
