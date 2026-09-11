@@ -1,9 +1,9 @@
-/* Zero → AGI · Chapter 10 · Pretraining: teaching a model the whole internet
-   One objective (next-token prediction), the data funnel, the compute bill, scaling laws,
-   and what a base model actually is.
-   Interactives: next-token prediction game (be the model, pay the cross-entropy);
-   data-filtering funnel animation; scaling-law explorer (click the N–D plane, watch the
-   loss and the money); training-run simulator with a scrubbable loss curve and samples. */
+/* Zero → AGI · Chapter 10 · Pretraining: how a base model is made
+   DESIGN RULE: the reader does the model's only job — guess the next token — in the first ten
+   seconds, and notices what they had to KNOW to do it well.
+   Interactives, in order: next-token game (be the model); loss/perplexity lab on one worked
+   sentence; the data funnel; the 6ND scaling and cost explorer; a training run with loss spikes;
+   raw base model vs post-trained assistant; mixture-of-experts stored-vs-active parameters. */
 (function () {
   ZTA.registerChapter({
     id: '10-pretraining-llms',
@@ -631,134 +631,404 @@
       /* ================================================================== */
       /*  PROSE                                                             */
       /* ================================================================== */
+      function wrapLines(gc, text, maxW) {
+        const words = String(text).split(' '); const out = []; let line = '';
+        for (const w of words) {
+          const t = line ? line + ' ' + w : w;
+          if (line && gc.measureText(t).width > maxW) { out.push(line); line = w; } else line = t;
+        }
+        if (line) out.push(line);
+        return out;
+      }
+      function wrapText(gc, text, x, y, maxW, lh) {
+        wrapLines(gc, text, maxW).forEach((ln, i) => gc.fillText(ln, x, y + i * lh));
+      }
+      const MONOF = '12px "JetBrains Mono", ui-monospace, monospace';
+      const UI = '13px Inter, system-ui, sans-serif';
+
+      /* ================================================================== */
+      /*  INTERACTIVE — what one number of loss actually means               */
+      /* ================================================================== */
+      function lossLab() {
+        const [cv, g] = ctx.canvas(720, 350);
+        /* the worked example from the chapter, with the model's confidence adjustable */
+        const TOKENS = [
+          { tok: 'cat', after: 'The', base: 0.020 },
+          { tok: 'sat', after: 'The cat', base: 0.100 },
+          { tok: 'on', after: 'The cat sat', base: 0.600 },
+          { tok: 'the', after: 'The cat sat on', base: 0.750 },
+          { tok: 'mat', after: 'The cat sat on the', base: 0.150 },
+        ];
+        let skill = 1.0;   // 0 = random guessing, 1 = as fitted, 2 = very strong
+        const VOCAB = 100000;
+        const pOf = (t) => ctx.clamp(Math.pow(t.base, 1 / Math.max(0.05, skill)), 1 / VOCAB, 0.999);
+
+        const sSl = ctx.slider({ label: 'how good the model is', min: 0.05, max: 2.5, step: 0.05, value: 1, digits: 2, onChange: (v) => { skill = v; } });
+        const rndBtn = ctx.button('an untrained model', () => { skill = 0.09; sSl.value = 0.09; });
+        const midBtn = ctx.button('the worked example', () => { skill = 1; sSl.value = 1; }, 'primary');
+        const goodBtn = ctx.button('a strong model', () => { skill = 2.2; sSl.value = 2.2; });
+        const ro = ctx.readout();
+
+        ctx.loop(() => {
+          g.clearRect(0, 0, 720, 350);
+          const losses = TOKENS.map(t => -Math.log(pOf(t)));
+          const total = losses.reduce((a, b) => a + b, 0);
+          const avg = total / TOKENS.length;
+          const ppl = Math.exp(avg);
+
+          g.font = 'bold ' + UI; g.fillStyle = C.text;
+          g.fillText('five predictions across one sentence', 30, 26);
+          g.font = MONOF; g.fillStyle = C.muted;
+          g.fillText('context', 30, 48);
+          g.fillText('true next', 235, 48);
+          g.fillText('model said', 330, 48);
+          g.fillText('cost  −log(p)', 440, 48);
+          let y = 70;
+          TOKENS.forEach((t, i) => {
+            const pp = pOf(t), ls = losses[i];
+            g.font = MONOF; g.fillStyle = C.muted;
+            g.fillText('"' + t.after + '"', 30, y + 12);
+            g.fillStyle = C.text; g.fillText(t.tok, 235, y + 12);
+            g.fillStyle = pp > 0.4 ? C.green : pp > 0.08 ? C.warn : C.danger;
+            g.fillText((pp * 100).toFixed(1) + '%', 330, y + 12);
+            /* cost bar */
+            g.fillStyle = C.line; g.fillRect(440, y + 2, 150, 13);
+            g.fillStyle = ls < 1 ? C.green : ls < 3 ? C.warn : C.danger;
+            g.fillRect(440, y + 2, ctx.clamp(ls / 12, 0, 1) * 150, 13);
+            g.fillStyle = C.text; g.fillText(ls.toFixed(2), 600, y + 12);
+            y += 26;
+          });
+          g.strokeStyle = C.line; g.lineWidth = 1;
+          g.beginPath(); g.moveTo(30, y + 4); g.lineTo(660, y + 4); g.stroke();
+          g.font = MONOF; g.fillStyle = C.muted;
+          g.fillText('total ' + total.toFixed(2) + ' ÷ 5 predictions =', 30, y + 26);
+          g.font = 'bold 18px Inter, system-ui, sans-serif'; g.fillStyle = C.accent;
+          g.fillText(avg.toFixed(2) + ' nats per token', 260, y + 28);
+
+          /* the loss → perplexity scale */
+          const P = { x: 30, y: 262, w: 630, h: 16 };
+          g.font = 'bold ' + UI; g.fillStyle = C.text;
+          g.fillText('what that number means', P.x, P.y - 10);
+          g.fillStyle = C.line; g.fillRect(P.x, P.y, P.w, P.h);
+          const lx = (l) => P.x + ctx.clamp(l / 11.5, 0, 1) * P.w;
+          g.fillStyle = 'rgba(56,217,169,0.35)'; g.fillRect(P.x, P.y, lx(2.5) - P.x, P.h);
+          g.strokeStyle = C.accent; g.lineWidth = 3;
+          g.beginPath(); g.moveTo(lx(avg), P.y - 5); g.lineTo(lx(avg), P.y + P.h + 5); g.stroke();
+          g.font = MONOF; g.fillStyle = C.muted;
+          g.fillText('0', P.x, P.y + 30);
+          g.fillText('good models live here', P.x + 40, P.y + 30);
+          g.fillText('11.5 = pure guessing over 100,000 tokens', lx(11.5) - 210, P.y + 30);
+
+          g.font = 'bold 16px Inter, system-ui, sans-serif'; g.fillStyle = C.text;
+          g.fillText('perplexity = e^loss = ' + ppl.toFixed(1), P.x, 322);
+          g.font = UI; g.fillStyle = C.muted;
+          wrapText(g, '— as unsure as if every token were a ' + Math.round(ppl) + '-way multiple-choice question.', P.x + 250, 322, 400, 16);
+          ro.set({ 'loss (nats/token)': avg.toFixed(2), perplexity: ppl.toFixed(1), 'like a multiple choice of': Math.round(ppl) });
+        });
+
+        return ctx.figure(cv,
+          'The entire training signal, on one sentence. Notice where the cost lives: "on" after "The cat sat" is nearly free, while "cat" after "The" is punished hard — and rightly so, because the model had no way to know and should not have been confident. Drag the slider to an untrained model and the loss climbs toward 11.5, which is exactly log(100,000): the cost of pure guessing over the vocabulary. Every training curve you have ever seen in a paper is this number going down.',
+          [sSl, rndBtn, midBtn, goodBtn], ro);
+      }
+
+      /* ================================================================== */
+      /*  INTERACTIVE — what a base model actually does with your question   */
+      /* ================================================================== */
+      function baseVsChat() {
+        const [cv, g] = ctx.canvas(720, 360);
+        const CASES = [
+          {
+            prompt: 'What is the capital of Peru?',
+            base: ['What is the capital of Bolivia?', 'What is the largest city in Peru?', 'What language do they speak in Peru?', '', 'Answers to these and more in our South America quiz pack — click here to download the PDF.'],
+            chat: ['The capital of Peru is Lima.', '', 'It sits on the Pacific coast and is home to roughly a third of the country\'s population.'],
+            why: 'On the web, a question is most often followed by more questions — a quiz, an FAQ, a forum thread. The base model is not refusing to answer. It is predicting correctly.',
+          },
+          {
+            prompt: 'How do I fix a leaking tap?',
+            base: ['Posted by mike_84 · 3 years ago', '', 'same problem here, any updates?', '', 'Re: How do I fix a leaking tap?', 'bump'],
+            chat: ['Start by turning off the water supply under the sink.', '', 'Most drips come from a worn washer or O-ring, so the next step is to open the tap up and check those.'],
+            why: 'Forum pages are full of this text. A model trained to continue the internet continues the forum thread, complete with the dead-end replies.',
+          },
+          {
+            prompt: 'Q: What is the capital of Peru?\nA:',
+            base: ['Lima', '', 'Q: What is the capital of Chile?', 'A: Santiago', '', 'Q: What is the capital of Ecuador?', 'A: Quito'],
+            chat: ['The capital of Peru is Lima.'],
+            why: 'This is few-shot prompting, and it works — you made the answer the most plausible continuation. But look what happens next: it has no idea when to stop, and cheerfully invents a whole quiz.',
+          },
+        ];
+        let idx = 0, showChat = false, reveal = 0;
+
+        const nextBtn = ctx.button('Next prompt →', () => { idx = (idx + 1) % CASES.length; reveal = 0; });
+        const modeBtn = ctx.button('show: base model', () => {
+          showChat = !showChat; reveal = 0;
+          modeBtn.textContent = 'show: ' + (showChat ? 'after post-training' : 'base model');
+        }, 'primary');
+        const ro = ctx.readout();
+
+        ctx.loop((dt) => {
+          reveal = Math.min(1, reveal + dt * 0.55);
+          g.clearRect(0, 0, 720, 360);
+          const c = CASES[idx];
+          const lines = showChat ? c.chat : c.base;
+
+          g.font = 'bold ' + UI; g.fillStyle = C.text;
+          g.fillText('you type', 30, 28);
+          g.fillStyle = 'rgba(124,156,255,0.12)';
+          const ph = c.prompt.split('\n').length * 20 + 14;
+          g.fillRect(30, 40, 640, ph);
+          g.strokeStyle = C.accent; g.lineWidth = 1.5; g.strokeRect(30, 40, 640, ph);
+          g.font = MONOF; g.fillStyle = C.accent;
+          c.prompt.split('\n').forEach((ln, i) => g.fillText(ln, 42, 62 + i * 20));
+
+          const Y0 = 40 + ph + 34;
+          g.font = 'bold ' + UI; g.fillStyle = showChat ? C.green : C.warn;
+          g.fillText(showChat ? 'what an assistant says (chapter 11)' : 'what the base model actually continues with', 30, Y0 - 12);
+          g.fillStyle = showChat ? 'rgba(56,217,169,0.08)' : 'rgba(251,191,36,0.08)';
+          g.fillRect(30, Y0, 640, 150);
+          g.strokeStyle = showChat ? C.green : C.warn; g.lineWidth = 1.5;
+          g.strokeRect(30, Y0, 640, 150);
+          const shown = Math.ceil(lines.length * reveal);
+          g.font = MONOF; g.fillStyle = C.text;
+          lines.slice(0, shown).forEach((ln, i) => g.fillText(ln, 42, Y0 + 24 + i * 19));
+
+          g.font = UI; g.fillStyle = C.muted;
+          wrapText(g, showChat
+            ? 'Post-training is what turns the left-hand behaviour into this. Nothing was added to the model\'s knowledge — only its sense of what it is for.'
+            : c.why, 30, Y0 + 176, 640, 17);
+          ro.set({ prompt: idx + 1 + ' of ' + CASES.length, showing: showChat ? 'after post-training' : 'raw base model' });
+        });
+
+        return ctx.figure(cv,
+          'A base model is not a chatbot that needs polishing. It is an autocomplete engine for the internet, and it is doing its job perfectly — a question on the web really is most often followed by another question. The illustrated continuations here are written to be representative rather than sampled live, but the behaviour is real and is exactly what everyone who has loaded a raw base model has met. Everything that makes a model feel like an assistant is added in chapter 11.',
+          [nextBtn, modeBtn], ro);
+      }
+
+      /* ================================================================== */
+      /*  INTERACTIVE — mixture of experts: big brain, small bill per token  */
+      /* ================================================================== */
+      function moeLab() {
+        const [cv, g] = ctx.canvas(720, 330);
+        let experts = 8, topK = 2, expertSize = 7, dense = false, t = 0;
+        const TOKENS = ['the', 'patient', 'presented', 'with', 'acute', 'chest', 'pain', 'and', 'ST', 'elevation'];
+        const eSl = ctx.slider({ label: 'experts per block', min: 2, max: 64, step: 1, value: 8, onChange: (v) => { experts = v; topK = Math.min(topK, v); } });
+        const kSl = ctx.slider({ label: 'experts used per token', min: 1, max: 8, step: 1, value: 2, onChange: (v) => { topK = Math.min(v, experts); } });
+        const zSl = ctx.slider({ label: 'billions of params per expert', min: 1, max: 20, step: 1, value: 7, onChange: (v) => { expertSize = v; } });
+        const denseBtn = ctx.button('compare with a dense model', () => {
+          dense = !dense;
+          denseBtn.textContent = dense ? 'back to mixture of experts' : 'compare with a dense model';
+        });
+        const dsBtn = ctx.button('DeepSeek-V3-ish', () => { experts = 64; eSl.value = 64; topK = 4; kSl.value = 4; expertSize = 10; zSl.value = 10; }, 'primary');
+        const ro = ctx.readout();
+
+        ctx.loop((dt) => {
+          t += dt;
+          g.clearRect(0, 0, 720, 330);
+          const total = experts * expertSize;
+          const active = dense ? total : topK * expertSize;
+          const tokIdx = Math.floor(t * 1.2) % TOKENS.length;
+          /* a deterministic, stable "routing" so the picture does not flicker */
+          const chosen = [];
+          for (let i = 0; i < (dense ? experts : topK); i++) chosen.push((tokIdx * 7 + i * 3) % experts);
+
+          g.font = 'bold ' + UI; g.fillStyle = C.text;
+          g.fillText('one token arrives and the router picks where to send it', 30, 26);
+          g.font = MONOF; g.fillStyle = C.accent;
+          g.fillText('"' + TOKENS[tokIdx] + '"', 30, 52);
+
+          const shown = Math.min(experts, 16);
+          const BW = Math.min(38, 600 / shown);
+          for (let i = 0; i < shown; i++) {
+            const on = chosen.indexOf(i) >= 0;
+            const x = 30 + i * (BW + 4);
+            g.fillStyle = on ? 'rgba(56,217,169,0.55)' : '#141b28';
+            g.fillRect(x, 74, BW, 60);
+            g.strokeStyle = on ? C.green : C.line; g.lineWidth = on ? 2 : 1;
+            g.strokeRect(x, 74, BW, 60);
+            if (on) {
+              g.strokeStyle = 'rgba(56,217,169,0.5)'; g.lineWidth = 1.5;
+              g.beginPath(); g.moveTo(70, 58); g.lineTo(x + BW / 2, 74); g.stroke();
+            }
+          }
+          g.font = MONOF; g.fillStyle = C.muted;
+          if (experts > shown) g.fillText('… and ' + (experts - shown) + ' more', 30 + shown * (BW + 4) + 6, 110);
+          g.fillText(dense ? 'a dense model: every token goes through every parameter' : 'only the lit experts do any work for this token', 30, 152);
+
+          /* the two bars */
+          const BX = 30, BWD = 430;
+          const bar = (lab, v, col, y, note) => {
+            g.font = UI; g.fillStyle = C.muted; g.fillText(lab, BX, y);
+            g.fillStyle = C.line; g.fillRect(BX, y + 8, BWD, 18);
+            g.fillStyle = col; g.fillRect(BX, y + 8, ctx.clamp(v / 700, 0, 1) * BWD, 18);
+            g.font = 'bold 16px Inter, system-ui, sans-serif'; g.fillStyle = col;
+            g.fillText(v.toFixed(0) + 'B', BX + BWD + 14, y + 23);
+            g.font = MONOF; g.fillStyle = C.muted; g.fillText(note, BX, y + 42);
+          };
+          bar('parameters stored (what it knows)', total, C.purple, 186, 'all of these sit in GPU memory, idle or not');
+          bar('parameters used per token (what you pay)', active, C.green, 248, 'this is the number that goes into the 6ND estimate');
+
+          g.font = 'bold ' + UI;
+          g.fillStyle = dense ? C.warn : C.green;
+          g.fillText(dense ? 'dense: stored and used are the same number'
+            : (total / Math.max(1, active)).toFixed(1) + '× more knowledge than compute per token', BX, 318);
+          ro.set({ experts, 'used per token': dense ? experts : topK, stored: total + 'B', active: active + 'B' });
+        });
+
+        return ctx.figure(cv,
+          'In a standard dense transformer every token passes through every parameter. A mixture of experts replaces each feed-forward block with many parallel experts and a tiny router that sends each token to only one or two of them — so the model can store far more knowledge than it spends compute on. DeepSeek-V3 has 671 billion parameters of which about 37 billion are active for any given token, which is why it could be trained for a reported few million dollars of GPU time. The cost is memory: every expert must be loaded even though most sit idle for each token.',
+          [eSl, kSl, zSl, dsBtn, denseBtn], ro);
+      }
+      /* ================================================================== */
+      /*  The chapter: touch first, read second.                            */
+      /* ================================================================== */
       root.append(
-        p('Ask a modern language model to translate a Portuguese poem, debug a Rust program, explain the causes of the Thirty Years\' War and then write a limerick about them. It will do all four. Nobody wrote a translation module, a Rust module or a history module. Nobody labelled a single example of "good limerick". Every one of those abilities fell out of a single, almost stupid training task, applied to a slice of the internet so large that reading it aloud would take a hundred thousand years.'),
-        p('That task is: <b>given some text, guess the next token</b>. This chapter is about why such a small objective produces such a large result, what it costs to run it at scale, and what the thing you get at the end actually is (spoiler: not yet an assistant). The transformer from chapter 7 is the machine; this chapter is the fuel and the factory.'),
-
-        section('One objective: predict the next token',
-          p('Take a document. Cut it at a random point. Show the model everything before the cut and ask for a probability distribution over what comes next: one number for every token in the vocabulary (about 100,000 of them), summing to 1. Compare that distribution with what actually came next. Penalise the model by how little probability it put on the truth. Nudge every weight to make that penalty smaller. Repeat, ten trillion times.'),
-          p('Why does this teach anything beyond spelling? Because <b>predicting text well requires understanding what the text is about</b>. To predict the next word of "the boiling point of water at sea level is 100 degrees", you need a fact. To predict the next line of a Python function, you need to know what the function is for. To predict the word after "so the total cost is", you need to have added up the numbers. And, in the example Ilya Sutskever likes to give: to predict the name that follows "and the murderer was…" on the last page of a mystery novel, you need to have solved the murder. Grammar, facts, arithmetic, code, the structure of arguments, a rough model of how people and objects behave: all of it lowers the loss, so all of it gets learned, as a <em>side effect</em>.'),
-          p('One detail makes this affordable. You might imagine the model being shown a prefix, guessing one token, and starting over. It is not. Because of the causal mask from chapter 7, a single forward pass over a 8,192-token document produces 8,192 predictions at once — at every position, a full distribution over what comes next, each one allowed to look only leftwards. So one pass yields 8,192 training signals instead of one. This trick has a name, <em>teacher forcing</em>: during training the model is always fed the <i>real</i> previous tokens, never its own guesses, which is why training parallelises and generation does not.'),
-          ctx.code('# The whole of pretraining, in six lines of PyTorch.\n# ids: (batch, block_size + 1) token ids sliced out of one long packed stream of text\nfor ids in loader:\n    x, y = ids[:, :-1], ids[:, 1:]      # inputs, and the same text shifted left by one\n    logits = model(x)                   # (batch, block_size, vocab_size) — every position at once\n    loss = F.cross_entropy(             # mean of −log p(true token) over the whole batch\n        logits.flatten(0, 1),           # (batch * block_size, vocab_size)\n        y.flatten())                    # (batch * block_size,)\n    loss.backward()                     # one gradient for every one of the N parameters\n    optimizer.step(); optimizer.zero_grad(set_to_none=True)'),
-          p('That is it. There is no other objective, no labels, no human in the loop. The data labels itself, which is why the internet works as a training set at all — this is what people mean by <em>self-supervised</em> learning.'),
-
-          sub('Measuring it: cross-entropy and perplexity',
-            p('The penalty is the <em>cross-entropy loss</em>: −log of the probability the model assigned to the correct token. If the model said 50% and was right, the loss is −log(0.5) ≈ 0.69. If it said 10%, the loss is 2.3. If it said 1%, 4.6. The loss is averaged over every token in the batch. A random guess over 100,000 tokens costs log(100,000) ≈ 11.5; a good model on typical web text averages roughly 2 per token (the exact number depends on the tokenizer and the data).'),
-            p('There is a friendlier version of the same number. <em>Perplexity</em> = e<sup>loss</sup>, and it reads as "the model is, on average, as unsure as if it were choosing uniformly among this many options". Loss 2.3 means perplexity 10: the model behaves as though every token were a ten-way multiple-choice question. Loss 11.5 means perplexity 100,000: pure guessing. Every training curve you see in a paper is one of these two numbers going down.'),
-            p('Here is the arithmetic in full, on one six-token sentence. The model reads <code class="inline">The cat sat on the mat</code> and makes five predictions — one at every position after the first:'),
-            ctx.table(
-              ['position', 'context the model can see', 'token that really came next', 'p the model gave it', 'loss = −ln p'],
-              [
-                ['1', '<code class="inline">The</code>', 'cat', '0.02', '3.91'],
-                ['2', '<code class="inline">The cat</code>', 'sat', '0.10', '2.30'],
-                ['3', '<code class="inline">The cat sat</code>', 'on', '0.60', '0.51'],
-                ['4', '<code class="inline">The cat sat on</code>', 'the', '0.75', '0.29'],
-                ['5', '<code class="inline">The cat sat on the</code>', 'mat', '0.15', '1.90'],
-              ]),
-            p('Add them: 3.91 + 2.30 + 0.51 + 0.29 + 1.90 = <b>8.91</b>. Divide by 5 predictions: the loss for this sentence is <b>1.78</b> nats per token, a perplexity of e<sup>1.78</sup> ≈ <b>5.9</b>. Notice where the cost lives. "on" after "The cat sat" was nearly free; "cat" after "The" was catastrophic, and rightly so — the model had no way to know, and a good model should not be confident there. Backpropagation now pushes up the probability of every one of those five true tokens, and pulls down everything else, a fraction of a percent at a time. That is one gradient step. A frontier run does a few million of them.'),
-          ),
-        ),
-
-        callout('tryit', 'Try it: be the language model',
-          'Fifteen sentences, each missing its last token. Pick the one you think comes next, then look at the "model\'s" distribution (hand-authored for this demo) and the loss −ln p for every option. <b>Notice two things.</b> When the true token is forced by the text (<i>"Once upon a ___"</i>) the loss is almost zero. When the text is genuinely ambiguous (<i>"The meeting is at 3 pm on ___"</i>) even a perfect model pays a large loss, because <b>the uncertainty is in the world, not in the model</b>. That irreducible share is why the loss curve later in this chapter flattens instead of reaching zero. Your running average loss and perplexity are at the bottom.'),
+        callout('tryit', '🖐 Do this first — be the language model',
+          `You are about to do the <b>only</b> job a model is given during pretraining, on real sentences.<br>
+           <b>1.</b> Guess the next word. Then reveal it and see what the model thought.<br>
+           <b>2.</b> Do a few. Notice that some guesses are nearly free and others are impossible.<br>
+           <b>3.</b> Now the important part: notice <b>what you had to know</b> to guess well. Not spelling — facts, arithmetic, what the sentence was about.<br>
+           <b>4.</b> Press <b>Next sentence →</b> and keep going until that clicks.`),
         nextTokenGame(),
-
-        section('The data: ten trillion tokens, mostly thrown away',
-          p('The raw material is the open web, and the standard starting point is <em>Common Crawl</em>, a non-profit that has been saving snapshots of billions of pages since 2008. A snapshot is a few hundred terabytes of HTML, and most of it is junk: navigation menus, cookie banners, SEO spam, the same Wikipedia article mirrored a thousand times, machine-translated product listings. The single biggest lever in pretraining is <b>what you do with the junk</b>.'),
-          p('A modern pipeline runs the crawl through a series of gates. <b>Language identification</b> keeps the languages you want. <b>Deduplication</b> removes exact and near-duplicate documents, because a model that sees the same paragraph ten thousand times memorises it instead of learning from it. <b>Quality classifiers</b>, often small models trained to recognise "text that looks like a good textbook or a well-written article", score every page and drop the worst. <b>Toxicity and personal-data filters</b> drop the rest. Of every hundred tokens that go in, something like five to ten come out. Those survivors are then <em>mixed</em> with curated sources in deliberate proportions: books, academic papers, a lot of source code (GitHub), maths, and dialogue, because each one teaches something the web does not. Llama 3 was pretrained on about 15 trillion tokens after all of this; frontier models in 2025 are believed to use similar or larger amounts, increasingly supplemented with synthetic data written by earlier models.'),
-          p('One more preprocessing step matters: the <em>tokenizer</em> itself is trained on a sample of this data (chapter 6 showed how byte-pair encoding works). Its vocabulary, typically 100,000 to 250,000 pieces, is frozen before pretraining begins, and it determines what "one token" even means for the rest of the model\'s life. This is why a model can be oddly bad at counting letters: it has never seen letters, only pieces.'),
-        ),
-
-        callout('tryit', 'Watch the funnel',
-          'Each vertical bar is a filter, and each block is a page. Watch how few survive to the right-hand side, and read the running <b>survival</b> figure in the numbers below: it settles near 6%. <b>Try this:</b> pause it mid-flight and count how many blocks are left in the last lane compared with the first. The numbers on the gates are illustrative of a typical pipeline, not from any one lab.'),
-        dataPipeline(),
-
-        callout('example', 'Where you have already met a raw base model',
-          'The grey "ghost text" that finishes your line in an IDE is very close to a naked next-token predictor: it is not answering you, it is continuing you. So was Gmail\'s Smart Compose, and so was the first GitHub Copilot, which was a code-pretrained GPT-3 variant with almost no assistant training on top — which is exactly why it was brilliant at completing a function and useless at being asked a question. Base models are still shipped deliberately: Llama, Qwen, Mistral and Gemma all publish a <code class="inline">-base</code> checkpoint alongside the <code class="inline">-instruct</code> one, because researchers want the autocomplete engine <i>before</i> anyone taught it manners.'),
-
-        section('The compute: FLOPs, GPUs and a hundred million dollars',
-          p('How much arithmetic does pretraining take? There is a rule of thumb that is accurate to within a factor of two for every transformer ever trained: <b>training FLOPs ≈ 6 × N × D</b>, where N is the number of parameters and D the number of tokens. Every parameter is used about twice per token in the forward pass (a multiply and an add) and about four times in the backward pass. Plug in GPT-3: 6 × 175 billion × 300 billion ≈ 3 × 10<sup>23</sup> floating-point operations. Llama 3 405B on 15 trillion tokens: about 3.8 × 10<sup>25</sup>. The largest 2025 runs are estimated at around 10<sup>26</sup>.'),
-          p('A single H100 GPU does roughly 10<sup>15</sup> useful FLOPs per second on this kind of arithmetic, and in practice a training run only keeps it about 40% busy (the <em>model FLOPs utilisation</em>, MFU; the rest is lost to waiting for memory and for other GPUs). Work it through:'),
-          ctx.code('N   = 4.05e11        # Llama 3 405B: parameters\nD   = 15.6e12        # training tokens\nC   = 6 * N * D      # = 3.8e25 FLOPs\n\ngpu = 1.0e15         # one H100, dense bfloat16, FLOP/s\nmfu = 0.40           # the fraction of peak a real run actually sustains\n\ngpu_seconds = C / (gpu * mfu)     # = 9.5e10\ngpu_hours   = gpu_seconds / 3600  # ≈ 26,000,000 H100-hours\ndays_on_16k = gpu_hours / 16000 / 24   # ≈ 69 days'),
-          p('Meta reported roughly 16,000 H100s running for about two months, so the back-of-the-envelope lands within a few tens of per cent of the real thing. At two to three dollars per GPU-hour, that is tens of millions of dollars of compute for one run, before counting the failed experiments, the staff, or the data centre itself. Frontier runs at 10<sup>26</sup> are a few times that.'),
-          p('The hardware has been on its own exponential. The A100 (2020) does about 3 × 10<sup>14</sup> FLOP/s in bfloat16; the H100 (2022) about 10<sup>15</sup>; the B200 (2024) roughly double that again, and each generation also has more memory and faster links between chips. Clusters went from a few thousand GPUs (GPT-3) to 16,000 (Llama 3) to 100,000 and beyond in 2024–2025. At that scale the interesting engineering is not the maths, it is getting a hundred thousand chips to behave like one.'),
-          sub('Making 100,000 GPUs act as one',
-            p('<b>Data parallelism.</b> Every GPU holds a full copy of the model and trains on a different slice of the batch. After each step, they average their gradients (an <i>all-reduce</i> over the network) so all copies stay identical. Simple, and the workhorse, but the model has to fit on one GPU, and at 405B parameters it does not.'),
-            p('<b>Tensor parallelism.</b> Split each individual matrix multiplication across several GPUs: each holds a slice of every weight matrix and computes a slice of every activation, exchanging partial results constantly. This needs very fast links, so it is used within one server (eight GPUs sharing NVLink).'),
-            p('<b>Pipeline parallelism.</b> Put layers 1–10 on one GPU, 11–20 on the next, and so on, and pass activations down the line like an assembly line. To stop GPUs idling while they wait for the previous stage, the batch is split into micro-batches that flow through the pipeline in sequence. Real runs combine all three: tensor parallel within a node, pipeline parallel across a few nodes, data parallel across the remaining thousands.'),
-            p('Two more essentials. <b>Mixed precision</b>: weights are kept in 32-bit but the heavy arithmetic runs in 16-bit (bfloat16) or, increasingly, 8-bit floating point, which is faster and uses half the memory, with occasional loss-scaling tricks to keep small gradients from vanishing. <b>Checkpointing</b>: the full model state is saved to disk every hour or so, because with a hundred thousand GPUs <i>something</i> fails every few hours (Meta reported 466 job interruptions in 54 days of Llama 3 training, mostly GPU faults), and you do not want to lose a day of a fifty-day run.'),
-          ),
-        ),
-
-        section('Scaling laws: the most expensive graph in the world',
-          p('Given a compute budget, should you train a bigger model on less data or a smaller model on more? In January 2020, Kaplan and colleagues at OpenAI published <em>scaling laws</em>: loss falls as a smooth power law in parameters, data and compute, predictably, over many orders of magnitude. Their fit said parameters mattered more, so the field built ever-larger models: GPT-3 (175B) was trained on just 300 billion tokens.'),
-          p('In March 2022, Hoffmann and colleagues at DeepMind redid the experiment more carefully (the <em>Chinchilla</em> paper) and found the earlier models had been badly under-trained. For a fixed budget, parameters and tokens should grow <b>together</b>, roughly 20 tokens per parameter. Their 70B model trained on 1.4 trillion tokens beat their own 280B Gopher and GPT-3, at a quarter of the size. Everyone recalibrated overnight.'),
-          p('The shape of the law is worth staring at, because the interactive below is built from it. The loss of a model with N parameters trained on D tokens is fitted as <b>L(N, D) = E + A/N<sup>α</sup> + B/D<sup>β</sup></b>. Three terms, three stories. <b>E</b> is the entropy of the text itself — the part of the uncertainty that lives in the world (which day the meeting is on), which no model of any size can remove. <b>A/N<sup>α</sup></b> is what you lose for being too small to represent the pattern. <b>B/D<sup>β</sup></b> is what you lose for not having read enough. Both shrink as power laws, which on a log-log plot are straight lines — that is why the field can extrapolate at all.'),
-          p('There is a twist. Chinchilla optimises <i>training</i> cost. But a model that is deployed to millions of users spends far more compute on <i>inference</i> than it ever did in training, and inference cost scales with parameters, not tokens. So it pays to go well past the Chinchilla point: train a <b>smaller</b> model for <b>longer</b> than is "optimal", eating a higher training bill to get a cheaper model to serve. Llama 3 trained its 8B model on 15 trillion tokens, nearly 2,000 tokens per parameter, a hundred times the Chinchilla ratio, and the loss was still going down.'),
-          callout('history', 'Emergence: real, or a trick of the ruler?',
-            'In 2022, a widely-read paper catalogued <i>emergent abilities</i>: skills such as multi-step arithmetic that appear to be absent in small models and then switch on abruptly at some scale, like a phase change. In 2023 another paper argued much of this is an artefact of the metric: if you score arithmetic as "all digits exactly right", a model that gets steadily better at each digit will look flat and then suddenly jump. Measured with smooth metrics, most "emergent" curves become gentle slopes. The honest summary in 2025: the underlying loss improves smoothly and predictably; what <i>we</i> care about (does it pass the exam?) can still change abruptly, because pass/fail is a threshold. Both camps are right about different things.'),
-        ),
-
-        callout('tryit', 'Try it: spend a hundred million dollars',
-          '<b>1.</b> Drag the blue dot around the left panel (or use the two sliders). It is the (N, D) plane: parameters across, training tokens up, colour = the loss you would reach. <b>2.</b> The white line is the compute-optimal frontier and the dashed diagonals are lines of equal compute — every point on one diagonal costs the same. Slide along a diagonal and watch the loss get worse the further you stray from the white line. <b>3.</b> The right panel plots your run against the best loss any run of that budget could reach; the red bar is the loss you are throwing away. Press <b>Snap to compute-optimal</b> to land on the line. <b>4.</b> Press <b>Jump to Llama 3 8B</b>: it sits far above the white line, on purpose — the wasted training loss buys a model that is 50× cheaper to serve. <b>5.</b> Push the MFU slider from 60% down to 20% and watch the bill triple without the loss changing by a hair. That is the whole job of an infrastructure team.'),
-        scalingExplorer(),
-
-        section('What a training run looks like from the inside',
-          p('Loss curves are boring to look at and thrilling to interpret. At the start, the model learns token frequencies (the word "the" is common) and the loss drops fast. Then it learns short-range structure: which tokens follow which, spelling, punctuation. Then grammar, then topic, then facts, then reasoning patterns, each stage costing ten times more tokens than the last for a smaller drop in loss. There are no visible boundaries; the samples just get better, on a log scale.'),
-          p('The engineers watching that curve are mostly watching for it to <i>break</i>. A <em>loss spike</em> — the curve jumping upward for a few hundred steps — is the classic failure, usually a bad batch of data or a numerical overflow in a deep layer. The standard response is unglamorous and universal: roll back to the last checkpoint, skip the offending data, lower the learning rate, and carry on. Everything else is patience.'),
-        ),
-
-        callout('tryit', 'Watch a model learn to write',
-          'Press ▶ Play, or just <b>drag along the chart</b> to scrub through the run by hand. The loss curve follows the Chinchilla formula for a 1-billion-parameter model; the samples at each checkpoint are hand-written to match what real models produce at those stages. <b>Notice three things.</b> The x-axis is logarithmic — each gridline is 10× more data, so the second half of the chart costs a thousand times more than the first. The jump from "grammatical nonsense" to "fluent but wrong" happens over one decade of data and buys almost no loss. And the grey dashed line is the floor: a 1B model cannot get below 2.04 no matter how much it reads. To go lower you have to make the model bigger, which is the whole argument of the previous interactive.'),
-        trainingRun(),
-
-        section('What you get at the end: a base model',
-          p('After pretraining you have a <em>base model</em>, and it is important to be clear about what that is. It is not a chatbot. It is an <b>autocomplete engine for the internet</b>: give it text, and it produces the most plausible continuation. Give it a question, and it does not answer; it produces what typically follows a question on the web, which is often <i>another question</i>, or a list of related questions, or a forum reply beginning "same problem here, any updates?". Give it the start of a news article and it will write a convincing news article, including invented quotes and a plausible-looking URL at the bottom.'),
-          p('You can coax a base model into being useful by making the desired output the most plausible continuation: write "Q: What is the capital of Peru? A:" and it will usually complete "Lima". Write three worked examples and it will do a fourth. This <em>few-shot prompting</em> was the headline of the GPT-3 paper. But it is fragile, it does not know when to stop, it will happily continue with "Q: What is the capital of Chile?" and answer that too, and it has no notion of being helpful, honest or safe. It simply is not trying to do anything except predict. Turning that into an assistant is a separate stage, <em>post-training</em>, and it is the whole of chapter 11.'),
-          callout('key', 'Key idea',
-            'Pretraining produces a model of <b>what text is like</b>. Everything an assistant model "knows" was learned here. Everything about how it <b>behaves</b> (answering rather than continuing, refusing, formatting, being honest about uncertainty) is added afterwards, on top of this.'),
-        ),
-
-        section('Two engineering trends: sparse experts and long contexts',
-          p('<b>Mixture of experts (MoE).</b> In a standard transformer every token passes through every parameter. In an MoE, each feed-forward block is replaced by, say, 8 or 64 parallel "experts", and a tiny router network sends each token to only one or two of them. The model can have an enormous number of parameters (more stored knowledge) while each token only touches a fraction (less compute per token). GPT-4 was widely reported to use this design; Mixtral 8×7B (December 2023) made it mainstream in open models; DeepSeek-V3 (December 2024) has 671 billion parameters of which only 37 billion are active for any given token, which is why it could be trained for a reported few million dollars of GPU time. The cost is memory: all the experts must be loaded even though most sit idle for each token. Note what this does to the rule of thumb — for an MoE, the 6ND estimate uses the <i>active</i> parameter count, not the total.'),
-          p('<b>Context length.</b> GPT-3 could see 2,048 tokens, about three pages. GPT-4 launched with 8k and 32k variants in 2023; 128k (a short novel) became standard by 2024; Gemini 1.5 offered a million tokens (several novels, or an hour of video). This took better positional encodings (RoPE and its extensions), attention variants that avoid the quadratic memory blow-up, and simply training on long documents. Chapter 12 covers why long contexts are expensive to <i>serve</i>, and why a model does not necessarily use all of what it can see.'),
-        ),
-
-        callout('history', 'The GPT line, in four steps',
-          '<b>GPT-1 (June 2018)</b>: 117M parameters, trained on 7,000 unpublished books; showed pretraining-then-fine-tuning beats training from scratch. <b>GPT-2 (February 2019)</b>: 1.5B parameters, 40GB of web text; wrote paragraphs coherent enough that OpenAI initially withheld the full model. <b>GPT-3 (May 2020)</b>: 175B parameters, 300B tokens, ~3 × 10<sup>23</sup> FLOPs; showed few-shot prompting and made "scale" the strategy. <b>Chinchilla (March 2022)</b>: not a GPT, but it rewrote the recipe everyone used afterwards, including <b>Llama 3 (July 2024)</b>, whose 405B model on 15T tokens set the template for open frontier-class pretraining. Between GPT-3 and the 2025 frontier, training compute grew by roughly a factor of 300.'),
-
-        section('Why this matters for modern AI',
-          p('Three consequences follow from everything above. First, <b>knowledge has a cut-off</b>: whatever was not in the pretraining data is not in the model, which is why models need retrieval and tools (chapter 12) for anything recent. Second, <b>the loss is a proxy</b>: a model trained to imitate the internet imitates the internet\'s errors, biases, and confident nonsense too; that is why post-training exists and why hallucination is hard to remove. Third, <b>the economics are brutal and predictable</b>: because scaling laws work, labs can forecast what a 10× bigger run will achieve before spending the money, and that predictability is the reason the money keeps being spent.'),
-          p('It also explains the shape of the industry. Pretraining is a capital expense that a handful of organisations can afford, and it happens once; everything after it — post-training, tools, agents, the product you actually use — is comparatively cheap and happens continuously. When you hear that a lab "released a new model", it is usually the second half that changed. One picture to keep: <b>pretraining fills the reservoir, and everything in Part III after this chapter is plumbing.</b>'),
-        ),
-
-        ctx.quiz([
-          { q: 'A model assigns probability 0.05 to the token that actually came next. Its cross-entropy loss on that token is about…',
-            options: ['0.05', '0.5', '3.0', '20'],
-            answer: 2, explain: '−ln(0.05) ≈ 3.0. The loss is −log of the probability given to the truth; the matching perplexity would be e³ ≈ 20, i.e. as unsure as a 20-way guess.' },
-          { q: 'Roughly how many FLOPs does it take to train a 10-billion-parameter model on 1 trillion tokens?',
-            options: ['10^13', '6 × 10^22', '10^25', '6 × 10^10'],
-            answer: 1, explain: '6 × N × D = 6 × 10^10 × 10^12 = 6 × 10^22. The factor of 6 is two operations per parameter per token forward, four backward.' },
-          { q: 'What was the main finding of the Chinchilla paper (2022)?',
-            options: ['Bigger models are always better', 'Earlier large models were under-trained; for a fixed compute budget, parameters and tokens should scale together (~20 tokens per parameter)', 'Transformers should be replaced by RNNs', 'Data quality does not matter'],
-            answer: 1, explain: 'Chinchilla (70B, 1.4T tokens) beat Gopher (280B) using the same compute, by rebalancing the budget away from parameters and toward data.' },
-          { q: 'Why did Meta train Llama 3 8B on 15 trillion tokens, far beyond the Chinchilla-optimal amount?',
-            options: ['They made a mistake', 'Inference cost depends on model size, so a small model trained longer is cheaper to serve even if it costs more to train', 'Small models cannot be trained on less data', 'The scaling laws were wrong'],
-            answer: 1, explain: 'Chinchilla optimises training cost only. When a model will be run billions of times, over-training a smaller model pays for itself in serving costs.' },
-          { q: 'You give a base (pretrained-only) model the prompt "What is the capital of Peru?". What is it most likely to do?',
-            options: ['Answer "Lima" and stop', 'Produce a plausible continuation of such text on the web, which might be more questions, a forum reply, or an answer that keeps going', 'Refuse because it lacks a system prompt', 'Search the internet'],
-            answer: 1, explain: 'A base model is an autocomplete engine. It predicts what typically follows; it has not been trained to be an assistant, and it has no idea when to stop. That is post-training (chapter 11).' },
-        ]),
-
-        section('Go deeper', ul([
-          '<a href="https://www.youtube.com/watch?v=7xTGNNLPyMI" target="_blank" rel="noopener">Andrej Karpathy, "Deep Dive into LLMs like ChatGPT" (2025, 3.5 h)</a> — the best single walkthrough of pretraining, tokenization, and what a base model is. The first hour covers this chapter.',
-          '<a href="https://www.youtube.com/watch?v=zjkBMFhNj_g" target="_blank" rel="noopener">Andrej Karpathy, "Intro to Large Language Models" (2023, 1 h)</a> — the shorter version of the same story.',
-          '<a href="https://arxiv.org/abs/2203.15556" target="_blank" rel="noopener">Hoffmann et al., "Training Compute-Optimal Large Language Models" (Chinchilla, 2022)</a> and <a href="https://arxiv.org/abs/2001.08361" target="_blank" rel="noopener">Kaplan et al., "Scaling Laws for Neural Language Models" (2020)</a> — the two papers the scaling-law explorer is built from.',
-          '<a href="https://arxiv.org/abs/2407.21783" target="_blank" rel="noopener">"The Llama 3 Herd of Models" (Meta, 2024)</a> — the most detailed public account of a frontier-scale pretraining run: data pipeline, parallelism, and every failure.',
-          '<a href="https://huggingface.co/spaces/HuggingFaceFW/blogpost-fineweb-v1" target="_blank" rel="noopener">The FineWeb report (Hugging Face, 2024)</a> — how a 15-trillion-token web dataset is actually filtered, with an ablation for every step.',
-          '<a href="https://lilianweng.github.io/posts/2021-09-25-train-large/" target="_blank" rel="noopener">Lilian Weng, "How to Train Really Large Models on Many GPUs"</a> — data, tensor and pipeline parallelism in detail.',
-        ])),
+        p(`That is the entire training objective. There is no second task, no labels, no human in the loop.`),
       );
+
+      root.append(section('Why guessing words teaches everything else',
+        p(`Ask a modern model to translate a Portuguese poem, debug a Rust program, explain the Thirty Years' War and write a limerick about it. It does all four. Nobody wrote a translation module, a Rust module or a history module. Nobody labelled a single example of "good limerick".`),
+        p(`All of it fell out of the task you just did, applied to a slice of the internet so large that reading it aloud would take a hundred thousand years.`),
+        p(`It works because <b>predicting text well requires understanding what the text is about</b>. To finish "the boiling point of water at sea level is 100", you need a fact. To predict the next line of a Python function, you need to know what the function is for. To finish "so the total cost is", you need to have added the numbers up.`),
+        callout('key', '🔑 The example worth remembering',
+          `To predict the name that follows <i>"and the murderer was…"</i> on the last page of a mystery novel, <b>you need to have solved the murder.</b><br>
+           Grammar, facts, arithmetic, code, the structure of an argument, a rough model of how people and objects behave: every one of them lowers the loss.
+           So every one of them gets learned — as a <em>side effect</em> of guessing the next word.`),
+        p(`One detail makes this affordable. You might imagine the model guessing one token and starting over. It is not. Because of the causal mask from chapter 7, a single forward pass over an 8,192-token document produces 8,192 predictions at once, each allowed to look only leftwards.`),
+        p(`So one pass yields 8,192 training signals instead of one. This is <em>teacher forcing</em>: during training the model is always fed the <i>real</i> previous tokens, never its own guesses — which is exactly why training parallelises and generation does not.`),
+        p(`The data labels itself. That is what people mean by <em>self-supervised</em> learning, and it is why the internet works as a training set at all.`),
+      ));
+
+      root.append(section('One number: how wrong, on average',
+        p(`The penalty is the <em>cross-entropy loss</em> from chapter 2: −log of the probability the model gave the correct token. Said 50% and was right? Loss 0.69. Said 10%? 2.3. Said 1%? 4.6.`),
+        callout('tryit', '🖐 Try this — watch a whole training run compressed into one slider',
+          `<b>1.</b> Press <b>an untrained model</b>. The loss climbs toward <b>11.5</b>, which is exactly log(100,000) — the cost of pure guessing over the vocabulary.<br>
+           <b>2.</b> Press <b>the worked example</b>, then <b>a strong model</b>. Watch which rows get cheaper and which stay expensive.<br>
+           <b>3.</b> Look at the row for <b>"cat" after "The"</b>. It stays costly even for a strong model, and that is correct — nothing in "The" tells you a cat is coming.`),
+        lossLab(),
+        p(`There is a friendlier version of the same number. <em>Perplexity</em> = e<sup>loss</sup>, read as "the model is as unsure as if it were choosing uniformly among this many options". Loss 2.3 means perplexity 10: every token behaves like a ten-way multiple-choice question.`),
+        p(`A random guess over a 100,000-token vocabulary costs about 11.5. A good model on typical web text averages roughly 2. Every training curve you have ever seen in a paper is one of those two numbers going down.`),
+      ));
+
+      root.append(section('The fuel: what actually goes in',
+        p(`The raw material is the open web, and the standard starting point is <em>Common Crawl</em>, a non-profit that has been saving snapshots of billions of pages since 2008. One snapshot is a few hundred terabytes of HTML, and most of it is junk.`),
+        p(`Navigation menus, cookie banners, SEO spam, the same Wikipedia article mirrored a thousand times, machine-translated product listings. <b>The single biggest lever in pretraining is what you do with the junk.</b>`),
+        callout('tryit', '🖐 Try this: watch the funnel',
+          `Watch the counters at each gate and keep an eye on the survival rate at the bottom.<br>
+           <b>Of every hundred tokens that go in, something like five to ten come out.</b> The other ninety are not a rounding error — discarding them is most of the work.`),
+        dataPipeline(),
+        p(`<b>Language identification</b> keeps the languages you want. <b>Deduplication</b> removes near-duplicate documents, because a model that sees the same paragraph ten thousand times memorises it instead of learning from it.`),
+        p(`<b>Quality classifiers</b> — small models trained to recognise text that looks like a good textbook or a well-written article — score every page and drop the worst. <b>Toxicity and personal-data filters</b> drop the rest.`),
+        p(`The survivors are then <em>mixed</em> with curated sources in deliberate proportions: books, academic papers, a great deal of source code, maths, and dialogue, because each teaches something the open web does not. Llama 3 used about 15 trillion tokens after all of this.`),
+        p(`One more step matters: the <em>tokenizer</em> is trained on a sample of this data and frozen before pretraining begins. Its vocabulary — typically 100,000 to 250,000 pieces — determines what "one token" means for the rest of the model's life. This is why a model can be oddly bad at counting letters. It has never seen letters, only pieces.`),
+      ));
+
+      root.append(section('The factory: what it costs',
+        p(`There is a rule of thumb accurate to within a factor of two for every transformer ever trained: <b>training FLOPs ≈ 6 × N × D</b>, where N is parameters and D is tokens. Every parameter is used about twice per token going forwards and about four times coming back.`),
+        p(`GPT-3: 6 × 175 billion × 300 billion ≈ 3 × 10<sup>23</sup> operations. Llama 3 405B on 15 trillion tokens: about 3.8 × 10<sup>25</sup>. The largest 2025 runs are estimated near 10<sup>26</sup>.`),
+        p(`A single H100 does roughly 10<sup>15</sup> useful operations per second on this arithmetic, and a real run keeps it only about 40% busy — the <em>model FLOPs utilisation</em>, with the rest lost waiting for memory and for other GPUs.`),
+        callout('tryit', '🖐 Try this: spend a hundred million dollars',
+          `<b>1.</b> Press <b>Jump to Llama 3 8B</b> and read the cost and the wall-clock time.<br>
+           <b>2.</b> Now drag <b>parameters N</b> up by 10× and watch the bill. Then put N back and drag <b>training tokens D</b> up by 10× instead. <b>The cost is the same</b> — 6ND does not care which one you grew.<br>
+           <b>3.</b> Press <b>Snap to compute-optimal</b> and see where Chinchilla says the balance should sit.<br>
+           <b>4.</b> Drop <b>MFU</b> from 40% to 20% and watch the wall-clock double. That number is pure engineering, and it is worth millions.`),
+        scalingExplorer(),
+        p(`Meta reported roughly 16,000 H100s running for about two months for Llama 3, so the back-of-the-envelope lands within a few tens of per cent of reality. At two to three dollars per GPU-hour that is tens of millions of dollars for one run — before the failed experiments, the staff, or the data centre.`),
+        callout('key', '🔑 Making a hundred thousand chips behave like one',
+          `<b>Data parallelism.</b> Every GPU holds a full copy of the model and trains on a different slice of the batch, then they average their gradients so all copies stay identical. The workhorse — but the model must fit on one GPU, and at 405B parameters it does not.<br>
+           <b>Tensor parallelism.</b> Split each individual matrix multiply across several GPUs, each holding a slice of every weight matrix. Needs very fast links, so it stays within one server.<br>
+           <b>Pipeline parallelism.</b> Layers 1–10 on one GPU, 11–20 on the next, activations passed down like an assembly line, with the batch split into micro-batches so nobody idles.<br>
+           Real runs use all three at once: tensor within a node, pipeline across a few nodes, data parallel across the remaining thousands.`),
+        p(`Two more essentials. <b>Mixed precision</b>: weights kept in 32-bit while the heavy arithmetic runs in 16-bit or increasingly 8-bit, which is faster and uses half the memory.`),
+        p(`And <b>checkpointing</b>: the full model state is saved every hour or so, because with that many GPUs <i>something</i> fails every few hours. Meta reported 466 job interruptions in 54 days of Llama 3 training, mostly GPU faults. You do not want to lose a day of a fifty-day run.`),
+      ));
+
+      root.append(section('How big, on how much? The law that made this an industry',
+        p(`Given a compute budget, should you train a bigger model on less data, or a smaller model on more? In January 2020 Kaplan and colleagues at OpenAI published <em>scaling laws</em>: loss falls as a smooth power law in parameters, data and compute, predictably, over many orders of magnitude.`),
+        p(`Their fit said parameters mattered more, so the field built ever-larger models. GPT-3 had 175 billion parameters and was trained on just 300 billion tokens.`),
+        p(`In March 2022 Hoffmann and colleagues at DeepMind redid the experiment more carefully — the <em>Chinchilla</em> paper — and found the earlier models had been badly under-trained. For a fixed budget, parameters and tokens should grow <b>together</b>, roughly 20 tokens per parameter.`),
+        p(`Their 70B model trained on 1.4 trillion tokens beat their own 280B Gopher <i>and</i> GPT-3, at a quarter of the size. Everyone recalibrated overnight.`),
+        callout('key', '🔑 Three terms, three stories',
+          `The fitted law is <b>L(N, D) = E + A/N<sup>α</sup> + B/D<sup>β</sup></b>.<br>
+           <b>E</b> is the entropy of the text itself — the uncertainty that lives in the world (which day the meeting is on), which no model of any size can remove.<br>
+           <b>A/N<sup>α</sup></b> is what you lose for being too small to represent the pattern.<br>
+           <b>B/D<sup>β</sup></b> is what you lose for not having read enough.<br>
+           Both shrink as power laws, which are straight lines on a log-log plot. <b>That is why the field can extrapolate at all</b> — and why labs can forecast what a 10× bigger run will buy before spending the money.`),
+        p(`There is a twist. Chinchilla optimises <i>training</i> cost. But a model deployed to millions of users spends far more compute on <i>inference</i> than it ever did on training, and inference cost scales with parameters, not tokens.`),
+        p(`So it pays to go well past the Chinchilla point: train a <b>smaller</b> model for <b>longer</b> than is "optimal", eating a higher training bill to get a cheaper model to serve. Llama 3 trained its 8B model on 15 trillion tokens — nearly 2,000 tokens per parameter, a hundred times the Chinchilla ratio — and the loss was still going down.`),
+      ));
+
+      root.append(section('Watching it learn',
+        callout('tryit', '🖐 Try this: watch a model learn to write',
+          `<b>1.</b> Press <b>▶ Play</b> and read the samples as the loss falls. Early on it produces letter soup, then plausible-looking words, then grammar, then something with a topic.<br>
+           <b>2.</b> Watch the <b>shape</b> of the curve, not the number. Each new ability costs about ten times more tokens than the last, for a smaller drop in loss.<br>
+           <b>3.</b> Look for the <b>loss spike</b> — the moment the curve jumps upward. That is the thing engineers actually sit and watch for.`),
+        trainingRun(),
+        p(`At the start the model learns token frequencies and the loss drops fast. Then short-range structure: spelling, punctuation, which tokens follow which. Then grammar, then topic, then facts, then reasoning patterns. There are no visible boundaries; the samples just get better, on a log scale.`),
+        p(`A <em>loss spike</em> — the curve jumping upward for a few hundred steps — is the classic failure, usually a bad batch of data or a numerical overflow in a deep layer. The standard response is unglamorous and universal: roll back to the last checkpoint, skip the offending data, lower the learning rate, carry on. Everything else is patience.`),
+      ));
+
+      root.append(section('What you have at the end is not an assistant',
+        p(`After pretraining you have a <em>base model</em>, and it is worth being precise about what that is. It is not a chatbot. It is an <b>autocomplete engine for the internet</b>.`),
+        callout('tryit', '🖐 Try this — ask a raw base model a question',
+          `<b>1.</b> Read what the base model does with "What is the capital of Peru?". It does not answer. It asks more questions.<br>
+           <b>2.</b> Press <b>show: base model</b> to flip to the post-trained version and see the difference. <b>Nothing was added to its knowledge</b> — only its sense of what it is for.<br>
+           <b>3.</b> Press <b>Next prompt →</b> twice to reach the <code class="inline">Q: … A:</code> example. That is few-shot prompting, and it works — right up until the model invents a whole quiz because nothing told it to stop.`),
+        baseVsChat(),
+        p(`Give a base model a question and it produces what typically follows a question on the web: often another question, or a list of related ones, or a forum reply beginning "same problem here, any updates?". Give it the start of a news article and it writes a convincing one, including invented quotes and a plausible-looking URL at the bottom.`),
+        p(`You can coax it into being useful by making the desired output the most plausible continuation — write "Q: What is the capital of Peru? A:" and it will usually complete "Lima". Write three worked examples and it will do a fourth. This <em>few-shot prompting</em> was the headline of the GPT-3 paper.`),
+        p(`But it is fragile, it does not know when to stop, and it has no notion of being helpful, honest or safe. It simply is not trying to do anything except predict. Turning that into an assistant is a separate stage — <em>post-training</em> — and it is the whole of chapter 11.`),
+      ));
+
+      root.append(section('Two things that changed the shape of models',
+        p(`<b>Mixture of experts.</b> In a standard transformer every token passes through every parameter. In an MoE each feed-forward block becomes many parallel experts, and a tiny router sends each token to only one or two of them.`),
+        callout('tryit', '🖐 Try this',
+          `<b>1.</b> Press <b>DeepSeek-V3-ish</b>. Read the two bars: an enormous amount stored, a small fraction used per token.<br>
+           <b>2.</b> Press <b>compare with a dense model</b> — now stored and used are the same number, and the bill per token jumps.<br>
+           <b>3.</b> Drag <b>experts used per token</b> up and watch the ratio close. That slider is the whole trade-off.`),
+        moeLab(),
+        p(`So the model can hold far more knowledge while each token touches only a fraction of it. GPT-4 was widely reported to use this design; Mixtral 8×7B made it mainstream in open models in December 2023; DeepSeek-V3 has 671 billion parameters of which about 37 billion are active per token, which is why it could be trained for a reported few million dollars of GPU time.`),
+        p(`The cost is memory: every expert must be loaded even though most sit idle. And note what this does to the rule of thumb — for an MoE, the 6ND estimate uses the <i>active</i> parameter count, not the total.`),
+        p(`<b>Context length.</b> GPT-3 could see 2,048 tokens, about three pages. GPT-4 launched with 8k and 32k variants in 2023; 128k — a short novel — became standard by 2024; Gemini 1.5 offered a million tokens.`),
+        p(`That took better positional encodings (RoPE and its extensions), attention variants that avoid the quadratic memory blow-up, and simply training on long documents. Chapter 12 covers why long contexts are expensive to <i>serve</i>, and why a model does not necessarily use all of what it can see.`),
+        callout('history', '📜 The GPT line, in four steps',
+          `<b>GPT-1 (2018):</b> 117M parameters, ~5GB of books. Proof that pretrain-then-finetune works for language.<br>
+           <b>GPT-2 (2019):</b> 1.5B parameters, 40GB of web text. Fluent enough that its staged release became a public argument about AI risk.<br>
+           <b>GPT-3 (2020):</b> 175B parameters, 300B tokens. Few-shot prompting works without any finetuning at all — the paper that convinced the field scale was the road.<br>
+           <b>GPT-4 (2023) onward:</b> details undisclosed, but widely believed to be a mixture of experts trained on trillions of tokens, with the real gains increasingly coming from post-training rather than pretraining.`),
+      ));
+
+      root.append(section('Why this matters for modern AI',
+        p(`Three consequences follow from everything above.`),
+        p(`First, <b>knowledge has a cut-off</b>. Whatever was not in the pretraining data is not in the model, which is why models need retrieval and tools — chapter 12 — for anything recent.`),
+        p(`Second, <b>the loss is a proxy</b>. A model trained to imitate the internet imitates the internet's errors, biases and confident nonsense too. That is why post-training exists, and a large part of why hallucination is so hard to remove: fluent-but-wrong text is exactly what the objective asked for.`),
+        p(`Third, <b>the economics are brutal and predictable</b>. Because scaling laws hold, labs can forecast what a 10× bigger run will achieve before spending the money. That predictability is the reason the money keeps being spent.`),
+        p(`It also explains the shape of the industry. Pretraining is a capital expense a handful of organisations can afford, and it happens once. Everything after it — post-training, tools, agents, the product you actually use — is comparatively cheap and happens continuously.`),
+        p(`When you hear that a lab "released a new model", it is usually the second half that changed. One picture to keep: <b>pretraining fills the reservoir, and everything in Part III after this chapter is plumbing.</b>`),
+      ));
+
+      root.append(ctx.quiz([
+        { q: 'Why does "guess the next token" teach a model history, arithmetic and code?', options: ['Those subjects are labelled in the training data', 'Because predicting text well requires understanding what the text is about — every fact or skill that lowers the loss gets learned as a side effect', 'Because the tokenizer separates subjects', 'It does not; those abilities are added later'], answer: 1, explain: 'To finish "and the murderer was…" on the last page of a mystery, you have to have solved the murder. No part of the objective mentions history or arithmetic; they are simply useful for prediction, so gradient descent finds them.' },
+        { q: 'A model assigns 1% probability to the token that actually came next. What is the loss, and why is the scale worth knowing?', options: ['0.01, which is small', '4.6 nats — and pure guessing over a 100,000-token vocabulary costs about 11.5, so 4.6 is bad but far from random', '100, because it was 100× wrong', '1, one per token'], answer: 1, explain: '−log(0.01) ≈ 4.6. The useful anchors are log(100,000) ≈ 11.5 for an untrained model and roughly 2 for a good one on web text. Perplexity = e^loss turns that into "as unsure as an N-way multiple choice".' },
+        { q: 'Both GPT-3 (175B params, 300B tokens) and a hypothetical 17.5B model on 3T tokens cost the same to train. Why?', options: ['They do not — bigger models always cost more', 'Training compute is about 6ND, so trading parameters against tokens at a constant product leaves the bill unchanged', 'Because tokens are free', 'Because of mixed precision'], answer: 1, explain: 'You can check this on the cost explorer: raise N by 10x or raise D by 10x and the bill moves identically. Chinchilla\'s contribution was showing which side of that trade actually buys you a better model — roughly 20 tokens per parameter.' },
+        { q: 'Why do labs train small models far past the "compute-optimal" point, as Llama 3 did with 15T tokens for an 8B model?', options: ['Because Chinchilla was wrong', 'Chinchilla minimises training cost, but a deployed model spends far more compute on inference, and inference cost scales with parameters — so a smaller, longer-trained model is cheaper to serve', 'To avoid overfitting', 'Because more tokens are always optimal'], answer: 1, explain: 'It is a deliberate trade: a higher training bill once, in exchange for a permanently cheaper model to run for millions of users. At nearly 2,000 tokens per parameter the loss was still falling.' },
+        { q: 'You ask a raw base model "What is the capital of Peru?" and it replies with three more geography questions. What is going on?', options: ['The model does not know the answer', 'It is working perfectly — on the web a question is most often followed by more questions, and a base model predicts the most plausible continuation rather than answering', 'The tokenizer failed', 'It needs a longer context window'], answer: 1, explain: 'A base model is an autocomplete engine for the internet, not a chatbot. Few-shot prompting works by making the answer the most plausible continuation, but it is fragile and has no notion of when to stop. Post-training, in chapter 11, is what fixes this.' },
+      ]));
+
+      root.append(section('Go deeper',
+        ul([
+          '<a href="https://www.youtube.com/watch?v=7xTGNNLPyMI" target="_blank" rel="noopener">Karpathy, "Let\'s build the GPT Tokenizer"</a> and <a href="https://www.youtube.com/watch?v=zjkBMFhNj_g" target="_blank" rel="noopener">"Intro to Large Language Models"</a> — the best available explanations of what pretraining actually produces.',
+          '<a href="https://arxiv.org/abs/2203.15556" target="_blank" rel="noopener">Hoffmann et al. (2022), "Training Compute-Optimal Large Language Models"</a> — the Chinchilla paper, and the 20-tokens-per-parameter result that recalibrated the field.',
+          '<a href="https://arxiv.org/abs/2001.08361" target="_blank" rel="noopener">Kaplan et al. (2020), "Scaling Laws for Neural Language Models"</a> — the original power laws.',
+          '<a href="https://arxiv.org/abs/2407.21783" target="_blank" rel="noopener">The Llama 3 Herd of Models (2024)</a> — an unusually candid engineering report, including the 466 job interruptions.',
+          '<a href="https://huggingface.co/spaces/HuggingFaceFW/blogpost-fineweb-v1" target="_blank" rel="noopener">FineWeb: decanting the web for the finest text data at scale</a> — what the data funnel really looks like, with ablations.',
+          '<a href="https://lilianweng.github.io/posts/2021-09-25-train-large/" target="_blank" rel="noopener">Lilian Weng, "How to Train Really Large Models on Many GPUs"</a> — data, tensor and pipeline parallelism in proper detail.',
+        ])));
     },
   });
 })();
