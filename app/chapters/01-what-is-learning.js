@@ -45,7 +45,7 @@
            <b>4.</b> Switch to <b>card fraud</b> and try properly. Its ceiling is <b>80.1%</b> — and guessing "genuine" every single time already scores 58.8%. Then read why.`),
         buildRealData(ctx),
         ctx.p(`Three lessons arrive at once, and none of them were visible in the toy.`),
-        ctx.p(`<b>Perfect is a property of toys.</b> Four dots split 4 out of 4. A hundred real ones do not — spam tops out at 91.2%, the tumours at 91.7% — and the interesting number stops being "did I win" and becomes "how close to the ceiling am I".`),
+        ctx.p(`<b>Perfect is a property of toys.</b> Four dots split 4 out of 4. A hundred real ones do not — spam tops out at 91.2%, the tumours at 92.5% — and the interesting number stops being "did I win" and becomes "how close to the ceiling am I".`),
         ctx.p(`<b>Not all mistakes are the same mistake.</b> Letting fraud through costs money. Freezing an honest customer's card at a petrol station costs a customer. The line you pick <i>is</i> that trade-off, and no amount of cleverness removes the choice — it is a business decision wearing a maths costume. Chapter 3 gives it names: precision and recall.`),
         ctx.p(`<b>And the fraud one really is beyond a line</b>, for exactly the reason puzzle 3 was. Fraud lives at <i>both</i> extremes: tiny "card testing" payments to check a stolen number still works, and one large cash-out. Genuine spending sits in the middle.`),
         ctx.p(`One line cannot cut both ends off a stick and leave the middle. That is XOR wearing a suit, and it costs real banks real money. Note the ceiling of 80.1% is not obviously terrible until you see that always guessing "genuine" already scores 58.8% — <b>a number can look respectable and still mean the model has learned almost nothing.</b> Chapter 3 makes that trap explicit.`),
@@ -336,16 +336,26 @@
     return [m * Math.cos(2 * Math.PI * v), m * Math.sin(2 * Math.PI * v)];
   }
 
+  /* A count of links, a percentage, a size in millimetres and a price are all
+     quantities that cannot go below zero, but a Gaussian happily produces a
+     tumour of −6 mm. Every generated point is held inside the range its own
+     axis advertises, so nothing is drawn off the end of the plot and no reader
+     is shown a payment of −£9.63. Holding the points changes what a line can
+     achieve on the tumour data — the ceiling there is 92.5%, not the 91.7% of
+     the unheld version — so the prose was remeasured, not assumed. */
+  const hold = (v, hi) => Math.max(0, Math.min(hi, v));
+
   const DATASETS = {
     spam: {
       label: 'Is this email spam?',
       xName: 'links in the email', yName: 'SHOUTING (% capitals)',
+      xShort: 'links', yShort: 'SHOUTING',
       xMax: 12, yMax: 60,
       pos: 'spam', neg: 'real email',
       build: () => {
         const r = seeded(21), pts = [];
-        for (let i = 0; i < 70; i++) { const [a, b] = gaussPair(r); pts.push({ x: 2.2 + a * 1.9, y: 12 + b * 8, lab: 0 }); }
-        for (let i = 0; i < 55; i++) { const [a, b] = gaussPair(r); pts.push({ x: 5.6 + a * 2.4, y: 26 + b * 13, lab: 1 }); }
+        for (let i = 0; i < 70; i++) { const [a, b] = gaussPair(r); pts.push({ x: hold(2.2 + a * 1.9, 12), y: hold(12 + b * 8, 60), lab: 0 }); }
+        for (let i = 0; i < 55; i++) { const [a, b] = gaussPair(r); pts.push({ x: hold(5.6 + a * 2.4, 12), y: hold(26 + b * 13, 60), lab: 1 }); }
         return pts;
       },
       note: 'A real filter uses hundreds of signals. Two is enough to see the shape of the problem.',
@@ -353,12 +363,13 @@
     tumour: {
       label: 'Is this tumour malignant?',
       xName: 'size (mm)', yName: 'how irregular the edge is',
+      xShort: 'size', yShort: 'edge',
       xMax: 40, yMax: 100,
       pos: 'malignant', neg: 'benign',
       build: () => {
         const r = seeded(77), pts = [];
-        for (let i = 0; i < 62; i++) { const [a, b] = gaussPair(r); pts.push({ x: 13 + a * 4.0, y: 32 + b * 13, lab: 0 }); }
-        for (let i = 0; i < 58; i++) { const [a, b] = gaussPair(r); pts.push({ x: 22 + a * 6.0, y: 58 + b * 16, lab: 1 }); }
+        for (let i = 0; i < 62; i++) { const [a, b] = gaussPair(r); pts.push({ x: hold(13 + a * 4.0, 40), y: hold(32 + b * 13, 100), lab: 0 }); }
+        for (let i = 0; i < 58; i++) { const [a, b] = gaussPair(r); pts.push({ x: hold(22 + a * 6.0, 40), y: hold(58 + b * 16, 100), lab: 1 }); }
         return pts;
       },
       note: 'This is close to the shape of the 1990s Wisconsin dataset, the problem a great many people learned this on.',
@@ -366,6 +377,7 @@
     fraud: {
       label: 'Is this card payment fraud?',
       xName: 'amount (£)', yName: 'distance from home (km)',
+      xShort: 'amount', yShort: 'distance',
       xMax: 900, yMax: 120,
       pos: 'fraud', neg: 'genuine',
       build: () => {
@@ -374,11 +386,11 @@
            clusters, so it cannot rescue a line the way a tidy second feature would. The only
            real signal is amount, and for fraud that signal is bimodal. Measured ceiling for
            any straight line: 80.1%, against a 58.8% always-guess-genuine baseline. */
-        for (let i = 0; i < 80; i++) { const [a, b] = gaussPair(r); pts.push({ x: 340 + a * 115, y: 58 + b * 26, lab: 0 }); }
+        for (let i = 0; i < 80; i++) { const [a, b] = gaussPair(r); pts.push({ x: hold(340 + a * 115, 900), y: hold(58 + b * 26, 120), lab: 0 }); }
         /* card testing: tiny amounts, checking a stolen number still works */
-        for (let i = 0; i < 30; i++) { const [a, b] = gaussPair(r); pts.push({ x: 22 + a * 14, y: 58 + b * 26, lab: 1 }); }
+        for (let i = 0; i < 30; i++) { const [a, b] = gaussPair(r); pts.push({ x: hold(22 + a * 14, 900), y: hold(58 + b * 26, 120), lab: 1 }); }
         /* and the big-ticket cash-out at the other extreme */
-        for (let i = 0; i < 26; i++) { const [a, b] = gaussPair(r); pts.push({ x: 775 + a * 70, y: 58 + b * 26, lab: 1 }); }
+        for (let i = 0; i < 26; i++) { const [a, b] = gaussPair(r); pts.push({ x: hold(775 + a * 70, 900), y: hold(58 + b * 26, 120), lab: 1 }); }
         return pts;
       },
       note: 'Fraud sits at BOTH extremes of amount. Distance from home does not separate them, so there is nothing for a line to grab.',
@@ -399,10 +411,17 @@
     const PAD = { l: 62, r: 300, t: 44, b: 58 };
     const PW = () => 720 - PAD.l - PAD.r;
     const PH = () => 420 - PAD.t - PAD.b;
-    const sx = (u) => PAD.l + u * PW();
-    const sy = (v) => PAD.t + (1 - v) * PH();
-    const ux = (px) => (px - PAD.l) / PW();
-    const uy = (py) => 1 - (py - PAD.t) / PH();
+    /* The plot box is clipped (see the loop), and the data runs right up to 0
+       and to xMax, so the drawable range is inset by a dot radius: without it
+       every point sitting on an axis limit would be sliced in half by the clip. */
+    const R = 6;
+    const sx = (u) => PAD.l + R + u * (PW() - 2 * R);
+    const sy = (v) => PAD.t + R + (1 - v) * (PH() - 2 * R);
+    const ux = (px) => (px - PAD.l - R) / (PW() - 2 * R);
+    const uy = (py) => 1 - (py - PAD.t - R) / (PH() - 2 * R);
+    /* handles stay inside the plot: far enough in that the 8px grab circle is
+       drawn whole, and every line that separates anything still reachable */
+    const HLO = 0.02, HHI = 0.98;
     const norm = (p) => ({ u: p.x / DATASETS[key].xMax, v: p.y / DATASETS[key].yMax });
 
     /* which side of the line a point falls on */
@@ -422,29 +441,60 @@
       return { tp, fp, fn, tn, acc: (tp + tn) / pts.length };
     }
     /* brute-force the best straight line, so "best possible" is measured, not asserted */
+    /* The text promises this searches every line there is, so it has to. A grid
+       over angle AND offset does not: it steps past the best offset and reports
+       a ceiling a point or so under the truth. For a fixed angle the optimal
+       cut can be found exactly — project every point onto the normal, sort, and
+       the best threshold is one of the gaps — so only the angle is sampled, and
+       finely. Both orientations are tried, as before. */
     function bestLine() {
+      const P = pts.map(p => { const n = norm(p); return { s: 0, u: n.u, v: n.v, lab: p.lab }; });
+      const N = P.length, ones = P.filter(p => p.lab === 1).length;
       let best = null;
-      for (let ang = 0; ang < 180; ang += 2) {
-        const th = ang * Math.PI / 180, dx = Math.cos(th), dy = Math.sin(th);
-        for (let off = -0.6; off <= 1.6; off += 0.02) {
-          for (const fl of [false, true]) {
-            const a = { x: 0.5 + dx * -2 + (-dy) * (off - 0.5), y: 0.5 + dy * -2 + dx * (off - 0.5) };
-            const b = { x: 0.5 + dx * 2 + (-dy) * (off - 0.5), y: 0.5 + dy * 2 + dx * (off - 0.5) };
-            let ok = 0;
-            for (const p of pts) {
-              const n = norm(p);
-              let s = (b.x - a.x) * (n.v - a.y) - (b.y - a.y) * (n.u - a.x);
-              if (fl) s = -s;
-              if ((s > 0 ? 1 : 0) === p.lab) ok++;
-            }
-            if (!best || ok > best.ok) best = { ok, a, b, fl };
-          }
+      const keep = (ok, th, t, fl) => { if (!best || ok > best.ok) best = { ok, th, t, fl }; };
+      for (let ang = 0; ang < 180; ang += 0.25) {
+        const th = ang * Math.PI / 180, nx = Math.cos(th), ny = Math.sin(th);
+        for (const p of P) p.s = p.u * nx + p.v * ny;
+        const proj = P.slice().sort((a, b) => a.s - b.s);
+        /* run = how many are right under "call it positive when the projection
+           is above the threshold"; N − run is the same line, read the other way */
+        let run = ones, t = proj[0].s - 0.01;
+        keep(run, th, t, true); keep(N - run, th, t, false);
+        for (let j = 0; j < proj.length; j++) {
+          run += proj[j].lab === 1 ? -1 : 1;
+          t = j + 1 < proj.length ? (proj[j].s + proj[j + 1].s) / 2 : proj[j].s + 0.01;
+          keep(run, th, t, true); keep(N - run, th, t, false);
         }
       }
-      return best;
+      /* turn the winning (angle, threshold) back into two points on the line,
+         which is what the rest of the demo and the drag handles work with */
+      const nx = Math.cos(best.th), ny = Math.sin(best.th);
+      const fx = nx * best.t, fy = ny * best.t;
+      const a = { x: fx + ny * 2, y: fy - nx * 2 };
+      const b = { x: fx - ny * 2, y: fy + nx * 2 };
+      return { ok: best.ok, a, b, fl: best.fl };
     }
     let cachedBest = null;
     const getBest = () => { if (!cachedBest) cachedBest = bestLine(); return cachedBest; };
+
+    /* bestLine() describes its answer with two points two whole plot-widths
+       apart, which is fine as geometry and useless as a pair of draggable
+       handles — dropped straight in they land hundreds of pixels off the
+       canvas. Trim the line to where it crosses the plot instead. The line
+       through the trimmed pair is the same line, so the verdict is identical. */
+    function trimToPlot(a, b) {
+      const dx = b.x - a.x, dy = b.y - a.y;
+      let t0 = -1e9, t1 = 1e9;
+      const p = [-dx, dx, -dy, dy];
+      const q = [a.x - HLO, HHI - a.x, a.y - HLO, HHI - a.y];
+      for (let i = 0; i < 4; i++) {
+        if (p[i] === 0) { if (q[i] < 0) return null; continue; }
+        const t = q[i] / p[i];
+        if (p[i] < 0) t0 = Math.max(t0, t); else t1 = Math.min(t1, t);
+      }
+      if (t1 <= t0) return null;
+      return [{ x: a.x + dx * t0, y: a.y + dy * t0 }, { x: a.x + dx * t1, y: a.y + dy * t1 }];
+    }
 
     function pick(pos) {
       const hits = [['A', A], ['B', B]];
@@ -459,7 +509,7 @@
     cv.addEventListener('pointermove', (e) => {
       if (!drag) return;
       const p = cv.pos(e);
-      const t = { x: ctx.clamp(ux(p.x), -0.35, 1.35), y: ctx.clamp(uy(p.y), -0.35, 1.35) };
+      const t = { x: ctx.clamp(ux(p.x), HLO, HHI), y: ctx.clamp(uy(p.y), HLO, HHI) };
       if (drag === 'A') A = t; else B = t;
     });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => cv.addEventListener(t, () => { drag = null; }));
@@ -473,7 +523,10 @@
     const selWrap = ctx.h('div', { class: 'control' }, ctx.h('label', {}, 'the decision'), sel);
     const flipBtn = ctx.button('Swap which side is which', () => { flip = !flip; showBest = false; });
     const bestBtn = ctx.button('Show the best line there is', () => {
-      const bl = getBest(); A = bl.a; B = bl.b; flip = bl.fl; showBest = true;
+      const bl = getBest();
+      const seg = trimToPlot(bl.a, bl.b);
+      if (seg) { A = seg[0]; B = seg[1]; } else { A = { x: HLO, y: HHI }; B = { x: HHI, y: HLO }; }
+      flip = bl.fl; showBest = true;
     }, 'primary');
     const ro = ctx.readout();
 
@@ -499,8 +552,14 @@
       g.fillText(D.xName + '  →', PAD.l, PAD.t + PH() + 34);
       g.save(); g.translate(PAD.l - 40, PAD.t + PH()); g.rotate(-Math.PI / 2);
       g.fillText(D.yName + '  →', 0, 0); g.restore();
-      g.fillText('0', PAD.l - 4, PAD.t + PH() + 16);
-      g.fillText(String(D.xMax), PAD.l + PW() - 14, PAD.t + PH() + 16);
+      g.fillText('0', sx(0) - 4, PAD.t + PH() + 16);
+      g.fillText(String(D.xMax), sx(1) - 14, PAD.t + PH() + 16);
+
+      /* Everything that depends on the data or on where the reader has dragged
+         is clipped to the plot box, so the boundary line cannot run off across
+         the axis labels and the panel of numbers on the right. */
+      g.save();
+      g.beginPath(); g.rect(PAD.l, PAD.t, PW(), PH()); g.clip();
 
       /* the line */
       const dx = B.x - A.x, dy = B.y - A.y, n = Math.hypot(dx, dy) || 1;
@@ -524,6 +583,7 @@
         g.globalAlpha = right ? 0.95 : 1; g.fill(); g.globalAlpha = 1;
         if (!right) { g.strokeStyle = C.warn; g.lineWidth = 2; g.stroke(); }
       });
+      g.restore();
 
       /* --------- right-hand panel --------- */
       const TX = 720 - PAD.r + 22;
@@ -558,9 +618,12 @@
       g.font = 'bold ' + FONT; g.fillStyle = C.purple;
       g.fillText('the line, as three numbers', TX, 270);
       g.font = MONO; g.fillStyle = C.muted;
-      g.fillText('w₁ = ' + (w1 * sc * fw).toFixed(2) + '   (' + D.xName.split(' ')[0] + ')', TX, 292);
-      g.fillText('w₂ = ' + (w2 * sc * fw).toFixed(2) + '   (' + D.yName.split(' ')[0] + ')', TX, 310);
-      g.fillText('b  = ' + (b0 * sc * fw).toFixed(2) + '   (how suspicious by default)', TX, 328);
+      /* the parentheticals name the axis, so they use each dataset's own short
+         name — chopping the first word off yName turned "how irregular the edge
+         is" into a label that just read "(how)" */
+      g.fillText('w₁ = ' + (w1 * sc * fw).toFixed(2) + '   (' + D.xShort + ')', TX, 292);
+      g.fillText('w₂ = ' + (w2 * sc * fw).toFixed(2) + '   (' + D.yShort + ')', TX, 310);
+      g.fillText('b  = ' + (b0 * sc * fw).toFixed(2) + '   (suspicion by default)', TX, 328);
 
       const bestOk = getBest().ok / pts.length;
       g.font = FONT;
@@ -788,13 +851,14 @@
       g.textAlign = 'center'; g.textBaseline = 'middle';
       g.fillText(labels[i] ? '1' : '0', X, Y);
     }
-    // axis hints
+    /* Axis hints live OUTSIDE the square, in the margin. Inside it they sat in
+       the shaded region where the boundary line sweeps across them. */
     g.fillStyle = C.muted; g.font = '11px Inter, system-ui, sans-serif';
-    g.textAlign = 'center';
-    g.fillText('switch A off', b.sx(0), b.sy(-0.28));
-    g.fillText('switch A on', b.sx(1), b.sy(-0.28));
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('switch A off', b.sx(0), b.y0 + b.size + 14);
+    g.fillText('switch A on', b.sx(1), b.y0 + b.size + 14);
     g.save();
-    g.translate(b.sx(-0.24), b.sy(0.5)); g.rotate(-Math.PI / 2);
+    g.translate(b.x0 - 22, b.sy(0.5)); g.rotate(-Math.PI / 2);
     g.fillText('switch B  off → on', 0, 0);
     g.restore();
   }
@@ -817,16 +881,23 @@
     }
   }
 
+  /* The decision boundary is an infinite line, so it is drawn very long and then
+     CLIPPED TO THE BOARD. Without the clip it runs clear across the canvas and
+     slashes through the score, the legend, the axis labels and the mistake bars
+     that live in the margins around the square. */
   function drawLineThrough(g, b, ax, ay, bx, by, color, width) {
     let dx = bx - ax, dy = by - ay;
     const len = Math.hypot(dx, dy) || 1;
     dx /= len; dy /= len;
     const far = 4;
+    g.save();
+    g.beginPath(); g.rect(b.x0, b.y0, b.size, b.size); g.clip();
     g.strokeStyle = color; g.lineWidth = width || 3;
     g.beginPath();
     g.moveTo(b.sx(ax - dx * far), b.sy(ay - dy * far));
     g.lineTo(b.sx(ax + dx * far), b.sy(ay + dy * far));
     g.stroke();
+    g.restore();
   }
 
   function scoreOf(labels, fn) {
@@ -841,7 +912,9 @@
   function buildLinePuzzle(ctx) {
     const C = ctx.colors;
     const [cv, g] = ctx.canvas(640, 480);
-    const b = makeBoard(cv, g, C);
+    /* a wider margin than the other boards: the puzzle blurb is a full sentence
+       and needs clear air above the square, or the line grazes its descenders */
+    const b = makeBoard(cv, g, C, 62);
     let puzzle = 'AND', flip = false;
     let A = { x: 0.9, y: -0.2 }, B = { x: -0.2, y: 0.9 };
     let drag = null, solved = false, tries = 0, hintTimer = 0;
@@ -869,7 +942,9 @@
     cv.addEventListener('pointermove', (e) => {
       if (!drag) return;
       const p = cv.pos(e);
-      const t = { x: Math.max(-0.5, Math.min(1.5, b.ix(p.x))), y: Math.max(-0.5, Math.min(1.5, b.iy(p.y))) };
+      /* handles stay inside the square — every line worth drawing crosses it,
+         and a handle parked out in the margin would sit on the axis labels */
+      const t = { x: Math.max(-0.3, Math.min(1.3, b.ix(p.x))), y: Math.max(-0.3, Math.min(1.3, b.iy(p.y))) };
       const other = drag === 'A' ? B : A;
       if (Math.hypot(t.x - other.x, t.y - other.y) < 0.25) return;  // never collapse the line
       if (drag === 'A') A = t; else B = t;
@@ -904,7 +979,7 @@
       g.fillText(score + ' / 4', 16, 14);
       g.font = '12px Inter, system-ui, sans-serif';
       g.fillStyle = C.muted;
-      g.fillText(PUZZLES[puzzle].blurb, 16, 46);
+      g.fillText(PUZZLES[puzzle].blurb, 16, 44);
 
       if (score === 4) {
         g.font = '700 15px Inter, system-ui, sans-serif'; g.fillStyle = C.green;
@@ -1003,10 +1078,10 @@
       g.font = '12px Inter, system-ui, sans-serif'; g.fillStyle = C.muted;
       g.fillText('pass ' + pass + (lastMistakes == null ? '' : '  ·  mistakes last pass: ' + lastMistakes), 16, 44);
 
-      // mistake history bars
-      const bx0 = 16, by0 = b.H - 42;
+      // mistake history bars, in the strip below the axis labels
+      const bx0 = 16, by0 = b.H - 28;
       g.fillStyle = C.muted; g.font = '10px Inter, system-ui, sans-serif';
-      g.fillText('mistakes per pass', bx0, by0 - 14);
+      g.fillText('mistakes per pass', bx0, by0 - 16);
       history.forEach((m, i) => {
         g.fillStyle = m === 0 ? C.green : C.danger;
         g.fillRect(bx0 + i * 8, by0 + 26 - m * 6.5, 6, Math.max(2, m * 6.5));
