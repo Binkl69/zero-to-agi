@@ -1,11 +1,11 @@
 /* Zero → AGI · Chapter 07 · Attention is all you need: the transformer
-   Tokenisation (BPE toy tokenizer trained at load time); the parallelism problem attention solves;
-   Query/Key/Value maths with a worked 3-token example; multi-head attention; positional encoding;
-   the full block (attention → add&norm → MLP → add&norm) and the residual stream; encoder vs
-   decoder and causal masking; GPT-2 small parameter arithmetic; autoregressive inference + KV-cache.
-   Interactives: (a) attention visualiser on an editable sentence (toy hand-crafted rule), (b) compute
-   attention by hand on 3 tokens with Q/K/V sliders, (c) a real BPE tokenizer trained on a small
-   built-in corpus, (d) an animated transformer-block diagram with a pulse on the residual stream. */
+   DESIGN RULE: the reader watches the letters of "strawberry" disappear in the first ten seconds
+   and sees exactly what a transformer receives. Every paragraph explains something they did.
+   Interactives, in order: the strawberry/tokenization lab; live BPE tokenizer training;
+   attention computed by hand on 2-D vectors; a rule-based attention visualiser with a causal
+   mask toggle; positional encoding (order-blindness on/off, plus the sine-cosine pattern);
+   the block diagram with a pulse tracing the residual stream; a parameter calculator that lands
+   on GPT-2's 124M and GPT-3's 175B; and a KV-cache per-step work chart. */
 (function () {
   /* ================================================================== */
   /* A tiny real byte-pair-encoding tokenizer, trained once at load time  */
@@ -119,7 +119,7 @@
     num: 7,
     part: 'II',
     title: 'Attention is all you need: the transformer',
-    tagline: 'Every token looks at every other token at once — no recurrence, no waiting in line — and that one idea rebuilt every model you use today.',
+    tagline: 'Watch the letters vanish, compute attention by hand, then count a real model\'s parameters on the back of an envelope — the architecture behind every model you can name.',
     render(root, ctx) {
       const { h, p, section, sub, callout, ul, ol } = ctx;
       const C = ctx.colors;
@@ -571,117 +571,512 @@
       }
 
       /* ================================================================== */
-      /* Prose                                                                */
+      /* Interactive: the strawberry problem, made visible                    */
+      /* ================================================================== */
+      function strawberryLab() {
+        const [cv, g] = ctx.canvas(720, 330);
+        /* a small stand-in vocabulary of common chunks; longest match wins, like a real BPE
+           tokenizer's merge table. IDs are arbitrary but fixed, exactly as in a real one. */
+        const CHUNKS = ['straw', 'berry', 'berries', 'straw', 'apple', 'rasp', 'blue', 'cran',
+          'the', 'ing', 'tion', 'able', 'ness', 'pine', 'water', 'melon', 'hippo', 'potam',
+          'us', 'er', 'ed', 'ly', 'un', 'pre', 'con', 'ph', 'ch', 'th', 'sh'];
+        const ID = new Map();
+        CHUNKS.forEach((c, i) => { if (!ID.has(c)) ID.set(c, 3000 + i * 137); });
+        const idOf = (s) => ID.has(s) ? ID.get(s) : (s.charCodeAt(0) * 7 + 100);
+        let word = 'strawberry', letter = 'r', hideLetters = false;
+
+        function tokenize(w) {
+          const out = []; let i = 0; const s = w.toLowerCase();
+          while (i < s.length) {
+            let best = '';
+            for (const c of CHUNKS) if (c.length > best.length && s.startsWith(c, i)) best = c;
+            if (best) { out.push(best); i += best.length; } else { out.push(s[i]); i += 1; }
+          }
+          return out;
+        }
+
+        const wIn = ctx.textarea({ label: 'a word', value: word, onChange: (v) => { word = v.trim().split(/\s+/)[0] || ''; } });
+        const lIn = ctx.textarea({ label: 'letter to count', value: letter, onChange: (v) => { letter = (v || 'r').trim().slice(0, 1).toLowerCase(); } });
+        const hideBtn = ctx.button('See it the way the model does', () => {
+          hideLetters = !hideLetters;
+          hideBtn.textContent = hideLetters ? 'Show me the letters again' : 'See it the way the model does';
+        }, 'primary');
+        const presets = ['strawberry', 'hippopotamus', 'the', 'unpredictable'].map(w =>
+          ctx.button(w, () => { word = w; wIn.value = w; }));
+        const ro = ctx.readout();
+
+        ctx.loop(() => {
+          g.clearRect(0, 0, 720, 330);
+          const w = (word || '').toLowerCase();
+          const toks = w ? tokenize(w) : [];
+          const trueCount = w.split('').filter(c => c === letter).length;
+
+          /* ---- what you see ---- */
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('what you see', 34, 30);
+          const CW = 30;
+          w.split('').forEach((c, i) => {
+            const x = 34 + i * CW;
+            const hit = c === letter;
+            g.fillStyle = hit ? 'rgba(56,217,169,0.25)' : '#131a27';
+            g.fillRect(x, 44, CW - 3, 32);
+            g.font = 'bold 16px "JetBrains Mono", ui-monospace, monospace';
+            g.fillStyle = hit ? C.green : C.text;
+            g.fillText(c, x + 9, 66);
+          });
+          g.font = MONO; g.fillStyle = C.green;
+          g.fillText(w.length + ' letters, ' + trueCount + ' × "' + letter + '" — you can just count them', 34, 96);
+
+          /* ---- what the model sees ---- */
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('what the model receives', 34, 140);
+          let x = 34;
+          toks.forEach((t) => {
+            const wdt = Math.max(58, t.length * 13 + 18);
+            g.fillStyle = 'rgba(124,156,255,0.18)';
+            g.fillRect(x, 154, wdt - 4, 46);
+            g.strokeStyle = C.accent; g.lineWidth = 1.5;
+            g.strokeRect(x, 154, wdt - 4, 46);
+            g.font = 'bold ' + MONO; g.fillStyle = C.accent;
+            g.fillText(String(idOf(t)), x + 8, 172);
+            g.font = MONO;
+            if (hideLetters) {
+              g.fillStyle = '#2a3444';
+              g.fillText('?'.repeat(t.length), x + 8, 191);
+            } else {
+              g.fillStyle = C.muted;
+              g.fillText(t, x + 8, 191);
+            }
+            x += wdt + 6;
+          });
+          g.font = MONO; g.fillStyle = C.muted;
+          g.fillText(toks.length + ' token' + (toks.length === 1 ? '' : 's') + ' — that is the entire input to layer 1', 34, 222);
+
+          /* ---- the verdict ---- */
+          const single = toks.length === 1;
+          g.font = 'bold 15px Inter, system-ui, sans-serif';
+          g.fillStyle = single ? C.green : C.danger;
+          wrapText(g, single
+            ? 'One chunk. There is nothing to unpack, so questions about this word tend to go much better.'
+            : 'The model gets ' + toks.length + ' opaque numbers. To answer "how many ' + letter + '", it must have learned, statistically, how each chunk happens to be spelled — a fact about spelling, one step removed from the meaning those numbers were built to carry.',
+            34, 254, 650, 18);
+          ro.set({ letters: w.length, tokens: toks.length, ['true count of "' + letter + '"']: trueCount });
+        });
+
+        return ctx.figure(cv,
+          'Press <b>See it the way the model does</b> and the letters disappear, which is the honest picture: the first layer of a transformer receives a short row of numbers and nothing else. "strawberry" is not common enough to earn its own symbol, so it arrives as two chunks — GPT-4\'s tokenizer does roughly this. Counting letters then requires the model to recall how each chunk is spelled, which is not what the chunk-number was designed to carry. Try "the": one token, nothing hidden, and the problem evaporates.',
+          [wIn, lIn, hideBtn, ...presets], ro);
+      }
+
+      /* ================================================================== */
+      /* Interactive: attention is order-blind, and how position is restored  */
+      /* ================================================================== */
+      function positionLab() {
+        const [cv, g] = ctx.canvas(720, 380);
+        const BASE = ['the', 'dog', 'bit', 'the', 'man'];
+        let swapped = false, usePE = true, probe = 0;
+        const words = () => swapped ? ['the', 'man', 'bit', 'the', 'dog'] : BASE;
+        const D = 16;
+        /* sinusoidal positional encoding, exactly as in the 2017 paper */
+        function pe(pos) {
+          const v = [];
+          for (let i = 0; i < D; i++) {
+            const k = Math.floor(i / 2);
+            const ang = pos / Math.pow(10000, (2 * k) / D);
+            v.push(i % 2 === 0 ? Math.sin(ang) : Math.cos(ang));
+          }
+          return v;
+        }
+        /* a crude content vector per word type, so identical words share one */
+        const CONTENT = {
+          the: [0.2, -0.1, 0.4], dog: [0.9, 0.3, -0.2], bit: [-0.3, 0.8, 0.1], man: [0.5, -0.6, 0.7],
+        };
+        function vecOf(w, pos) {
+          const c = CONTENT[w] || [0, 0, 0];
+          const base = [];
+          for (let i = 0; i < D; i++) base.push(c[i % 3] * (1 - (i / D) * 0.5));
+          return usePE ? base.map((x, i) => x + pe(pos)[i] * 0.9) : base;
+        }
+        function scores() {
+          const ws = words();
+          const vs = ws.map((w, i) => vecOf(w, i));
+          return vs.map(q => {
+            const raw = vs.map(k => q.reduce((s, x, i) => s + x * k[i], 0) / Math.sqrt(D));
+            return softmax(raw);
+          });
+        }
+
+        const swapBtn = ctx.button('Swap dog and man', () => { swapped = !swapped; }, 'primary');
+        const peBtn = ctx.button('positional encoding: on', () => {
+          usePE = !usePE;
+          peBtn.textContent = 'positional encoding: ' + (usePE ? 'on' : 'off');
+        });
+        const probeSl = ctx.slider({ label: 'inspect position', min: 0, max: 4, step: 1, value: 0, onChange: (v) => { probe = v; } });
+        const ro = ctx.readout();
+
+        ctx.loop(() => {
+          g.clearRect(0, 0, 720, 380);
+          const ws = words();
+          const S = scores();
+
+          /* ---- attention grid ---- */
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('attention scores', 34, 28);
+          const GX = 110, GY = 56, CELL = 42;
+          ws.forEach((w, j) => {
+            g.font = MONO; g.fillStyle = C.muted;
+            g.fillText(w, GX + j * CELL + 4, GY - 8);
+          });
+          ws.forEach((w, i) => {
+            g.font = MONO; g.fillStyle = i === probe ? C.warn : C.muted;
+            g.fillText(w, 34, GY + i * CELL + 26);
+            ws.forEach((_, j) => {
+              const v = S[i][j];
+              g.fillStyle = 'rgba(124,156,255,' + (0.06 + v * 1.6) + ')';
+              g.fillRect(GX + j * CELL, GY + i * CELL, CELL - 2, CELL - 2);
+              g.font = '10px "JetBrains Mono", ui-monospace, monospace';
+              g.fillStyle = v > 0.35 ? '#0a0e16' : C.muted;
+              g.fillText(v.toFixed(2), GX + j * CELL + 6, GY + i * CELL + 25);
+            });
+          });
+          g.font = MONO; g.fillStyle = C.muted;
+          g.fillText('each row sums to 1', GX, GY + ws.length * CELL + 16);
+
+          /* ---- the verdict on order-blindness ---- */
+          g.font = 'bold ' + FONT; g.fillStyle = usePE ? C.green : C.danger;
+          wrapText(g, usePE
+            ? 'With positional encoding, swapping two words genuinely changes the scores — the model can tell the two sentences apart.'
+            : 'Without it, swapping two words only shuffles the grid. The same numbers come back in a different order, because a dot product has no idea where either token sat.',
+            34, GY + ws.length * CELL + 44, 640, 17);
+
+          /* ---- the positional encoding pattern itself ---- */
+          const PX = 380, PY = 56, PW = 300, PH = 150;
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('the position signal being added', PX, 28);
+          const NPOS = 40;
+          for (let pos = 0; pos < NPOS; pos++) {
+            const v = pe(pos);
+            for (let i = 0; i < D; i++) {
+              g.fillStyle = ctx.heat(v[i]);
+              g.fillRect(PX + pos * (PW / NPOS), PY + i * (PH / D), PW / NPOS - 0.4, PH / D - 0.4);
+            }
+          }
+          g.strokeStyle = C.warn; g.lineWidth = 2;
+          g.strokeRect(PX + probe * (PW / NPOS) - 1, PY - 2, PW / NPOS + 1, PH + 4);
+          g.font = MONO; g.fillStyle = C.muted;
+          g.fillText('position  →', PX, PY + PH + 16);
+          g.save(); g.translate(PX - 8, PY + PH - 10); g.rotate(-Math.PI / 2);
+          g.fillText('dimension', 0, 0); g.restore();
+          g.font = FONT; g.fillStyle = C.muted;
+          wrapText(g, 'Sine and cosine waves at different frequencies. Fast waves at the top distinguish neighbouring positions; slow waves at the bottom distinguish far-apart ones — so a single vector encodes position at every scale at once, and nothing had to be learned.',
+            PX, PY + PH + 40, 300, 16);
+          ro.set({ order: swapped ? 'man bit dog' : 'dog bit man', 'positional encoding': usePE ? 'on' : 'off' });
+        });
+
+        return ctx.figure(cv,
+          'Attention is fundamentally a <i>set</i> operation: Q·Kᵀ compares content against content and has no idea where either token sat. Turn positional encoding off and swap two words — the same scores return, merely rearranged, so "the dog bit the man" and "the man bit the dog" are literally indistinguishable. Turn it back on and a position-dependent vector has been added to each embedding before layer 1, so identical words in different slots no longer produce identical keys. An RNN got order free by reading left to right; a transformer has to be told.',
+          [swapBtn, peBtn, probeSl], ro);
+      }
+
+      /* ================================================================== */
+      /* Interactive: count a real model's parameters on the back of a napkin */
+      /* ================================================================== */
+      function paramCalc() {
+        const [cv, g] = ctx.canvas(720, 330);
+        let d = 768, L = 12, V = 50257, nctx = 1024, tied = true;
+        const dSl = ctx.slider({ label: 'width d', min: 128, max: 12288, step: 64, value: 768, onChange: (v) => { d = v; } });
+        const lSl = ctx.slider({ label: 'layers L', min: 1, max: 128, step: 1, value: 12, onChange: (v) => { L = v; } });
+        const vSl = ctx.slider({ label: 'vocabulary', min: 8000, max: 256000, step: 1000, value: 50257, onChange: (v) => { V = v; } });
+        const gpt2 = ctx.button('GPT-2 small', () => { d = 768; dSl.value = 768; L = 12; lSl.value = 12; V = 50257; vSl.value = 50257; nctx = 1024; }, 'primary');
+        const gpt3 = ctx.button('GPT-3', () => { d = 12288; dSl.value = 12288; L = 96; lSl.value = 96; V = 50257; vSl.value = 50257; nctx = 2048; });
+        const ro = ctx.readout();
+        const human = (n) => n >= 1e9 ? (n / 1e9).toFixed(1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : (n / 1e3).toFixed(0) + 'K';
+
+        ctx.loop(() => {
+          g.clearRect(0, 0, 720, 330);
+          const attn = 4 * d * d;          // Q, K, V and the output projection
+          const mlp = 8 * d * d;           // two matrices, hidden width 4d
+          const per = attn + mlp;          // 12 d^2 per block
+          const blocks = per * L;
+          const emb = V * d;
+          const pos = nctx * d;
+          const total = blocks + emb + pos + (tied ? 0 : emb);
+
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('where the parameters actually go', 34, 28);
+          const rows = [
+            ['attention (Q, K, V, out)  4d²', attn, C.accent, ' per block'],
+            ['MLP (d→4d→d)              8d²', mlp, C.purple, ' per block'],
+            ['× ' + L + ' blocks           12d²·L', blocks, C.green, ''],
+            ['token embeddings       V·d', emb, C.warn, ''],
+            ['position embeddings  n·d', pos, C.muted, ''],
+          ];
+          let y = 58;
+          const BX = 330, BW = 250;
+          const peak = Math.max(blocks, emb, 1);
+          rows.forEach(([lab, v, col, note]) => {
+            g.font = MONO; g.fillStyle = C.muted;
+            g.fillText(lab, 34, y + 12);
+            g.fillStyle = C.line; g.fillRect(BX, y, BW, 14);
+            g.fillStyle = col; g.fillRect(BX, y, ctx.clamp(v / peak, 0, 1) * BW, 14);
+            g.font = 'bold ' + MONO; g.fillStyle = col;
+            g.fillText(human(v) + note, BX + BW + 10, y + 12);
+            y += 30;
+          });
+          g.strokeStyle = C.line; g.lineWidth = 1;
+          g.beginPath(); g.moveTo(34, y + 4); g.lineTo(680, y + 4); g.stroke();
+          g.font = 'bold 22px Inter, system-ui, sans-serif'; g.fillStyle = C.green;
+          g.fillText('total ≈ ' + human(total), 34, y + 36);
+          g.font = MONO; g.fillStyle = C.muted;
+          g.fillText('params ≈ 12·d²·L + V·d + n·d' + (tied ? '   (output layer tied to the embeddings)' : ''), 34, y + 58);
+          g.font = FONT; g.fillStyle = C.muted;
+          wrapText(g, 'The d² term is why doubling the width roughly quadruples the model while doubling the depth only doubles it — and why width is the expensive dial.',
+            34, y + 82, 640, 17);
+          ro.set({ d, L, vocab: V.toLocaleString(), total: human(total) });
+        });
+
+        return ctx.figure(cv,
+          '"124 million parameters" is not a fact you have to look up — it is arithmetic. Each block spends 4d² on attention (the Q, K, V and output matrices) and 8d² on its MLP, which is 12d² per block; multiply by the number of blocks and add the embedding tables. Press <b>GPT-2 small</b> and the total lands on 124M, the published figure. Press <b>GPT-3</b> and it lands near 175B. Every model-size headline you will ever read is this formula with different numbers in it.',
+          [dSl, lSl, vSl, gpt2, gpt3], ro);
+      }
+
+      /* ================================================================== */
+      /* Interactive: why replies stream, and why long chats get slower       */
+      /* ================================================================== */
+      function kvCacheLab() {
+        const [cv, g] = ctx.canvas(720, 340);
+        let prompt = 200, gen = 300, cached = true;
+        const pSl = ctx.slider({ label: 'prompt length (tokens)', min: 0, max: 2000, step: 25, value: 200, onChange: (v) => { prompt = v; } });
+        const gSl = ctx.slider({ label: 'tokens generated', min: 10, max: 1000, step: 10, value: 300, onChange: (v) => { gen = v; } });
+        const cBtn = ctx.button('KV-cache: on', () => {
+          cached = !cached;
+          cBtn.textContent = 'KV-cache: ' + (cached ? 'on' : 'off');
+        }, 'primary');
+        const ro = ctx.readout();
+
+        ctx.loop(() => {
+          g.clearRect(0, 0, 720, 340);
+          /* Work to produce ONE more token when the sequence is already n long.
+             With the cache: the new token's Q against n stored keys, so O(n).
+             Without it: every token's K and V recomputed and full attention redone, so O(n^2).
+             Per-step rather than cumulative, because per-step is what the reader feels. */
+          const cachedAt = (n) => n;
+          const uncachedAt = (n) => n * n / 1000;   // same units, scaled to fit one axis
+          const cur = [], unc = [];
+          for (let t = 0; t < gen; t++) { const n = prompt + t + 1; cur.push(cachedAt(n)); unc.push(uncachedAt(n)); }
+          const peak = Math.max(unc[gen - 1], cur[gen - 1], 1);
+
+          const P = { x: 60, y: 50, w: 420, h: 200 };
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('work to produce each next token', P.x, 30);
+          g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(P.x, P.y, P.w, P.h);
+          const px = (t) => P.x + t / Math.max(1, gen - 1) * P.w;
+          const py = (v) => P.y + P.h - ctx.clamp(v / peak, 0, 1) * P.h;
+          const drawLine = (arr, col, wdt) => {
+            g.strokeStyle = col; g.lineWidth = wdt; g.beginPath();
+            arr.forEach((v, t) => { t ? g.lineTo(px(t), py(v)) : g.moveTo(px(t), py(v)); });
+            g.stroke();
+          };
+          drawLine(unc, cached ? 'rgba(251,113,133,0.45)' : C.danger, cached ? 2 : 3);
+          drawLine(cur, cached ? C.green : 'rgba(56,217,169,0.45)', cached ? 3 : 2);
+          g.font = MONO; g.fillStyle = C.muted;
+          g.fillText('tokens generated \u2192', P.x + 150, P.y + P.h + 20);
+          g.save(); g.translate(P.x - 22, P.y + P.h - 30); g.rotate(-Math.PI / 2);
+          g.fillText('work per token', 0, 0); g.restore();
+          g.font = MONO;
+          g.fillStyle = C.green; g.fillText('with cache: rises gently, linear in n', P.x + 8, P.y + P.h - 14);
+          g.fillStyle = C.danger; g.fillText('without: curves upward, n\u00b2', P.x + 8, P.y + P.h - 30);
+
+          const TX = 510;
+          const finalN = prompt + gen;
+          const saving = finalN;   // n^2 / n = n, the length of the sequence
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('per generated token', TX, 60);
+          g.font = MONO; g.fillStyle = C.green;
+          g.fillText('cached:   compute Q,K,V', TX, 84);
+          g.fillText('          for 1 new token', TX, 100);
+          g.fillStyle = C.danger;
+          g.fillText('uncached: redo all', TX, 124);
+          g.fillText('          ' + (prompt + gen) + ' tokens', TX, 140);
+          g.font = 'bold 20px Inter, system-ui, sans-serif';
+          g.fillStyle = C.green;
+          g.fillText(saving.toLocaleString() + '× less work', TX, 178);
+          g.font = FONT; g.fillStyle = C.muted;
+          wrapText(g, 'A Key and Value never change once computed — only new tokens get added to the end. So store them.', TX, 200, 190, 16);
+          g.font = 'bold ' + FONT; g.fillStyle = C.warn;
+          g.fillText('the catch', TX, 264);
+          g.font = FONT; g.fillStyle = C.muted;
+          wrapText(g, 'The cache grows with every token exchanged, so a long conversation costs more memory and slows down — even with the cache on.', TX, 284, 190, 16);
+          ro.set({ 'context now': (prompt + gen).toLocaleString() + ' tokens', 'cache': cached ? 'on' : 'off', 'work saved': saving.toLocaleString() + '×' });
+        });
+
+        return ctx.figure(cv,
+          'Generation is a loop: predict one token, append it, feed the whole sequence back in, predict again. Done naively, every step recomputes the Key and Value vectors for every earlier token — but those never change, so they are stored the first time and only the newest token is computed fresh. That is the KV-cache, and it is the single biggest reason a chat reply feels fast. It also explains the thing you have felt: long conversations get slower and heavier, because the cache keeps growing with everything you have said.',
+          [pSl, gSl, cBtn], ro);
+      }
+      /* ================================================================== */
+      /* The chapter: touch first, read second.                             */
       /* ================================================================== */
       root.append(
-        p(`Ask most 2024-era chatbots how many r's are in "strawberry" and a surprising number of them say two. Not because the model is bad at spelling in any human sense, and not because arithmetic on letters is hard for a machine — a pocket calculator from 1975 could count characters perfectly. It is because the model never sees the letters s-t-r-a-w-b-e-r-r-y one at a time. It sees a short row of two or three opaque chunks, each one a single number, and it was never shown a task that required unpacking those chunks back into individual characters. Understanding why requires understanding how text becomes numbers in the first place, and that turns out to be the smaller half of this chapter.`),
-        p(`The bigger half is the architecture underneath every headline model of the last eight years: Claude, GPT, Gemini, Llama. In 2017 a small team at Google published a paper with an almost arrogant title, "Attention Is All You Need", and it was right. It threw away recurrence — the one-word-at-a-time processing that chapter 5's RNNs and LSTMs relied on — and replaced it with a single mechanism: every token looks directly at every other token, all at once, in parallel. No message has to travel step by step down a chain to get from word 1 to word 500. It can just look.`),
-        p(`This chapter builds that mechanism from the ground up: the vectors it multiplies, the exact arithmetic, the block it lives inside, and the two ways models are built from it. By the end you will be able to compute a real transformer's parameter count on the back of an envelope.`),
+        callout('tryit', '🖐 Do this first — find out why a model miscounts letters',
+          `Ask most 2024-era chatbots how many r's are in "strawberry" and a surprising number say two.<br>
+           <b>1.</b> The word is already loaded. Count the r's yourself: there are three, and it takes you a second.<br>
+           <b>2.</b> Press <b>See it the way the model does</b>. The letters vanish and two bare numbers remain. <b>That is the entire input to layer 1.</b><br>
+           <b>3.</b> Press <b>the</b>. One token, nothing hidden, no problem.<br>
+           <b>4.</b> Try <b>hippopotamus</b>, then type a word of your own.`),
+        strawberryLab(),
+        p(`The model is not bad at spelling. A pocket calculator from 1975 could count characters perfectly. The model simply never receives the characters.`),
+      );
 
-        section('Tokens: how a model actually reads the page',
-          p(`Before any attention happens, text has to become numbers. The crude approach is one number per word: give "cat" the number 4,821, give "dog" the number 917, and so on. That fails almost immediately — English has hundreds of thousands of words, new ones appear constantly, and "cats", "catlike" and "catastrophe" would each need their own unrouted entry despite sharing a root. The other crude approach is one number per character: only about 100 symbols needed, nothing is ever unrecognised, but a paragraph becomes a very long sequence of very uninformative units, and the model has to rebuild "the" from t-h-e every single time it appears.`),
-          p(`Real tokenizers split the difference with <em>subword</em> tokens, built by an algorithm called <em>byte-pair encoding</em> (BPE). The idea, in one sentence: start with individual characters, then repeatedly find whichever adjacent pair appears most often anywhere in a huge pile of text and glue it into a single new symbol — repeat tens of thousands of times. Early merges fuse common letter pairs ("t"+"h" → "th"); later merges fuse whole common words ("th"+"e" → "the"); rare words never get their own dedicated symbol, so they end up spelled out as two, three or five subword pieces stitched together from parts learned elsewhere. The demo below trains this exact algorithm, live, on a few hundred words of built-in text, so you can watch it happen.`),
-          p(`This is the real answer to the strawberry question. "Strawberry" is not a common enough word in most tokenizers' training data to earn its own single symbol, so it gets cut into pieces such as "straw" and "berry" (GPT-4's tokenizer does roughly this). The model's very first layer only ever receives those two chunk-numbers. To answer "how many r's", it would have to have learned, purely statistically, that the chunk spelled "berry" happens to contain two r's — a fact about the chunk's <i>spelling</i>, which is one step removed from the chunk's <i>meaning</i>, which is the only thing the chunk-number was ever designed to carry. Ask it to count letters in a word that tokenizes as a single familiar chunk, and it does much better, because now there is nothing to unpack.`),
-          p(`Tokens matter for your wallet too. Every API that serves a language model charges by the token, for both what you send and what it sends back, because tokens are the model's actual unit of work — one forward pass through the network per token produced. A rough rule of thumb for English is about four characters per token, so a 500-word email is roughly 650–700 tokens. A codebase, dense mathematics, or a language whose script rarely appears in the training data (many Southeast Asian and African languages) can cost two to five times more tokens for the same content, because the tokenizer never learned efficient chunks for it.`),
-          callout('tryit', 'Try it: watch a tokenizer learn', `Press the presets below. <b>“strawberry”</b>: watch it fragment into pieces that have nothing to do with the fruit — this toy tokenizer was trained on text about language models, not berries, so it never learned a chunk for "berry". <b>Long rare word</b>: watch a word nobody has ever needed a token for get cut almost to single letters. <b>A normal sentence</b>: notice how many common words already survive whole after only a couple hundred merges. Then type your own text — try your name, or a word in another language.`),
-          tokenizerDemo(),
-        ),
+      root.append(section('Tokens: how a model actually reads the page',
+        p(`Before any attention happens, text has to become numbers. One number per word fails almost immediately — English has hundreds of thousands of words, new ones appear constantly, and "cats", "catlike" and "catastrophe" would each need an unconnected entry despite sharing letters.`),
+        p(`One number per character fixes that — only about 100 symbols, nothing ever unrecognised — but a paragraph becomes a very long sequence of very uninformative units, and the model must rebuild "the" from t-h-e every single time.`),
+        p(`Real tokenizers split the difference with <em>subword</em> tokens, built by <em>byte-pair encoding</em>. Start with individual characters, repeatedly find whichever adjacent pair appears most often in a huge pile of text, and glue it into a single new symbol. Repeat tens of thousands of times.`),
+        p(`Early merges fuse common letter pairs ("t"+"h" → "th"). Later merges fuse whole words ("th"+"e" → "the"). Rare words never earn their own symbol, so they end up spelled out as two, three or five pieces stitched together from parts learned elsewhere.`),
+        callout('tryit', '🖐 Try this: watch a tokenizer learn',
+          `The demo below runs that exact algorithm, live, on a few hundred words of built-in text.<br>
+           <b>1.</b> Step through the merges one at a time and read what each one fuses. The first few are letter pairs.<br>
+           <b>2.</b> Keep going and watch whole words appear as single symbols.<br>
+           <b>3.</b> Notice the vocabulary growing while the token count of the same text <b>falls</b>. That trade is the entire design.`),
+        tokenizerDemo(),
+        callout('key', '🔑 Why this costs you money',
+          `Every API that serves a language model charges by the token, for what you send and what comes back, because a token is the model's actual unit of work — one forward pass per token produced.<br>
+           A rough rule for English is about <b>four characters per token</b>, so a 500-word email is roughly 650–700 tokens.
+           Code, dense mathematics, or a language whose script rarely appeared in training (many Southeast Asian and African languages) can cost <b>two to five times more tokens for the same content</b>, because the tokenizer never learned efficient chunks for it.`),
+      ));
 
-        section('The problem attention solves',
-          p(`Chapter 5's recurrent networks read a sentence the way you read this one: left to right, one word at a time, carrying a running summary forward in a hidden state. That has two costs. First, speed: word 500 cannot be processed until words 1 through 499 have each taken their turn, so a GPU with thousands of idle cores sits mostly unused while the sequence trickles through step by step. Second, memory: everything the network knows about word 1 has to survive, compressed into one fixed-size vector, all the way to word 500 — and in practice it doesn't; distant information fades, which is exactly the vanishing-gradient problem from chapter 5.`),
-          p(`Attention removes both costs with one change: instead of relaying information through a chain, let every token query every other token directly. Word 500 can look straight at word 1 in a single step, with no relay and no fading, and — crucially — every token can do this <i>at the same time</i>, because "look at everything" is just one matrix multiplication, and matrix multiplications are exactly what GPUs are built to do in parallel. This is the trade the 2017 paper made explicit in its title: attention alone, no recurrence, is all you need.`),
-        ),
+      root.append(section('The problem attention solves',
+        p(`Chapter 5's recurrent networks read a sentence the way you read this one: left to right, one word at a time, carrying a running summary forward. That has two costs.`),
+        p(`First, <b>speed</b>. Word 500 cannot be processed until words 1 to 499 have each taken their turn, so a GPU with thousands of idle cores sits mostly unused while the sequence trickles through.`),
+        p(`Second, <b>memory</b>. Everything the network knows about word 1 must survive, compressed into one fixed-size vector, all the way to word 500 — and in practice it does not. That is the vanishing-gradient problem from chapter 5.`),
+        p(`Attention removes both with one change: instead of relaying information down a chain, let every token query every other token directly. Word 500 looks straight at word 1 in a single step, with no relay and no fading.`),
+        p(`And crucially every token can do this <i>at the same time</i>, because "look at everything" is one matrix multiplication — exactly what a GPU is built to do in parallel. That is the trade the 2017 paper made in its title.`),
+        callout('key', '🔑 Query, Key, Value — the dating-app analogy',
+          `You have a <em>type</em>: the sort of profile you are looking for. That is your <b>Query</b>.<br>
+           Every other profile has a short headline summarising what they are about. That is their <b>Key</b>.<br>
+           You compare your type against every headline and get a compatibility score for each person.<br>
+           Then the twist that makes attention different from search: instead of picking your single best match, you take a <b>blend of everyone's full profile</b> — their <b>Value</b> — weighted by how well each scored. A perfect match dominates; a bad match still contributes a whisper.<br>
+           Every token does this simultaneously: once as a query looking outward, once as a key and value being looked at by everyone else.`),
+        p(`Concretely: every token's embedding is multiplied by three learned weight matrices to produce a Query <b>q</b>, a Key <b>k</b> and a Value <b>v</b>. For one query token, compute its compatibility with every token's key by a dot product, scale it down, then squash the row through <em>softmax</em> so the scores are positive and sum to exactly 1 — a genuine weighted average.`),
+        callout('tryit', '🖐 Try this: compute attention by hand',
+          `Three tiny 2-dimensional tokens, so you can check every digit with a calculator if you want to.<br>
+           <b>1.</b> Step through the four stages: dot products, scale by √d, softmax, then blend the Values.<br>
+           <b>2.</b> Drag a Query vector and watch which token it starts leaning on.<br>
+           <b>3.</b> Watch the softmax row: it always sums to 1. Nothing is left over and nothing is negative.`),
+        attentionByHand(),
+        p(`Q·Kᵀ produces one raw score for every (query, key) pair at once — a full grid. Dividing by √d matters more than it looks: as the dimension grows, a plain dot product's typical size grows with it, and uncorrected the scores swing so wildly that softmax collapses into an all-or-nothing spike, which starves the gradient during training.`),
+        p(`That four-step recipe — score, scale, softmax, blend — run for every token against every other token in one matrix multiplication, <b>is the entire mechanism</b>. Nothing else in a transformer is conceptually harder. Everything else is scale and repetition.`),
+      ));
 
-        section('Query, Key, Value: the mechanism itself',
-          p(`Picture a dating app. You have a <em>type</em> — the sort of profile you're looking for. Call that your <em>Query</em>. Every other profile on the app has posted a short headline summarising what they're about — call that their <em>Key</em>. You compare your type against every headline and get a compatibility score for each person. Now here is the twist that makes attention different from a simple search: instead of picking your single best match, you take a <i>blend</i> of everyone's actual full profile — their <em>Value</em> — weighted by how well each one scored. A perfect match dominates the blend; a bad match still contributes a whisper. Every token in a sentence runs this exact process simultaneously, once as a query looking outward and once as a key/value being looked at by everyone else.`),
-          p(`Concretely: every token's embedding is multiplied by three learned weight matrices to produce three vectors — a Query <b>q</b>, a Key <b>k</b>, and a Value <b>v</b>, each of some dimension <i>d</i>. For one query token, compute its raw compatibility with every token's key by a dot product, scale it down, then squash the whole row through <em>softmax</em> so the scores become positive and sum to exactly 1 — a genuine weighted average, nothing left over and nothing negative. The full formula for a whole sentence at once, stacking every token's q, k, v as rows of matrices Q, K, V:`),
-          ctx.code('Attention(Q, K, V) = softmax( Q·Kᵀ / √d ) · V'),
-          p(`Q·Kᵀ produces one raw score for every (query, key) pair at once — a full grid. Dividing by √d matters more than it looks: as the vector dimension <i>d</i> grows, a plain dot product's typical size grows too (more terms being summed), and without correcting for it, scores would swing so wildly that softmax collapses into an almost all-or-nothing spike, which starves the gradient during training. Dividing by √d keeps the scores in a sane range regardless of dimension. Softmax then turns the row of scaled scores into weights; multiplying that weight row by V blends the Value vectors accordingly.`),
-          p(`Here is the whole pipeline on three tiny 2-dimensional tokens, so you can check every digit. Token 1 has <b>q</b>=(1,0), token 2 has <b>k</b>=(0,2), and so on — full vectors below. Take the query from token 1: <b>q₁</b>=(1,0).`),
-          ol([
-            `<b>Raw scores</b> (q₁ · k<sub>j</sub>): against k₁=(1,0) → 1×1+0×0=<b>1</b>. Against k₂=(0,2) → 1×0+0×2=<b>0</b>. Against k₃=(1,−1) → 1×1+0×(−1)=<b>1</b>.`,
-            `<b>Scale</b> by √d = √2 ≈ 1.414: scores become 0.707, 0, 0.707.`,
-            `<b>Softmax</b>: e<sup>0.707</sup>≈2.028, e<sup>0</sup>=1, e<sup>0.707</sup>≈2.028; sum ≈ 5.056. Weights ≈ <b>0.401, 0.198, 0.401</b> — token 1 splits its attention almost evenly between tokens 1 and 3, and gives token 2 less, because its key pointed a different way.`,
-            `<b>Weighted sum of V</b>: with v₁=(1,0), v₂=(0,1), v₃=(2,0): output = 0.401·(1,0) + 0.198·(0,1) + 0.401·(2,0) = (0.401+0.802, 0.198) ≈ <b>(1.20, 0.20)</b>.`,
-          ]),
-          p(`That four-step recipe, run for every token against every other token, computed in one shot by matrix multiplication, is the entire mechanism. Nothing else in a transformer is conceptually harder than this; everything else is scale and repetition.`),
-          callout('tryit', 'Try it: compute attention by hand', `The numbers above are the interactive's default settings — confirm them first. Then drag <b>K2.y</b> up toward 3: token 2's key now points more like q₁ does, so watch its softmax weight rise and steal share from tokens 1 and 3. Switch the "inspect query" dropdown to token 2 or 3 and work out by eye which key it should favour before checking the bars. Try dragging a Value vector instead of a Key: notice the attention <i>weights</i> (which token matters) don't move at all, only the final blended <i>output</i> does — Value only supplies content, never relevance.`),
-          attentionByHand(),
-        ),
+      root.append(section('What attention buys you, in language',
+        p(`Toy numbers make the arithmetic checkable; the payoff is linguistic. A model can resolve a pronoun to the noun it stands for, directly, by attending across the whole sentence.`),
+        p(`The classic test is a Winograd-style sentence: "The animal didn't cross the street because <b>it</b> was too tired." Every human instantly reads "it" as the animal, because a tired street makes no sense. Real trained attention heads learn exactly this kind of link from data.`),
+        callout('tryit', '🖐 Try this: the attention visualiser',
+          `<b>1.</b> Click the word <b>it</b> and watch where the weight goes.<br>
+           <b>2.</b> Change "tired" to "wide" and watch the link move to <i>street</i>. Nothing was reprogrammed — the rule reads the sentence.<br>
+           <b>3.</b> Toggle <b>causal mask</b> on and off. With it on, no token can attend to anything to its right, which is the constraint every GPT-style model trains under.`),
+        callout('warning', '⚠️ Illustrative, not trained',
+          `The visualiser below fakes one attention head with a few hand-written rules — a crude part-of-speech guess, a boost from pronouns toward the nearest preceding noun, a boost from "the" toward the following word, and a mild preference for nearby words.
+           It shows you the <b>shape</b> of the behaviour without needing billions of trained weights. A real head is messier and was never told any of these rules.`),
+        attentionVisualiser(),
+        p(`One attention computation learns one <i>kind</i> of relationship — say, pronoun-to-noun. A sentence needs many at once: which adjective modifies which noun, which verb takes which object, which word agrees with which.`),
+        p(`So a transformer runs attention several times in parallel, called <em>heads</em>, each with its own Q, K, V matrices, each free to specialise. A model with d = 768 and 12 heads gives each head 64 dimensions; the heads run simultaneously, and their outputs are concatenated back to 768 and passed through one more learned matrix that mixes their findings.`),
+        p(`That is <em>multi-head attention</em>: not a bigger version of the mechanism, just several independent copies run side by side, each looking for something different.`),
+      ));
 
-        section('Seeing it on a real sentence',
-          p(`Toy numbers make the arithmetic checkable, but the payoff of attention is linguistic: a model can resolve a pronoun to the noun it stands for, directly, by attending across the whole sentence. The classic example is a Winograd-style sentence: "The animal didn't cross the street because it was too tired." Every human instantly reads "it" as the animal, not the street — a tired street makes no sense. Real trained attention heads learn to make exactly this kind of link from data. The visualiser below fakes one such head with a small set of hand-written rules (a crude part-of-speech guess, a boost from pronouns toward the nearest preceding noun-like word, a boost from "the" toward the word right after it, and a mild preference for nearby words) so you can see the shape of the behaviour without needing billions of trained weights.`),
-          callout('warning', 'Illustrative, not trained', `The weights drawn below come from a hand-written scoring rule in this page's JavaScript, tuned so the classic "it → animal" example works. It is not a real attention head, has not seen any training data, and will do less sensible things on sentences it wasn't designed for. Real attention weights emerge from gradient descent over billions of examples (chapters 2–3); this is a cartoon of the <i>shape</i> of that behaviour, not a measurement of it.`),
-          callout('tryit', 'Try it: the attention visualiser', `<b>1.</b> Click the word "it" (token 8). Watch a fat arc reach all the way back to "animal" — by far its heaviest weight — while "street", the other candidate noun, gets much less. <b>2.</b> Click "the" (token 1 or 5): it should point almost entirely at the noun immediately following it. <b>3.</b> Push the <b>temperature</b> slider high: every arc fades toward equal thickness — attention becomes almost uniform. Push it low: one arc dominates completely, almost a hard choice. <b>4.</b> Toggle <b>causal mask</b> on and click an early word like "The": its arcs to later words vanish — it is now only allowed to look left, exactly like GPT generating text one token at a time. <b>5.</b> Edit the sentence entirely and see how (or whether) the rule still behaves sensibly — this is where "illustrative, not trained" becomes obvious.`),
-          attentionVisualiser(),
-        ),
+      root.append(section('The blind spot: attention has no idea what order anything is in',
+        p(`Here is a strange fact about Q·Kᵀ. It does not care about word order at all. Swap two tokens and the set of dot products between them is identical — attention is fundamentally a <i>set</i> operation.`),
+        callout('tryit', '🖐 Try this — break the model\'s grasp of word order',
+          `<b>1.</b> Turn <b>positional encoding off</b>, then press <b>Swap dog and man</b>. Read the grid carefully: the same numbers come back, merely rearranged. The two sentences are <b>literally indistinguishable</b>.<br>
+           <b>2.</b> Turn positional encoding back on and swap again. Now the scores genuinely change.<br>
+           <b>3.</b> Look at the right-hand pattern and drag <b>inspect position</b>. Fast waves at the top separate neighbouring positions; slow waves at the bottom separate distant ones.`),
+        positionLab(),
+        p(`That is a real problem, because "the dog bit the man" and "the man bit the dog" contain exactly the same words. An RNN got order for free by reading left to right. A transformer has to be told.`),
+        p(`The fix is <em>positional encoding</em>: before the first layer, add a vector to each token's embedding that encodes its position, so token 1 and token 50 differ even when the word is identical.`),
+        p(`The 2017 paper used the fixed pattern of sine and cosine waves you just dragged — no learning required, and it extends to sequences longer than any seen in training. Many models instead learn a position vector per slot.`),
+        p(`Most models from 2023 onward use <em>RoPE</em> (rotary position embedding), which rotates each Query and Key by an angle proportional to its position, so the dot product between two tokens naturally reflects their <i>relative</i> distance rather than absolute position. Worth knowing the name of; not worth deriving here.`),
+      ));
 
-        section('Multi-head attention: several lenses at once',
-          p(`One attention computation learns one <i>kind</i> of relationship — say, pronoun-to-noun. A sentence needs many kinds at once: which adjective modifies which noun, which verb takes which object, which word two positions back rhymes with this one. So a transformer doesn't run attention once per layer; it runs it several times in parallel, called <em>heads</em>, each with its own separate learned Q, K, V weight matrices, each free to specialise in a different pattern. A model with dimension <i>d</i> = 768 and 12 heads might give each head just 64 dimensions to work with (768 ÷ 12); the heads run independently and simultaneously, and their outputs are concatenated back into a 768-dimensional vector and passed through one more learned matrix that mixes the heads' findings together. This is <em>multi-head attention</em>: not a bigger version of the mechanism above, just several independent copies of it, run side by side, each looking for something different.`),
-        ),
+      root.append(section('The block, and the highway running through it',
+        p(`Attention only moves information <i>between</i> positions; it never processes the content of one position on its own. So every attention step is paired with a small ordinary <em>MLP</em> — chapter 2's network, applied to each token independently with the same weights — giving the model room to actually compute with what attention gathered.`),
+        p(`Wrap each of the two in a <em>residual connection</em> — add the sublayer's output back onto its input rather than replacing it — plus a normalisation step that keeps activations in a stable range, and you have the standard block.`),
+        callout('key', '🔑 The residual stream',
+          `Think of <b>x</b>, the running vector at each token position, as a highway down the length of the network.
+           Attention and the MLP are off-ramps: they read the highway, do their work, and merge their result back on. <b>The highway itself is never overwritten, only added to.</b><br>
+           This is what lets networks stack dozens or hundreds of blocks without gradients vanishing on the way back — the same failure that limited pre-2015 networks, and the same fix as the LSTM's conveyor belt in chapter 5.
+           A gradient can always flow straight back down the highway, with every sublayer offering an optional shortcut rather than a mandatory bottleneck.`),
+        callout('tryit', '🖐 Try this: follow the pulse',
+          `Watch one pulse make a full pass through the stack, and note that the <b>same two-step recipe</b> repeats layer after layer.<br>
+           Drag the layer slider: GPT-2 small stacks it 12 times, and the largest 2026 models stack it over a hundred.<br>
+           Attention is computed for every token in parallel; only the layer-by-layer stacking is sequential.`),
+        blockDiagram(),
+      ));
 
-        section('Order does not come for free',
-          p(`Here is a strange fact about the Q·Kᵀ formula: it does not care about word order at all. Swap two tokens' positions in the input and the set of dot products between them is identical — attention is fundamentally a <i>set</i> operation, blind to sequence. That is a real problem, because "the dog bit the man" and "the man bit the dog" contain exactly the same set of words. An RNN got order for free, because it read left to right by construction; a transformer has to be told explicitly.`),
-          p(`The fix is <em>positional encoding</em>: before the first layer, add a vector to each token's embedding that encodes its position in the sequence, so token 1's embedding and token 50's embedding differ even if the underlying word is identical. The original 2017 paper used a fixed pattern of sine and cosine waves at different frequencies — no learning required, and it generalises to sequences longer than any seen in training. Many models instead just learn a position vector per slot, the same way they learn a vector per word. Most 2023-and-later models (Llama, and most open frontier models) use a newer trick called <em>RoPE</em> (rotary position embedding), which rotates each token's Query and Key vectors by an angle proportional to their position, so that the dot product between any two tokens naturally reflects their <i>relative</i> distance rather than their absolute position — a detail worth knowing the name of, not worth deriving here.`),
-        ),
+      root.append(section('Two halves, and why one of them won',
+        p(`The original 2017 architecture was built for translation and had two halves. An <em>encoder</em> reads the whole source sentence with unrestricted attention — every token sees every other, including later ones — and builds a representation of what it means. A <em>decoder</em> then generates the translation one word at a time, attending both to its own previous output and, via cross-attention, to the encoder's representation.`),
+        p(`Two influential 2018 models each kept one half. <b>BERT</b> is encoder-only: full bidirectional attention, trained by hiding random words and asking the model to fill them in. Excellent for understanding text — search, classification, the embeddings of chapter 6 — but never designed to generate long free-form prose.`),
+        p(`<b>GPT</b> is decoder-only, and this is where <em>causal masking</em> comes in. A decoder predicting word 50 must not peek at the real word 50 sitting in the training example — that would make training trivial and useless, since at generation time word 50 does not exist yet. So every query is masked to attend only to its own position or earlier, exactly the toggle in the visualiser above.`),
+        p(`GPT won as the shape for general assistants for one economic reason: next-token prediction on plain unlabelled text needs no translation pairs and no hand-labelled examples, so it can train on virtually the whole internet. And one decoder can be prompted to translate, summarise, code or chat — tasks that used to need separate systems.`),
+        callout('history', '📜 Three papers, eighteen months, 2017–2019',
+          `<b>June 2017:</b> "Attention Is All You Need" (Vaswani et al., Google) introduces the transformer for machine translation, and beats the recurrent state of the art while training far faster.<br>
+           <b>October 2018:</b> BERT (Devlin et al., Google) keeps the encoder, trains by masked-word prediction, and takes the top of nearly every language-understanding benchmark at once.<br>
+           <b>February 2019:</b> GPT-2 (Radford et al., OpenAI) keeps the decoder, scales next-token prediction to 1.5 billion parameters, and produces text fluent enough that its staged release became a public argument about AI risk.<br>
+           Everything since has largely been that third path, made much bigger.`),
+        callout('example', '🌍 Where each half lives today',
+          `<b>Encoder-only</b> models still quietly run an enormous amount of infrastructure: search ranking, document classification, spam and abuse detection, and the embedding models behind vector search in chapter 12. They are small, fast and cheap, and they never needed to generate a word.<br>
+           <b>Decoder-only</b> models are what you talk to.<br>
+           <b>Encoder–decoder</b> survives where there genuinely are two distinct sequences: translation systems, speech-to-text, and some summarisation models.`),
+      ));
 
-        section('The full block, and the residual stream',
-          p(`Attention alone only moves information between token positions; it never processes the content of one position on its own. So every attention step is paired with a small ordinary <em>multi-layer perceptron</em> (chapter 2's MLP, applied to each token independently, same weights reused at every position) that gives the model room to actually compute with what attention gathered. Wrap each of the two with a <em>residual connection</em> — add the sublayer's output back onto its input rather than replacing it — and a normalisation step that keeps activations in a stable range, and you get the standard recipe:`),
-          ctx.code('x  ← x + Attention(LayerNorm(x))\nx  ← x + MLP(LayerNorm(x))          # repeat this whole pair, N times'),
-          p(`Think of <b>x</b>, the running vector at each token position, as a highway running the full length of the network: the <em>residual stream</em>. Attention and the MLP are off-ramps — they read the highway, do their work, and merge their result back on, but the highway itself is never overwritten, only added to. This additive design is what lets networks stack dozens or hundreds of these blocks without gradients vanishing on the way back during training (the same failure that limited how deep pre-2015 networks could usefully go): a gradient can always flow straight back down the highway, with every sublayer offering an optional shortcut rather than a mandatory bottleneck.`),
-          callout('tryit', 'Try it: follow the pulse', `Watch one full pass through the stack. Notice the pulse always returns to the same highway line between detours — that's the residual add. Slide <b>layers</b> up to 12 (GPT-2 small's actual depth) and notice the diagram doesn't get more complicated, just longer: the identical two-step block repeats. Pause it mid-detour and read the caption to see exactly which of the four repeating operations (Attention, Add & Norm, MLP, Add & Norm) is active.`),
-          blockDiagram(),
-        ),
+      root.append(section('Count the parameters yourself',
+        p(`"124 million parameters" sounds like a fact you would have to look up. It is arithmetic, and doing it once demystifies every model-size headline you will ever read.`),
+        callout('tryit', '🖐 Try this',
+          `<b>1.</b> Press <b>GPT-2 small</b>: d = 768, 12 layers, 50,257 tokens. The total lands on <b>124M</b> — the published figure.<br>
+           <b>2.</b> Press <b>GPT-3</b>: d = 12,288 and 96 layers. It lands near <b>175B</b>.<br>
+           <b>3.</b> Now the lesson. Double <b>layers</b> and watch the total double. Then put it back and double <b>width</b> instead — the total roughly <b>quadruples</b>, because the per-block cost is 12<i>d</i>².`),
+        paramCalc(),
+        p(`Each block spends 4<i>d</i>² on attention — the Q, K and V matrices plus the output projection — and 8<i>d</i>² on its MLP, whose hidden layer is conventionally four times the width. That is 12<i>d</i>² per block.`),
+        p(`Twelve blocks of 7.08M is about 85M. Add 38.6M of token embeddings and 0.8M of position embeddings and you get 124M. GPT-2 ties its output layer to the input embedding matrix, reusing the same numbers to turn the final vector back into probabilities, which is why there is no separate un-embedding line.`),
+      ));
 
-        section('Encoder, decoder, and why GPT never looks ahead',
-          p(`The original 2017 architecture was built for machine translation and had two halves. An <em>encoder</em> reads the entire source sentence at once, with unrestricted attention — every token can look at every other token, including ones later in the sentence — and produces a rich representation of what the sentence means. A <em>decoder</em> then generates the translated sentence one word at a time, attending both to its own previous output and, via a separate cross-attention step, to the encoder's representation of the source.`),
-          p(`Two influential 2018 models each kept only one half. <b>BERT</b> is encoder-only: full bidirectional attention, trained by hiding random words and asking the model to fill them in, which builds excellent representations for understanding text — search, classification, the embeddings of chapter 6 — but BERT was never designed to generate long free-form text. <b>GPT</b> is decoder-only, and this is where <em>causal masking</em> comes in: during training, a decoder predicting word 50 must not be allowed to peek at the real word 50 sitting right there in the training example — that would make training trivial and useless, since at actual generation time word 50 doesn't exist yet. So every query position is masked to only attend to keys at its own position or earlier (exactly the toggle in the visualiser above). GPT won out as the dominant shape for general-purpose assistants because next-token prediction on plain, unlabelled text needs no parallel translation pairs or hand-labelled examples — it can train on virtually the whole internet — and one decoder can be prompted to translate, summarise, code, or chat, tasks that used to need separate specialised systems.`),
-        ),
+      root.append(section('Generating: why the reply arrives word by word',
+        p(`Training sees a whole sentence at once and predicts every next-token in parallel. Using the model — <em>inference</em> — is different: it only knows the tokens generated so far, so it produces its reply <em>autoregressively</em>. Predict the most likely next token, append it, feed the now-longer sequence back in, predict again.`),
+        p(`That loop, repeated hundreds or thousands of times, is why a chat response streams into view word by word. It is not a UI affectation. It is the actual order of computation.`),
+        callout('tryit', '🖐 Try this — the optimisation you have already felt',
+          `<b>1.</b> With the <b>KV-cache on</b>, the work curve is a straight line. Turn it <b>off</b> and watch it bend upward.<br>
+           <b>2.</b> Drag <b>prompt length</b> to 2,000 and read the "work saved" figure. That is the difference between a reply that streams and one that crawls.<br>
+           <b>3.</b> Now the part you have felt without knowing why: with the cache on, drag <b>tokens generated</b> up and watch the per-step cost keep climbing anyway.`),
+        kvCacheLab(),
+        p(`Done naively, the loop recomputes Key and Value vectors for every earlier token at every step — wasteful, since a token's Key and Value never change once computed. Only new tokens are ever added to the end.`),
+        p(`The fix is a <em>KV-cache</em>: store every token's Key and Value the first time, and at each step compute Q, K and V for only the newest token, comparing its fresh Query against the whole cached history. It is the single biggest reason chat responses feel fast.`),
+        p(`It is also why very long conversations get slower and use more memory: the cache keeps growing with every token you have exchanged, and it all has to sit in GPU memory at once.`),
+      ));
 
-        section('Counting the parameters: GPT-2 small, step by step',
-          p(`"124 million parameters" sounds like a fact you'd have to look up. It's actually arithmetic you can do yourself, and doing it once demystifies every model-size headline you'll ever read. GPT-2 small uses embedding dimension <i>d</i> = 768, 12 stacked blocks, a vocabulary of 50,257 tokens, and a context window of 1,024 positions.`),
-          ul([
-            `<b>Token embeddings:</b> one learned <i>d</i>-dimensional vector per vocabulary entry — vocab × d = 50,257 × 768 ≈ <b>38.6M</b>.`,
-            `<b>Position embeddings:</b> one learned vector per context slot — n_ctx × d = 1,024 × 768 ≈ <b>0.8M</b>.`,
-            `<b>Per block, attention:</b> four d×d matrices (the Q, K, V and output projections) — 4d² = 4 × 768² ≈ <b>2.36M</b>.`,
-            `<b>Per block, MLP:</b> two matrices expanding to 4d and back — 2 × (d × 4d) = 8d² = 8 × 768² ≈ <b>4.72M</b>.`,
-            `<b>Per block total:</b> ≈ 12d² ≈ <b>7.08M</b> (LayerNorm adds a few thousand more — negligible at this scale).`,
-          ]),
-          p(`Twelve blocks: 12 × 7.08M ≈ 85M. Add the embeddings: 85M + 38.6M + 0.8M ≈ <b>124M</b> — and there's the number. (GPT-2 ties its output layer to the input embedding matrix — reusing the same 38.6M numbers to turn the final vector back into a probability over the vocabulary — which is why there's no separate "unembedding" line above.) The general shape, params ≈ V·d + n_ctx·d + 12d²·L, is the same formula every larger model scales up: GPT-3 pushed d to 12,288 and L to 96 and landed near 175 billion; the d² term is why doubling width roughly quadruples a model's size while doubling depth only doubles it.`),
-        ),
+      root.append(section('Why this matters for modern AI',
+        p(`Two properties, working together, ended the architecture argument.`),
+        p(`First, <b>parallel training</b>. Because attention over a whole sequence is one matrix multiplication rather than a step-by-step loop, an entire training example of thousands of tokens is processed in one shot, and thousands of examples across thousands of GPUs run simultaneously. An RNN's one-step-at-a-time nature made it structurally unable to use hardware that way, no matter how many GPUs you bought.`),
+        p(`Second, <b>clean scaling</b>. Transformers reliably keep getting better as you add data, parameters and compute, in a smooth and predictable way — the subject of chapter 10's scaling laws — with no sign through years of scaling that the returns simply stop.`),
+        p(`A parallelisable architecture that also scales predictably is exactly the combination that turns "bigger GPU budget" into "better model", which is the entire economic engine behind the last eight years of AI progress.`),
+        p(`Every model you can name — Claude, the GPT family, Gemini, Llama — is this decoder-only recipe: token and position embeddings in, N copies of attention-then-MLP-with-residuals, a final projection back to vocabulary-sized probabilities, generated one token at a time behind a KV-cache.`),
+        p(`The differences between them are almost entirely differences of degree and detail covered later in this course — how many layers, how wide, what data, what fine-tuning — not differences in this skeleton. If you understand this page, you understand mechanically what happens between pressing enter and a reply appearing, for every major model in existence.`),
+      ));
 
-        section('Why this design won',
-          p(`Two properties, working together, ended the argument. First, <i>parallel training</i>: because attention over a whole sequence is one matrix multiplication rather than a step-by-step loop, an entire training example — thousands of tokens — is processed in one shot on a GPU, and thousands of examples across thousands of GPUs run simultaneously. An RNN's inherent one-step-at-a-time-ness made it structurally unable to use hardware this way, no matter how many GPUs you bought. Second, <i>clean scaling</i>: transformers reliably keep getting better as you feed them more data and more parameters and more compute, in a smooth, predictable way (the subject of chapter 11's scaling laws) — there was no sign, through years of scaling, of the returns simply stopping. A parallelisable architecture that also scales predictably is precisely the combination that turns "bigger GPU budget" into "better model", which is the entire economic engine behind the last eight years of AI progress.`),
-        ),
-
-        callout('history', 'Three papers, eighteen months, 2017–2019', `Ashish Vaswani and seven co-authors at Google published <i>"Attention Is All You Need"</i> in June 2017, introducing the full encoder–decoder transformer for machine translation — the title was a claim, and it held up. In June 2018, OpenAI's GPT-1 (Radford et al.) showed that a decoder-only transformer, pretrained to just predict the next word in ordinary text and then lightly fine-tuned, beat specialised systems across several language tasks at once, with 117M parameters. In October 2018, Google's BERT (Devlin et al.) took the encoder half instead, trained bidirectionally by masking random words, and reset the state of the art across nearly every language-understanding benchmark overnight — for several years "fine-tune a BERT" was the default recipe for any serious NLP product. In February 2019, OpenAI's GPT-2 scaled the decoder-only recipe to 1.5 billion parameters and showed it could perform tasks — translation, summarisation, question answering — it was never explicitly trained to do, just by predicting text well enough; OpenAI initially withheld the full model, citing misuse concerns, an early preview of the safety debates this course returns to in Part V.`),
-
-        callout('example', 'Where each half lives today', `Decoder-only transformers write: every chat assistant you've used (Claude, ChatGPT, Gemini) generates its reply one token at a time with a causal mask, exactly as described above. Encoder-style bidirectional attention still quietly powers search-query understanding, spam and content classifiers, and the embedding models behind semantic search from chapter 6. Translation, once the transformer's original purpose, is now usually done by the same decoder-only recipe, simply prompted to translate rather than routed through a separate encoder.`),
-
-        section('Generating text: one token at a time, and the KV-cache',
-          p(`Training sees a whole sentence at once and predicts every next-token in parallel, but using the model — <em>inference</em> — is different: the model only knows the tokens generated so far, so it produces its reply <em>autoregressively</em>, one token at a time. Predict the most likely next token, append it to the sequence, feed the whole (now one-token-longer) sequence back in, predict again. This loop, repeated hundreds or thousands of times, is why a chat response streams into view word by word instead of appearing all at once — that is not a UI affectation, it is the actual order of computation.`),
-          p(`Done naively, this loop would recompute Key and Value vectors for every earlier token from scratch at every single step — wasteful, since a token's Key and Value never change once computed; only new tokens ever get added to the end. The standard fix is a <em>KV-cache</em>: store every token's Key and Value vectors the first time they're computed, and at each new step only compute Q, K, V for the one newest token, comparing its fresh Query against the whole cached history. This turns each generation step from redoing all the past work into one small increment, and it's the single biggest reason chat responses feel fast — it's also why very long conversations get slower and use more memory, since the cache keeps growing with every token you've exchanged.`),
-        ),
-
-        section('Why this matters for modern AI',
-          p(`Every model you can currently name — Claude, the GPT family, Gemini, Llama, and everything else described as "an LLM" in 2026 — is this exact decoder-only recipe: token and position embeddings in, N copies of attention-then-MLP-with-residuals, a final projection back to vocabulary-sized probabilities, generated one token at a time behind a KV-cache. The differences between them are almost entirely differences of degree and detail covered later in this course — how many layers, how wide, what data, what fine-tuning — not differences in this underlying skeleton. If you understand everything on this page, you understand, mechanically, what happens between you pressing enter and a reply appearing, for every major model in existence today.`),
-        ),
-
+      root.append(
         ctx.quiz([
-          { q: 'Why can attention be computed in parallel across an entire sequence, while an RNN cannot?', options: ['Attention uses less memory', 'Every pairwise score is one matrix multiplication that doesn\'t depend on any other position\'s result being computed first, unlike an RNN\'s step-by-step hidden state', 'Attention only works on short sequences', 'GPUs cannot run RNNs at all'], answer: 1, explain: 'Q·Kᵀ computes every (query, key) score at once. An RNN\'s hidden state at step t requires step t−1\'s output first, forcing strictly sequential computation no matter how much hardware is available.' },
-          { q: 'In scores = QKᵀ/√d, what does dividing by √d prevent?', options: ['Negative numbers', 'Scores growing large as the vector dimension d grows, which would push softmax toward an extreme, hard-to-train spike', 'The need for a Value vector', 'Ties between tokens'], answer: 1, explain: 'A dot product\'s typical magnitude scales with the number of terms summed, i.e. with d. Without the √d correction, larger models (bigger d) would see wildly larger raw scores and softmax would saturate, weakening the training signal.' },
-          { q: 'What does softmax guarantee about one query\'s attention weights over all the keys?', options: ['They are all equal', 'They are each non-negative and sum to exactly 1, forming a weighted average over the Value vectors', 'Exactly one weight is 1 and the rest are 0', 'They sum to the vector dimension d'], answer: 1, explain: 'Softmax exponentiates and normalises, so every weight is positive and the row sums to 1 — a genuine weighted average of every token\'s Value, never a hard, all-or-nothing pick.' },
-          { q: 'Why does GPT need a causal mask during training, while BERT does not?', options: ['BERT is a smaller model', 'GPT predicts the next token and must never see it or later tokens while training, since at real generation time they don\'t exist yet; BERT instead fills in masked words using full bidirectional context', 'Causal masking makes training faster, nothing more', 'BERT does not use attention'], answer: 1, explain: 'A decoder trained to predict word 50 while being allowed to look at word 50 would trivially cheat during training and then fail completely at real generation, when future words genuinely don\'t exist yet. BERT\'s fill-in-the-blank objective has no such constraint.' },
-          { q: 'GPT-2 small has d = 768 and 12 layers. Roughly which two terms dominate its ≈124M parameters?', options: ['The LayerNorm parameters and the biases', 'The token embedding matrix (vocab × d ≈ 38.6M) and the twelve blocks\' matrices (≈12d² per block × 12 ≈ 85M)', 'The positional encodings alone', 'The softmax function\'s own parameters'], answer: 1, explain: 'params ≈ V·d + n_ctx·d + 12d²·L. With V=50,257, d=768, n_ctx=1,024, L=12: embeddings ≈ 39.4M and the stacked blocks ≈ 85M, summing to ≈124M; LayerNorm\'s few thousand parameters are negligible by comparison.' },
+          { q: 'Why do language models miscount the letters in "strawberry"?', options: ['Arithmetic on letters is hard for computers', 'The word arrives as a couple of opaque chunk-numbers, so the model must recall how each chunk is spelled rather than simply looking at the letters', 'The model was never trained on the word', 'Tokenizers delete repeated letters'], answer: 1, explain: 'You saw it in the opening demo: press "See it the way the model does" and only the numbers remain. Spelling is one step removed from the meaning those numbers were built to carry. Try "the" — one token, no unpacking, no problem.' },
+          { q: 'What does dividing by √d accomplish in the attention formula?', options: ['It normalises the output to length 1', 'It keeps raw dot products in a sane range as the dimension grows, so softmax does not collapse into an all-or-nothing spike and starve the gradient', 'It makes the computation faster', 'It is required for the causal mask'], answer: 1, explain: 'A dot product of longer vectors sums more terms and so grows with d. Uncorrected, the scores swing far enough that softmax saturates, gradients go to nearly zero, and training stalls.' },
+          { q: 'You turned positional encoding off and swapped two words. What happened to the attention grid, and why?', options: ['It went blank', 'The same numbers came back, merely rearranged — because Q·Kᵀ compares content against content and has no idea where either token sat', 'The scores doubled', 'Nothing, because attention already tracks order'], answer: 1, explain: 'Attention is a set operation. That is why a position-dependent vector is added to every embedding before layer 1: without it, "the dog bit the man" and "the man bit the dog" are literally indistinguishable to the mechanism.' },
+          { q: 'A transformer block has 12d² parameters. What does that imply about making a model bigger?', options: ['Depth and width cost the same', 'Doubling the width roughly quadruples the parameter count, while doubling the depth only doubles it', 'Width is free', 'Parameter count does not depend on d'], answer: 1, explain: 'The per-block cost is quadratic in width and linear in the number of blocks, which you can verify on the calculator: press GPT-2 small, then double layers (total doubles), then double width instead (total roughly quadruples).' },
+          { q: 'What is a KV-cache and what does it cost you?', options: ['It stores the model weights closer to the GPU; it costs nothing', 'It stores every token\'s Key and Value so they are not recomputed each step — making replies fast, but growing with the conversation, so long chats get slower and heavier', 'It caches common prompts so repeated questions are free', 'It compresses the context window'], answer: 1, explain: 'A token\'s Key and Value never change once computed, so storing them turns each generation step into a small increment instead of redoing all the past work. The cache lives in GPU memory and grows with every token exchanged, which is exactly why a very long conversation feels slower.' },
         ]),
 
         section('Go deeper',
           ul([
-            `<a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener">Vaswani et al. (2017), "Attention Is All You Need"</a> — the original paper, all six pages of mechanism that started this chapter.`,
-            `<a href="https://jalammar.github.io/illustrated-transformer/" target="_blank" rel="noopener">Jay Alammar, "The Illustrated Transformer"</a> — the diagrams that made this architecture click for a generation of engineers.`,
-            `<a href="https://www.youtube.com/watch?v=kCc8FmEb1nY" target="_blank" rel="noopener">Andrej Karpathy, "Let's build GPT: from scratch, in code, spelled out"</a> — writes this entire chapter's mechanism as running Python, live.`,
-            `<a href="https://arxiv.org/abs/1810.04805" target="_blank" rel="noopener">Devlin et al. (2018), "BERT: Pre-training of Deep Bidirectional Transformers"</a> — the encoder-only half of this story.`,
-            `<a href="https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf" target="_blank" rel="noopener">Radford et al. (2019), "Language Models are Unsupervised Multitask Learners"</a> — the GPT-2 paper, decoder-only at 1.5B parameters.`,
+            `<a href="https://jalammar.github.io/illustrated-transformer/" target="_blank" rel="noopener">Jay Alammar, "The Illustrated Transformer"</a>: the same architecture with a different set of pictures. The best second explanation there is.`,
+            `<a href="https://www.youtube.com/watch?v=kCc8FmEb1nY" target="_blank" rel="noopener">Karpathy, "Let's build GPT: from scratch, in code, spelled out"</a>: two hours that build everything on this page in Python. Lab 06 of this course follows it.`,
+            `<a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener">Vaswani et al. (2017), "Attention Is All You Need"</a>: the paper. Eleven pages, and section 3.2 is the formula you computed by hand.`,
+            `<a href="https://arxiv.org/abs/1810.04805" target="_blank" rel="noopener">Devlin et al. (2018), "BERT"</a>: the encoder-only branch, and masked-language-model training.`,
+            `<a href="https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf" target="_blank" rel="noopener">Radford et al. (2019), "Language Models are Unsupervised Multitask Learners"</a>: GPT-2, and the argument that one decoder can do every task.`,
           ]),
         ),
       );
