@@ -1,10 +1,9 @@
-/* Zero → AGI · Chapter 15 · What separates us from AGI, and how you could help build it
-   What "AGI" has meant (Turing, Legg & Hutter, OpenAI charter, Anthropic, DeepMind's Levels of AGI);
-   what 2026 frontier models can and can't do; candidate paths and hard constraints; what one person
-   can realistically do, tiered, with a reading list.
-   Interactives: capability radar (2020 vs 2026 vs human expert, click/hover an axis for the gap and
-   what would close it); cost-of-compute explorer (Chinchilla-optimal N, D from a budget); a personal
-   12-month roadmap builder; a task-horizon chart extrapolating METR's doubling trend. */
+/* Zero → AGI · Chapter 15 · The road to AGI
+   DESIGN RULE: the reader draws their own definition of AGI in the first thirty seconds and
+   watches the verdict swing without a single fact about any model changing.
+   Interactives, in order: the AGI definer; capability radar (what is done, partial, not close);
+   the task-horizon doubling chart; the training-budget cost explorer; and a personal roadmap
+   builder. */
 (function () {
   ZTA.registerChapter({
     id: '15-road-to-agi',
@@ -333,7 +332,118 @@
       /* ================================================================== */
       /* Prose                                                              */
       /* ================================================================== */
+
+      function wrapLines2(gc, text, maxW) {
+        const words = String(text).split(' '); const out = []; let line = '';
+        for (const w of words) {
+          const t = line ? line + ' ' + w : w;
+          if (line && gc.measureText(t).width > maxW) { out.push(line); line = w; } else line = t;
+        }
+        if (line) out.push(line);
+        return out;
+      }
+      function wrapText2(gc, text, x, y, maxW, lh) {
+        wrapLines2(gc, text, maxW).forEach((ln, i) => gc.fillText(ln, x, y + i * lh));
+      }
+
+      /* ================================================================== */
+      /*  INTERACTIVE — draw your own finish line                            */
+      /* ================================================================== */
+      function agiDefiner() {
+        const [cv, g] = ctx.canvas(720, 400);
+        const FONT = '13px Inter, system-ui, sans-serif';
+        const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
+        /* met: 1 = clearly true of 2026 frontier models, 0.5 = partly/contested, 0 = not close */
+        const CRITERIA = [
+          { n: 'Hold a conversation indistinguishable from a person', met: 1, note: 'Turing, 1950. Widely considered passed, and quietly dropped as a target.' },
+          { n: 'Score at expert level on hard exams across many fields', met: 1, note: 'Graduate-level science, law, medicine, competition maths.' },
+          { n: 'Write working code for a non-trivial task', met: 1, note: 'Routine in 2026, and a large share of actual usage.' },
+          { n: 'Work usefully across many unrelated domains', met: 1, note: 'Legg & Hutter, 2007: goals in a *wide* range of environments.' },
+          { n: 'Stay coherent on a task lasting several hours', met: 0.5, note: 'Improving fast, but errors still compound over long agent runs.' },
+          { n: 'Learn from experience without being retrained', met: 0, note: 'Weights freeze when training ends. Nothing in the chat survives it.' },
+          { n: 'Know reliably what it does and does not know', met: 0.5, note: 'Calibration improved a lot and is still not dependable.' },
+          { n: 'Make an original scientific discovery unaided', met: 0, note: 'Genuine assistance, yes. Unaided discovery, no.' },
+          { n: 'Do most economically valuable work', met: 0, note: 'OpenAI\'s charter bar. Not close, on any honest reading.' },
+          { n: 'Act in the physical world as competently as a person', met: 0, note: 'Robotics lags the language side by a wide margin.' },
+        ];
+        const picked = CRITERIA.map((c, i) => i < 4);
+        const PRESETS = {
+          turing: [0],
+          legg: [0, 1, 2, 3],
+          openai: [0, 1, 2, 3, 4, 6, 8],
+          strict: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+        };
+        const setPreset = (k) => { picked.forEach((_, i) => { picked[i] = PRESETS[k].indexOf(i) >= 0; }); };
+        const btns = CRITERIA.map((c, i) => ctx.button(String(i + 1), () => { picked[i] = !picked[i]; }));
+        const pTuring = ctx.button('Turing (1950)', () => setPreset('turing'));
+        const pLegg = ctx.button('Legg & Hutter (2007)', () => setPreset('legg'));
+        const pOpenAI = ctx.button('"most economically valuable work"', () => setPreset('openai'), 'primary');
+        const pStrict = ctx.button('everything on the list', () => setPreset('strict'));
+        const ro = ctx.readout();
+
+        ctx.loop(() => {
+          g.clearRect(0, 0, 720, 400);
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('tick what you think "AGI" has to mean — numbered buttons below toggle each row', 30, 24);
+
+          let need = 0, have = 0;
+          CRITERIA.forEach((c, i) => {
+            const y = 40 + i * 30;
+            const on = picked[i];
+            if (on) { need++; have += c.met; }
+            g.fillStyle = on ? 'rgba(124,156,255,0.10)' : 'transparent';
+            g.fillRect(30, y, 655, 27);
+            /* the tick box */
+            g.strokeStyle = on ? C.accent : C.line; g.lineWidth = 1.5;
+            g.strokeRect(34, y + 6, 15, 15);
+            if (on) { g.fillStyle = C.accent; g.fillRect(37, y + 9, 9, 9); }
+            g.font = MONO; g.fillStyle = C.line; g.fillText(String(i + 1), 56, y + 18);
+            g.font = FONT; g.fillStyle = on ? C.text : '#55627a';
+            g.fillText(c.n, 74, y + 18);
+            /* status */
+            const col = c.met === 1 ? C.green : c.met === 0.5 ? C.warn : C.danger;
+            const lab = c.met === 1 ? 'done' : c.met === 0.5 ? 'partly' : 'not close';
+            g.font = 'bold ' + MONO; g.fillStyle = on ? col : '#3a4558';
+            g.fillText(lab, 470, y + 18);
+            g.font = MONO; g.fillStyle = on ? C.muted : '#2f3949';
+            wrapLines2(g, c.note, 160).slice(0, 1).forEach(ln => g.fillText(ln, 530, y + 18));
+          });
+
+          const frac = need ? have / need : 0;
+          const Y = 352;
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('by your definition, 2026 models are', 30, Y);
+          g.fillStyle = C.line; g.fillRect(30, Y + 8, 360, 20);
+          g.fillStyle = frac > 0.85 ? C.green : frac > 0.5 ? C.warn : C.danger;
+          g.fillRect(30, Y + 8, frac * 360, 20);
+          g.font = 'bold 20px Inter, system-ui, sans-serif';
+          g.fillStyle = frac > 0.85 ? C.green : frac > 0.5 ? C.warn : C.danger;
+          g.fillText((frac * 100).toFixed(0) + '%', 402, Y + 25);
+          g.font = FONT; g.fillStyle = C.muted;
+          wrapText2(g, need === 0
+            ? 'Tick at least one thing. That is harder than it sounds, and it is the whole problem.'
+            : frac > 0.95 ? 'By this definition it already arrived, and nobody held a ceremony.'
+              : frac < 0.35 ? 'By this definition it is clearly not here, and the missing pieces are not small.'
+                : 'By this definition it is genuinely arguable — which is why the public argument never resolves.',
+            470, Y + 12, 215, 16);
+          ro.set({ 'criteria you chose': need, 'already met': have.toFixed(1), 'your verdict': need === 0 ? '—' : (frac * 100).toFixed(0) + '%' });
+        });
+
+        return ctx.figure(cv,
+          'Every row is a real definition someone has seriously proposed, and the status column is an honest reading of 2026 frontier models rather than a measurement. Move between the presets and watch the verdict swing from "already arrived" to "not close" without a single fact about any model changing. That is the actual state of the AGI debate: not a disagreement about capabilities, but about where to draw a line that was never a unit like a kilogram in the first place.',
+          [...btns, pTuring, pLegg, pOpenAI, pStrict], ro);
+      }
+
       root.append(
+        callout('tryit', '🖐 Do this first — draw your own finish line',
+          `Ten things people have seriously proposed as the definition of AGI. Tick whichever ones <b>you</b> think it has to mean.<br>
+           <b>1.</b> Press <b>Turing (1950)</b>. By that definition it arrived some time ago and nobody held a ceremony.<br>
+           <b>2.</b> Press <b>"most economically valuable work"</b> — OpenAI's own charter bar. Now it is clearly not here.<br>
+           <b>3.</b> Press <b>everything on the list</b>. Not close.<br>
+           <b>4.</b> <b>No fact about any model changed between those three clicks.</b> Only where you drew the line.`),
+        agiDefiner(),
+        p(`That is the actual state of the AGI debate. Not a disagreement about what models can do — those are measurable — but about where a finish line goes that was never a unit like a kilogram.`),
+
         p(`You have just spent fourteen chapters learning how a machine turns a pile of numbers into something that can hold a conversation, write code, and pass a bar exam. So here is the question you have actually been building toward: are we close to a machine that can do <i>anything</i> a smart human can do? And if we are not there yet, is there anything one person, reading this in 2026, could actually do about it?`),
         p(`Both deserve honest answers, not hype and not doom. The first: closer than most people in 2015 would have believed, and further than most 2026 headlines admit. The second: yes, more than at almost any point in this field's eighty-year history, because the tools, the papers, and the open models are, for the first time, sitting on your own laptop.`),
         p(`This chapter earns both answers. It starts with what people actually mean by "AGI" — a term older and slipperier than it sounds. Then it takes today's frontier models apart, axis by axis, to find exactly where the gaps still are. Then the roads people are betting on to close them, the walls that could stop any of those bets, and — since this is the last chapter — what you, specifically, can do next.`),
@@ -341,14 +451,16 @@
         section('What people have meant by "AGI"',
           p(`Alan Turing never used the phrase "artificial general intelligence." In 1950 he proposed something cleverer: instead of arguing about the word "think," ask whether a machine's typed answers could be told apart from a human's. That sidestep — judge behaviour, not some unmeasurable inner spark — is still the field's best trick, and it still bites us, because a system can imitate the behaviour of understanding without necessarily having the thing itself.`),
           p(`In 2007 Shane Legg and Marcus Hutter tried to pin the word down properly: intelligence is an agent's ability to achieve goals in a <em>wide</em> range of environments. That one word is doing all the work. A chess engine is extraordinary in one environment and useless in every other; generality, not raw skill, is the bar.`),
-          p(`Organisations building toward that bar wrote their own versions of it. <a href="https://openai.com/charter/" target="_blank" rel="noopener">OpenAI's charter</a> defines AGI as "highly autonomous systems that outperform humans at most economically valuable work" — an economic bar, deliberately concrete. Anthropic tends to avoid the term itself and instead writes about <em>transformative AI</em>: systems whose impact could rival the agricultural or industrial revolutions — a framing about consequences, not a skills checklist. And in 2023 Google DeepMind (Morris et al.) proposed <a href="https://arxiv.org/abs/2311.02462" target="_blank" rel="noopener">"Levels of AGI"</a>, grading systems on <i>depth</i> (how good, "emerging" to "superhuman") and <i>breadth</i> (how general), the way self-driving cars get graded 0 through 5 — so "is it AGI yet?" stops being one yes/no argument.`),
+          p(`Organisations building toward that bar wrote their own versions of it. <a href="https://openai.com/charter/" target="_blank" rel="noopener">OpenAI's charter</a> defines AGI as "highly autonomous systems that outperform humans at most economically valuable work" — an economic bar, deliberately concrete. `),
+          p(`Anthropic tends to avoid the term itself and instead writes about <em>transformative AI</em>: systems whose impact could rival the agricultural or industrial revolutions — a framing about consequences, not a skills checklist. And in 2023 Google DeepMind (Morris et al.) proposed <a href="https://arxiv.org/abs/2311.02462" target="_blank" rel="noopener">"Levels of AGI"</a>, grading systems on <i>depth</i> (how good, "emerging" to "superhuman") and <i>breadth</i> (how general), the way self-driving cars get graded 0 through 5 — so "is it AGI yet?" stops being one yes/no argument.`),
           p(`None of these agree on a finish line, and that is the honest point: "AGI" is not a unit like a kilogram, it is a moving target several serious people define differently, and you should be suspicious of anyone — in either direction — who claims certainty about when we cross it.`),
         ),
 
         callout('history', 'A test that keeps getting redefined', `Turing's 1950 paper predicted machines would pass his test by 2000. A version of it plausibly happened, quietly, sometime in the 2020s — and by then almost nobody treated it as the finish line, because a system could imitate conversation convincingly while still failing at planning, memory and reliability in ways a five-year-old would not. Each decade's definition of "real" intelligence has moved to whatever the current best machines still can't do. That isn't a failure of the field; it's a sign the goalposts were badly placed the first time, and every reframing since — Legg &amp; Hutter, the OpenAI charter, DeepMind's Levels of AGI — has been an attempt to place them better.`),
 
         section('What 2026 frontier models can already do',
-          p(`Whatever you think "AGI" should mean, it's worth being precise about the checkable capabilities of 2026 frontier models — both the hype and the dismissal usually skip this part. Today's best models answer PhD-qualifying-exam science questions (the GPQA benchmark) at a level beating most non-specialist PhDs outside their own field. They solve International Mathematical Olympiad and Putnam-competition problems most strong maths graduates cannot. Handed an open-ended coding task, they work autonomously for hours across dozens of files, run their own tests, and open a real pull request. They look at a screen, decide what to click, and operate real software (<em>computer use</em>). And they do all of this across text, images, audio and video in one system, not four bolted together.`),
+          p(`Whatever you think "AGI" should mean, it's worth being precise about the checkable capabilities of 2026 frontier models — both the hype and the dismissal usually skip this part. `),
+          p(`Today's best models answer PhD-qualifying-exam science questions (the GPQA benchmark) at a level beating most non-specialist PhDs outside their own field. They solve International Mathematical Olympiad and Putnam-competition problems most strong maths graduates cannot. Handed an open-ended coding task, they work autonomously for hours across dozens of files, run their own tests, and open a real pull request. They look at a screen, decide what to click, and operate real software (<em>computer use</em>). And they do all of this across text, images, audio and video in one system, not four bolted together.`),
           p(`That list would have sounded like science fiction to this field's own researchers in 2015. It is real, measured, and why the conversation about AGI stopped being purely academic around 2023.`),
         ),
 
@@ -369,7 +481,8 @@
 
         section('The clock nobody agrees on: how fast is "long-horizon" moving?',
           p(`Of the four gaps above, long-horizon reliability is the one with the best public data behind it. In 2025 the AI safety research group METR asked a direct question: for a task of a given length (measured by how long a skilled human takes to do it), what is the longest task a given model can complete with 50% success? They call this the model's <em>time horizon</em>, and they have been tracking it since the GPT-2 era.`),
-          p(`Their finding: the 50%-success time horizon of frontier models has been doubling roughly every seven months since 2019 — and the trend may have sped up since 2024. Early-2025 reasoning models reached about 110 minutes. That single number is easy to misread in either direction. Read pessimistically, "110 minutes" sounds unimpressive next to a human workweek. Read as a trend, seven straight years of doubling every seven months is one of the fastest sustained capability curves in the history of any technology — and METR's own extrapolation is that, if the trend holds, tasks that take a skilled human a full month could be within reach within about five years of their 2025 measurement.`),
+          p(`Their finding: the 50%-success time horizon of frontier models has been doubling roughly every seven months since 2019 — and the trend may have sped up since 2024. Early-2025 reasoning models reached about 110 minutes. `),
+          p(`That single number is easy to misread in either direction. Read pessimistically, "110 minutes" sounds unimpressive next to a human workweek. Read as a trend, seven straight years of doubling every seven months is one of the fastest sustained capability curves in the history of any technology — and METR's own extrapolation is that, if the trend holds, tasks that take a skilled human a full month could be within reach within about five years of their 2025 measurement.`),
           p(`Notice the word <i>if</i>. Every exponential trend in this field's history — Moore's law, model scale, benchmark scores — has eventually bent, sometimes up and sometimes down, when it hit a wall nobody had priced in yet. Treat the extrapolation below as the trend's honest continuation, not a prophecy.`),
           callout('tryit', 'Try it: drag the horizon forward', `Start at 2026 and read the projected task length. Now drag to 2030: notice it jumps from hours to weeks, because a fixed <i>doubling time</i> compounds into an enormous absolute number surprisingly fast — that is what exponentials do, and it is the same math as chapter 14's compute curve. Then drag back to 2020 and compare the model's projected horizon there against what GPT-3 could actually do; a mismatch is the fit being a smooth idealisation of noisy, lumpy real progress.`),
           taskHorizonChart(),
@@ -436,7 +549,8 @@
         ),
 
         section('Why this matters for modern AI',
-          p(`Every capability in this chapter — the PhD-level answers, the hours-long coding sessions, the 110-minute task horizon — was built from exactly the mechanisms in chapters 1 through 13: a loss function, gradient descent, backpropagation, a transformer's attention, scaled up, then shaped by RLHF and RL on verifiable tasks (chapters 9–11). AGI, if it arrives, won't be a different kind of machine. It will be this same recipe, plus whichever candidate path above actually closes the remaining gaps — gaps that are specific, named, and in several cases already measured year over year, not vague hand-waving. That's the most useful thing this course can leave you with: not a prediction of when, but a precise enough map of <i>what is still missing</i> that you can watch it close, or fail to, with your own eyes.`),
+          p(`Every capability in this chapter — the PhD-level answers, the hours-long coding sessions, the 110-minute task horizon — was built from exactly the mechanisms in chapters 1 through 13: a loss function, gradient descent, backpropagation, a transformer's attention, scaled up, then shaped by RLHF and RL on verifiable tasks (chapters 9–11).`),
+          p(` AGI, if it arrives, won't be a different kind of machine. It will be this same recipe, plus whichever candidate path above actually closes the remaining gaps — gaps that are specific, named, and in several cases already measured year over year, not vague hand-waving. That's the most useful thing this course can leave you with: not a prediction of when, but a precise enough map of <i>what is still missing</i> that you can watch it close, or fail to, with your own eyes.`),
           p(`And unlike almost any other transformative technology in history, the tools to work on that map — papers, open model weights, training code — sit on your computer right now, not locked in one company's basement. That's genuinely new, and it's why the roadmap above isn't wishful thinking.`),
         ),
 
