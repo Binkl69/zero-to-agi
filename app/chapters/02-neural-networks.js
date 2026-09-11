@@ -971,6 +971,26 @@
            <b>4.</b> Find a start position from which η = 0.3 reaches the deepest valley.<br>
            <b>Notice:</b> that red tangent line is the only information the algorithm ever has.`),
         gradientDescent1D(),
+
+        /* maths beat: the red tangent they were just told is the only information available */
+        p(`That red tangent line has a name, and it is the one piece of calculus this entire course needs.`),
+        ctx.decoder([
+          { sym: '&part;', name: 'del, or "partial"', says: 'Just a curly <b>d</b>, meaning "a tiny change in". It is curly rather than straight only because the loss depends on <i>many</i> weights and we are changing one at a time, holding the rest still. <b>That is the whole difference.</b> If straight-d calculus once defeated you, this is not a harder version of it.', points: 'nothing yet — it is a piece of punctuation, not an operation.' },
+          { sym: '&part;L', name: 'a tiny change in the loss', says: 'How much the error moved.', points: 'the height of the ball on the curve.' },
+          '/',
+          { sym: '&part;w', name: 'a tiny change in the weight', says: 'How much you nudged the weight to cause it.', points: 'how far left or right you moved.' },
+        ], {
+          title: '∂L / ∂w',
+          hint: 'Three symbols. Click each one — you have already watched all three.',
+          plain: '"If I nudge this weight a hair, how much does the error move?" — which is exactly the steepness of that red line. Steep means this weight matters a lot right here. Flat means it barely matters. That is all a <em>gradient</em> is: the slope, for every weight at once.',
+        }),
+        callout('key', '🔑 You already know this rule — it is chapter 1\'s, rearranged',
+          `Gradient descent, written out, is <b>w ← w − η · ∂L/∂w</b>.<br>
+           Put it next to the perceptron rule you decoded in chapter 1: <b>w ← w + η(y − ŷ)x</b>.<br>
+           <b>Same shape.</b> Take what you had, add a step of size η, in a direction worked out from how wrong you were. The perceptron rule <i>is</i> gradient descent — on a particular loss, with a particularly crude measure of wrongness.<br>
+           The one new thing is the <b>minus sign</b>, and it is not a detail: ∂L/∂w tells you which way the loss goes <i>up</i>. You want down. So you subtract. Every "descent" in machine learning is that minus sign.`),
+        p(`<b>And you never have to calculate one.</b> Working out ∂L/∂w by hand is a thing people did in 1986 and essentially nobody does now — a tool called <em>autograd</em> computes it for you, and in lab 02 of chapter 13 you build that tool yourself. What you need is not the algebra. It is knowing what the number <i>means</i> when you see it, which you now do.`),
+
         p(`The learning rate η is your stride length, and all three failures above are stride failures. Too short and you need a million steps. Too long and you leap clean over the valley, land higher on the far slope, leap back, and the loss bounces or explodes.`),
         callout('warning', '⚠️ Where this picture lies to you',
           `A one-dimensional valley makes local minima look like the central danger of training, and for decades people assumed they were.
@@ -990,6 +1010,28 @@
            Drag left and right across the picture to freeze the step mid-flight.`),
         backpropFlow(),
         p(`That reuse is the entire trick. Each layer's gradients are built from the layer after it, so computing the gradient for a million weights costs about the same as one forward pass. Not a million times as much. About once.`),
+
+        /* maths beat: the chain rule, named after they have watched it happen */
+        p(`Those red numbers on the canvas are written in notation nobody has explained yet. Here it is, and it is one idea.`),
+        ctx.decoder([
+          { sym: '&part;L/&part;w<sub>1</sub>', name: 'how the loss depends on the first weight', says: 'The thing you actually want. It is buried deep — w₁ is nowhere near the loss.', points: 'the red number on a layer-1 edge.' },
+          '=',
+          { sym: '&part;L/&part;y', name: 'loss, given the output', says: 'How the loss responds to the final answer. Easy: it is right next to the loss.', points: 'the single red number at the far right, computed once.' },
+          '×',
+          { sym: '&part;y/&part;h', name: 'output, given the hidden value', says: 'How the output responds to the hidden neuron feeding it.', points: 'the factor picked up crossing one edge.' },
+          '×',
+          { sym: '&part;h/&part;w<sub>1</sub>', name: 'hidden value, given the weight', says: 'How that hidden neuron responds to the weight itself. Also easy: they are adjacent.', points: 'the factor picked up at the last hop.' },
+        ], {
+          title: '∂L/∂w₁  =  ∂L/∂y · ∂y/∂h · ∂h/∂w₁',
+          hint: 'Click along the line, right to left — the same direction the red dots travel.',
+          plain: 'The <em>chain rule</em>: to find how a far-away thing affects the loss, multiply the slopes of every link between them. Each individual link is easy. The chain is what makes it look hard.',
+        }),
+        callout('key', '🔑 Why this is cheap, in one observation',
+          `Look at where <b>∂L/∂y</b> sits in that product: it is the <b>first factor in every weight's chain</b>, at every depth.<br>
+           So you compute it <b>once</b>, push it leftward, and each layer multiplies it by one more local factor on the way past. Nothing is ever recomputed — which is exactly what you watched, and exactly why the whole backward sweep costs about what one forward pass costs.<br>
+           <b>That is backpropagation.</b> Not a new kind of maths — the chain rule, plus the observation that you should work right to left so the shared part is only done once.`),
+        p(`It is worth being blunt about the notation: <code class="inline">∂L/∂w</code> looks like the hard part and is the easy part. The genuinely clever move is the <b>ordering</b> — going backwards. Do the same multiplications left to right and you recompute the shared prefix for every single weight, and training a large model becomes impossible.`),
+
         callout('key', '🔑 Check one number by hand',
           `Smallest network that shows it: one input x, one hidden neuron h = σ(w<sub>1</sub>·x), one linear output y = w<sub>2</sub>·h, loss L = ½(y − t)².
            Take x = 1, t = 1, w<sub>1</sub> = 0.5, w<sub>2</sub> = −1.<br>
