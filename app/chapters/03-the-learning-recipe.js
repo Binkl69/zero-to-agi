@@ -30,7 +30,14 @@
         const plot = { x: 46, y: 12, w: 630, h: 230 };
         const YLO = -2.0, YHI = 2.0;
         const trueF = (x) => Math.sin(2 * Math.PI * x * 1.5) * 0.55;
-        const NOISE = 0.18, RIDGE = 1e-4, MAXD = 15;
+        const NOISE = 0.18, RIDGE = 1e-10, MAXD = 15;
+        /* Legendre basis: same space of polynomials, vastly better conditioned. */
+        function basis(u, d1) {
+          const row = [1];
+          if (d1 > 1) row.push(u);
+          for (let k = 2; k < d1; k++) row.push(((2 * k - 1) * u * row[k - 1] - (k - 1) * row[k - 2]) / k);
+          return row;
+        }
         const toPx = (x, y) => ({ x: plot.x + x * plot.w, y: plot.y + (YHI - ctx.clamp(y, YLO, YHI)) / (YHI - YLO) * plot.h });
 
         function solve(A, b) {
@@ -54,16 +61,16 @@
           const b = new Array(d1).fill(0);
           for (const i of idx) {
             const u = (S.xs[i] - 0.5) * 2;
-            const row = [1]; for (let k = 1; k < d1; k++) row.push(row[k - 1] * u);
+            const row = basis(u, d1);
             for (let r = 0; r < d1; r++) { b[r] += row[r] * S.ys[i]; for (let c = 0; c < d1; c++) A[r][c] += row[r] * row[c]; }
           }
           for (let r = 0; r < d1; r++) A[r][r] += RIDGE;
           return solve(A, b);
         }
-        function evalW(w, x) { const u = (x - 0.5) * 2; let s = 0, pw = 1; for (let k = 0; k < w.length; k++) { s += w[k] * pw; pw *= u; } return s; }
+        function evalW(w, x) { const row = basis((x - 0.5) * 2, w.length); let s = 0; for (let k = 0; k < w.length; k++) s += w[k] * row[k]; return s; }
         function mse(w, idx) { let s = 0; for (const i of idx) { const e = evalW(w, S.xs[i]) - S.ys[i]; s += Math.min(16, e * e); } return s / Math.max(1, idx.length); }
 
-        const S = { n: 22, deg: 3, xs: [], ys: [], train: [], held: [], w: [], curveTrain: [], curveVal: [], dirty: true };
+        const S = { n: 40, deg: 3, xs: [], ys: [], train: [], held: [], w: [], curveTrain: [], curveVal: [], dirty: true };
         function recompute() {
           S.w = fitDeg(S.train, S.deg);
           S.curveTrain = []; S.curveVal = [];
@@ -126,10 +133,10 @@
         function updateRO() { ro.set({ degree: S.deg, points: S.n, 'train error': S.curveTrain[S.deg - 1] != null ? S.curveTrain[S.deg - 1].toFixed(3) : '–', 'held-out error': S.curveVal[S.deg - 1] != null ? S.curveVal[S.deg - 1].toFixed(3) : '–' }); }
         ctx.loop(() => { if (S.dirty) { draw(); drawErr(); updateRO(); S.dirty = false; } });
         const degSl = ctx.slider({ label: 'polynomial degree', min: 1, max: MAXD, step: 1, value: 3, onChange: (v) => { S.deg = v; recompute(); } });
-        const nSl = ctx.slider({ label: 'number of points', min: 8, max: 50, step: 1, value: 22, onChange: (v) => { S.n = v; makeData(); } });
+        const nSl = ctx.slider({ label: 'number of points', min: 8, max: 50, step: 1, value: 40, onChange: (v) => { S.n = v; makeData(); } });
         const resampleBtn = ctx.button('New noise sample', () => makeData());
         const body = h('div', {}, cv, ec);
-        return ctx.figure(body, 'Least-squares polynomial fit (normal equations, solved with a tiny ridge term for numerical stability) to noisy samples of a hidden sine. Right: training error (blue) always falls as degree rises; held-out error (red) falls then rises — the U-shaped signature of the bias–variance trade-off.', [degSl, nSl, resampleBtn], ro);
+        return ctx.figure(body, 'Least-squares polynomial fit (normal equations, on a Legendre basis, with a nominal ridge term for numerical stability) to noisy samples of a hidden sine. Below: training error (blue) always falls as degree rises; held-out error (red) falls then rises — the U-shaped signature of the bias–variance trade-off.', [degSl, nSl, resampleBtn], ro);
       }
 
       /* ================================================================== */
@@ -228,12 +235,12 @@
           if (dirty) { draw(); dirty = false; }
         });
         function reset() { S = OPT.map(fresh); dirty = true; }
-        const sgdSl = ctx.slider({ label: 'SGD learning rate', min: 0.0005, max: 0.03, step: 0.0005, value: 0.0035, digits: 4, onChange: (v) => { OPT[0].lr = v; } });
-        const momSl = ctx.slider({ label: 'Momentum learning rate', min: 0.0005, max: 0.03, step: 0.0005, value: 0.0035, digits: 4, onChange: (v) => { OPT[1].lr = v; } });
+        const sgdSl = ctx.slider({ label: 'SGD learning rate', min: 0.0005, max: 0.06, step: 0.0005, value: 0.0035, digits: 4, onChange: (v) => { OPT[0].lr = v; } });
+        const momSl = ctx.slider({ label: 'Momentum learning rate', min: 0.0005, max: 0.08, step: 0.0005, value: 0.0035, digits: 4, onChange: (v) => { OPT[1].lr = v; } });
         const adamSl = ctx.slider({ label: 'Adam learning rate', min: 0.01, max: 0.4, step: 0.01, value: 0.09, digits: 2, onChange: (v) => { OPT[2].lr = v; } });
         const playBtn = ctx.button('▶ Start', () => { playing = !playing; playBtn.textContent = playing ? '⏸ Pause' : '▶ Start'; }, 'primary');
         const resetBtn = ctx.button('Reset', () => { reset(); playing = false; playBtn.textContent = '▶ Start'; });
-        return ctx.figure(cv, 'Three optimizers descending the same curved valley (a tamed Rosenbrock surface; white cross marks the true minimum). SGD (grey) fights the curvature every step; momentum (yellow) builds speed but overshoots the valley floor; Adam (green) rescales every direction by its own gradient history and glides down with far less zig-zag.', [sgdSl, momSl, adamSl, playBtn, resetBtn]);
+        return ctx.figure(cv, 'Three optimizers descending the same curved valley (a tamed Rosenbrock surface; white cross marks the true minimum). SGD (grey) fights the curvature every step; momentum (yellow) builds speed down the slope and reaches the floor about twelve times sooner than SGD, wobbling only where it first turns into the valley; Adam (green) rescales every direction by its own gradient history and glides down with far less zig-zag.', [sgdSl, momSl, adamSl, playBtn, resetBtn]);
       }
 
       /* ================================================================== */
@@ -341,7 +348,7 @@
           best.push(tried[bi]);
         }
 
-        const trSl = ctx.slider({ label: 'training examples', min: 400, max: 900, step: 10, value: 700, onChange: (v) => { nTrain = v; if (nTrain + nVal > TOTAL - 50) { nVal = TOTAL - 50 - nTrain; vaSl.value = nVal; } reset(); } });
+        const trSl = ctx.slider({ label: 'training examples', min: 400, max: 900, step: 10, value: 500, onChange: (v) => { nTrain = v; if (nTrain + nVal > TOTAL - 50) { nVal = TOTAL - 50 - nTrain; vaSl.value = nVal; } reset(); } });
         const vaSl = ctx.slider({ label: 'validation examples', min: 25, max: 400, step: 5, value: 150, onChange: (v) => { nVal = v; if (nTrain + nVal > TOTAL - 50) { nTrain = TOTAL - 50 - nVal; trSl.value = nTrain; } reset(); } });
         const oneBtn = ctx.button('Tune once', () => tryOne());
         const manyBtn = ctx.button('Tune 50 times', () => { for (let i = 0; i < 50; i++) tryOne(); }, 'primary');
@@ -537,7 +544,7 @@
           ro.set({ batch, 'avg angle error': avgAng.toFixed(1) + '°', 'noise ∝ 1/√b': (1 / Math.sqrt(batch)).toFixed(3) });
         });
 
-        return ctx.figure(cv, 'Left: forty different mini-batches, each drawn fresh from the same 2,000 examples, each pointing where <i>it</i> thinks downhill is. The white arrow is the true gradient over all the data. At batch 1 the fan is wild; the error shrinks with 1/√(batch size), so 4× the batch halves the noise. Right: a CPU does the same total work however you slice it, while a GPU has a fixed cost per step it can amortise over a whole batch at once — which is why batching is nearly free there and the reason deep learning waited for graphics hardware.', [bSl, ...presets], ro);
+        return ctx.figure(cv, 'Left: forty different mini-batches, each drawn fresh from the same 2,000 examples, each pointing where <i>it</i> thinks downhill is. The white arrow is the true gradient over all the data. At batch 1 the fan is wild. Above a handful of examples the error shrinks with 1/√(batch size), so 4× the batch halves the noise. Right: a CPU does the same total work however you slice it, while a GPU has a fixed cost per step it can amortise over a whole batch at once — which is why batching is nearly free there and the reason deep learning waited for graphics hardware.', [bSl, ...presets], ro);
       }
 
       /* ================================================================== */
@@ -726,7 +733,7 @@
            <b>2.</b> Push <b>degree</b> to 15. The curve now threads almost perfectly through every blue dot: training error near zero.
            <b>Now look at the orange dots</b>, and at the wild swings between them.<br>
            <b>3.</b> Still at degree 15, press <b>New noise sample</b> a few times. The true curve never moves. Yours reshapes itself completely.<br>
-           <b>4.</b> Find the degree with the lowest <i>held-out</i> error on the right-hand chart.`),
+           <b>4.</b> Find the degree with the lowest <i>held-out</i> error on the lower chart.`),
         curveFit(),
         p(`Degree 15 did not learn the curve. It learned the dots — including the random jitter in them, which will never repeat. It built an answer key.`),
       );
@@ -764,7 +771,7 @@
         ul([
           `<b>Weight decay</b> — add a small penalty for large weights, so the optimizer keeps them small unless the data really insists. Small weights make smoother functions, and smooth functions memorise noise less easily. (The ridge term quietly stabilising the polynomial fit above is exactly this.)`,
           `<b>Dropout</b> — during training, randomly switch off a fraction of neurons on every pass, so the survivors cannot rely on one teammate always being present. The network is forced to learn redundant, robust features.`,
-          `<b>Early stopping</b> — watch validation loss during training and stop the moment it turns upward, even though training loss is still falling.`,
+          `<b>Early stopping</b> — watch validation loss during training, and when it has clearly stopped improving, go back and keep the weights from the epoch where it was lowest. (The single lowest point, not the first uptick: validation loss is noisy and wobbles up and down on the way.)`,
           `<b>More and cleaner data</b> — the single most reliable fix. A model cannot memorise noise it has not seen enough of.`,
         ]),
         p(`All four do the same underlying thing: make it harder to fit noise without making it harder to fit signal. None are free — overdo weight decay or dropout and you are back to underfitting.`),
@@ -772,7 +779,7 @@
           `It is already running. Training loss (blue) keeps falling — the model can always get better at its own homework. Validation loss (red) falls, then <b>turns upward</b>. That turn is memorisation beginning.<br>
            <b>1.</b> Find the green dot: the best validation epoch, and where early stopping would have saved you.<br>
            <b>2.</b> Set training set size to its smallest and regularization to zero. The turn arrives early and steeply.<br>
-           <b>3.</b> Set size to its largest and regularization to maximum. The turn may not arrive at all inside 60 epochs.<br>
+           <b>3.</b> Set size to its largest and regularization to maximum. The turn still arrives and the demo still plants its green dot — but look how little the red line rises after it. That is what "this model is not overfitting much" looks like.<br>
            <b>4.</b> Press <b>↺ Replay</b> a few times at fixed settings: the curve jitters, the story never changes.`),
         earlyStopping(),
         p(`Notice that the blue line never betrays you. It falls forever. If training loss were all you watched, you would ship the model from the far right of that chart — the most-trained one, and the worst one.`),
@@ -783,15 +790,15 @@
         callout('tryit', '🖐 Try this: three optimizers, one nasty valley',
           `Darker background is lower loss; the white cross is the true minimum. All three start together.<br>
            <b>1.</b> Press <b>▶ Start</b>. Plain SGD (grey) crawls — it fights the curvature at every step.<br>
-           <b>2.</b> Momentum (yellow) builds speed, then overshoots the valley floor and wobbles.<br>
-           <b>3.</b> Adam (green) glides down with far less zig-zag.<br>
+           <b>2.</b> Momentum (yellow) builds speed down the slope and gets there about twelve times sooner, wobbling only at the turn into the valley.<br>
+           <b>3.</b> Adam (green) takes a similar path but needs a twentieth of SGD's steps — and, unlike the other two, it survives every setting its slider offers.<br>
            <b>4.</b> Push the SGD or momentum learning rate up until its ball bounces off the walls. Then do the same to Adam — it tolerates a far wider range before misbehaving.`),
         optimizerRace(),
         p(`<em>Momentum</em> fixes the first problem by changing the metaphor. Instead of a marble that stops dead when you stop pushing, imagine a heavy ball: it keeps most of its previous velocity and adds the new gradient on top. Down a narrow valley it builds speed along the floor, while the side-to-side component flips sign each step and largely cancels itself out.`),
         callout('key', '🔑 Momentum, by hand',
           `v ← β·v − η·∇L, then position ← position + v, with β ≈ 0.9 (keep 90% of last step's velocity).<br>
-           Say the previous velocity was v = −0.40, the new gradient is 0.30, β = 0.9 and η = 0.1.<br>
-           New velocity = 0.9 × (−0.40) − 0.1 × 0.30 = <b>−0.39</b>. Barely changed.
+           Say the ball is rolling left, v = −0.40, and one noisy batch now says "go right": gradient 0.30, with β = 0.9 and η = 0.1.<br>
+           New velocity = 0.9 × (−0.40) − 0.1 × 0.30 = <b>−0.39</b>. Still heading left, barely dented.
            The ball remembers where it was heading and shrugs off one noisy gradient — which is exactly what you want when every gradient comes from a small random batch.`),
         p(`<em>Adam</em> fixes the second problem. For each parameter it tracks a running average of the gradient <i>and</i> of the gradient's squared size, then divides the first by the square root of the second. A parameter with consistently huge gradients gets shrunk to a sane step; one with tiny rare gradients gets amplified. Every parameter effectively gets a learning rate chosen from its own history.`),
         p(`A neat fact falls out of the algebra: on the very first update Adam's step is almost exactly η × sign(gradient), regardless of the gradient's actual size. Plain SGD's first step is η × gradient, so one freak batch throws it wildly off. That is why Adam tolerated the much wider slider range you just tested.`),
@@ -810,8 +817,9 @@
            <b>3.</b> Watch the right-hand chart as you do it: on a GPU, all that extra accuracy costs almost nothing.`),
         batchNoise(),
         p(`Real training almost never computes the gradient from one example (that was chapter 2's playground, for clarity) nor from the whole dataset at once (far too slow to ever take a step). It averages over a <em>mini-batch</em> — commonly 32 to a few thousand — takes one step, then moves on.`),
-        p(`The noise falls as 1/√(batch size), so quadrupling the batch halves the error. That is a punishing exchange rate, which is why batches are not simply enormous: past a point you are paying four times the compute to halve a noise that was not hurting you much anyway.`),
-        p(`A GPU's advantage was never doing one multiplication fast — it is doing thousands at the same instant. Feed it one example and most of the chip idles. Feed it 512 stacked into one matrix and the same multiply handles all of them for barely more time. Bigger batches are nearly free on a GPU and expensive on a CPU, which is one quiet reason deep learning did not take off until graphics hardware was repurposed for it.`),
+        p(`The noise falls as 1/√(batch size), so quadrupling the batch halves the error. That is a punishing exchange rate, which is why batches are not simply enormous: past a point you are paying four times the work <i>in each update</i> to halve a noise that was not hurting you much anyway.`),
+        p(`A GPU's advantage was never doing one multiplication fast — it is doing thousands at the same instant. Feed it one example and most of the chip idles. Feed it 512 stacked into one matrix and the same multiply handles all of them for barely more time. `),
+        p(`Bigger batches buy a CPU nothing at all — it does the same total work however you slice it, which is what the flat red line says. On a GPU they are nearly free, and that asymmetry is one quiet reason deep learning did not take off until graphics hardware was GPU and expensive on a CPU, which is one quiet reason deep learning did not take off until graphics hardware was repurposed for it.`),
         callout('key', '🔑 Parameters vs hyperparameters',
           `<b>Parameters</b> are what the optimizer learns: weights and biases, everything adjusted by ∂L/∂w.<br>
            <b>Hyperparameters</b> are what a human sets before training and the optimizer never touches: learning rate, batch size, number of layers, dropout rate, the polynomial degree you dragged at the top of this chapter.<br>
@@ -835,7 +843,7 @@
         p(`Every "predict the next word" example carries a free label — the actual next word — manufactured automatically from ordinary text, then trained with exactly the cross-entropy loss and backpropagation from chapter 2. It is what let language models train on essentially the whole internet, instead of waiting for a hand-labelled dataset that could never be big enough.`),
         p(`More data helps, but not all data is worth the same. Ten thousand carefully checked, genuinely diverse examples routinely beat a million scraped, duplicated, mislabelled ones — because the optimizer cannot tell a real pattern from a systematic error in the labels. It fits both with equal enthusiasm.`),
         callout('example', '🌍 Curation beats scale',
-          `Early large language model training sets went through aggressive filtering and deduplication before a single weight was updated; simply removing near-duplicate documents measurably improved the resulting model, because duplicated text taught it to overweight whatever happened to be copy-pasted often across the web.
+          `Early large language model training sets went through aggressive filtering and deduplication before a single weight was updated; Lee et al. (2022) found one 61-word sequence repeated over 60,000 times in C4, and showed that simply removing near-duplicate documents measurably improved the resulting model, because duplicated text taught it to overweight whatever happened to be copy-pasted often across the web.
            Later, smaller-but-carefully-curated model families showed the same lesson from the other direction: a modestly sized model trained on well-chosen data can beat a much larger model trained carelessly.
            "Bigger dataset" and "better dataset" are different axes, and the second is usually the cheaper one to pull.`),
       ));
@@ -846,7 +854,7 @@
           `<b>1.</b> Set <b>how much of the mail is really spam</b> to 5%, then press <b>Flag nothing ever</b>.<br>
            <b>Read the accuracy bar: 95%.</b> Now read the recall bar: zero. The filter catches no spam whatsoever and still scores 95%.<br>
            <b>2.</b> Press <b>Flag everything</b>. Recall is now perfect and precision is terrible.<br>
-           <b>3.</b> Set spam back to 20% and drag the yellow line to about <b>0.48</b>: precision 73%, recall 95%. Now drag it to <b>0.62</b>: precision jumps to 94% and recall collapses to 75%. One cannot rise without the other falling.`),
+           <b>3.</b> Set spam back to 20% and drag the yellow line to about <b>0.48</b>: precision 73%, recall 95%. Now drag it to <b>0.62</b>: precision jumps to 94% and recall collapses to 75%. Past the easy gains, one cannot rise without the other falling.`),
         spamDial(),
         p(`Two sharper questions than accuracy. Of the emails it flagged, how many really were spam — that is <em>precision</em>. Of all the spam there was, how many did it catch — that is <em>recall</em>. The confusion matrix gives you both, and accuracy gives you neither.`),
         p(`A filter tuned for high recall catches nearly everything and annoys users with false alarms. One tuned for high precision rarely bothers a real email and lets more spam through. Which you want depends entirely on what each kind of mistake costs — and that is a product decision, not a modelling one.`),
@@ -854,9 +862,10 @@
       ));
 
       root.append(section('Why this matters for modern AI',
-        p(`Every headline about a new frontier model is this chapter's recipe run at a scale a 2012 researcher would have called science fiction. Petabytes of self-supervised data standing in for hand-made labels. Hundreds of billions of parameters for the model. Cross-entropy for the loss. AdamW for the optimizer.`),
+        p(`Every headline about a new frontier model is this chapter's recipe run at a scale a 2012 researcher would have called science fiction. Tens of terabytes of self-supervised text, filtered down from petabytes of raw crawl, standing in for hand-made labels. Cross-entropy for the loss. AdamW for the optimizer.`),
+        p(`Hundreds of billions of parameters for the model, often a few trillion. Most frontier models are now <em>sparse mixtures of experts</em>, so only a fraction of those parameters are used on any one token — which is why a single headline number tells you less than it used to. Chapter 10 takes that apart.`),
         p(`And a held-out benchmark — never the training data — standing in for the report card anyone trusts. The training-versus-validation gap you watched turn upward is the same gap researchers track at the scale of trillions of tokens.`),
-        p(`A striking share of frontier-lab effort goes into data curation and regularization: exactly the levers in this chapter. The recipe does not change as it scales. Only its size does.`),
+        p(`A striking share of frontier-lab effort goes into data curation and evaluation: the first and last levers in this chapter. The regularizers change as you scale — a single pass over trillions of tokens leaves little to memorise, so frontier pretraining generally drops dropout altogether. The recipe does not change as it scales. Only its size does.`),
         callout('warning', '⚠️ The failure mode that survives at every scale',
           `Benchmark contamination is overfitting wearing a lab coat. If a test set leaked into the training data — and at internet scale, some of it always has — the reported score is a training score,
            and the model is grading its own homework in front of an audience. This is why frontier labs build fresh held-out evaluations, and why a benchmark number without a contamination check deserves the same follow-up as that vendor's "99.9% on our data".`),
@@ -874,11 +883,11 @@
 
         section('Go deeper',
           ul([
-            `<a href="https://developers.google.com/machine-learning/guides/rules-of-ml" target="_blank" rel="noopener">Google, "Rules of Machine Learning"</a>: 43 hard-won practical rules from people who ship models. Rules 1–15 are essentially this chapter.`,
+            `<a href="https://developers.google.com/machine-learning/guides/rules-of-ml" target="_blank" rel="noopener">Google, "Rules of Machine Learning"</a>: 43 hard-won practical rules from people who ship models — the engineering discipline that surrounds everything in this chapter, once a model has to survive contact with a real product.`,
             `<a href="https://distill.pub/2017/momentum/" target="_blank" rel="noopener">"Why Momentum Really Works" (Distill)</a>: an interactive article that lets you feel the valley the optimizer race above is crossing.`,
             `<a href="https://arxiv.org/abs/1412.6980" target="_blank" rel="noopener">Kingma &amp; Ba (2014), "Adam: A Method for Stochastic Optimization"</a>: the original paper, unusually readable.`,
             `<a href="https://arxiv.org/abs/1711.05101" target="_blank" rel="noopener">Loshchilov &amp; Hutter (2017), "Decoupled Weight Decay Regularization"</a>: the one-line fix that made AdamW the default everywhere.`,
-            `<a href="https://jmlr.org/papers/v15/srivastava14a.html" target="_blank" rel="noopener">Srivastava et al. (2014), "Dropout"</a>: the JMLR paper, including the bank-teller analogy.`,
+            `<a href="https://jmlr.org/papers/v15/srivastava14a.html" target="_blank" rel="noopener">Srivastava et al. (2014), "Dropout"</a>: the JMLR paper. Its own motivation reaches for sexual reproduction and small conspiracies rather than bank tellers; the teller story is one Hinton has told in talks and interviews.`,
           ]),
         ),
       );
