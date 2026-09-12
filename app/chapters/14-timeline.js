@@ -537,7 +537,7 @@
         'records imply': obs ? obs.toFixed(1) + ' months' : 'n/a',
       });
     }
-    const s1 = ctx.slider({ label: 'doubling time (months)', min: 1, max: 24, step: 0.5, value: months, digits: 1, onChange: v => { months = v; draw(); } });
+    const s1 = ctx.slider({ label: 'doubling time (months)', min: 1, max: 24, step: 0.1, value: months, digits: 1, onChange: v => { months = v; draw(); } });
     const s2 = ctx.slider({ label: 'start year', min: 2012, max: 2024, step: 1, value: start, onChange: v => { start = v; draw(); } });
     const reset = ctx.button('↺ reset', () => { months = 6; start = 2012; s1.value = 6; s2.value = 2012; draw(); });
     draw();

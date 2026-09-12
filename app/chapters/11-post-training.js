@@ -868,7 +868,7 @@
       root.append(section('Go deeper',
         ul([
           '<a href="https://arxiv.org/abs/2203.02155" target="_blank" rel="noopener">Ouyang et al. (2022), "Training language models to follow instructions with human feedback"</a> — the InstructGPT paper, and the result that a 1.3B model with RLHF beat 175B GPT-3.',
-          '<a href="https://arxiv.org/abs/2305.18290" target="_blank" rel="noopener">Rafailov et al. (2023), "Direct Preference Optimization"</a> — the derivation that made the reward model cancel out. Section 4 is the whole idea.',
+          '<a href="https://arxiv.org/abs/2305.18290" target="_blank" rel="noopener">Rafailov et al. (2023), "Direct Preference Optimization: Your Language Model is Secretly a Reward Model"</a> — the derivation that made the reward model cancel out. Section 4 is the whole idea.',
           '<a href="https://arxiv.org/abs/2212.08073" target="_blank" rel="noopener">Bai et al. (2022), "Constitutional AI: Harmlessness from AI Feedback"</a> — critique-and-revise, RLAIF, and the argument for writing the rules down.',
           '<a href="https://arxiv.org/abs/2501.12948" target="_blank" rel="noopener">DeepSeek-R1 (2025)</a> — reasoning trained with verifiable rewards, GRPO, and the open recipe.',
           '<a href="https://lmarena.ai" target="_blank" rel="noopener">LMArena</a> — Bradley-Terry run as a public leaderboard. Vote a few times and you will recognise exactly what you did in the reward-model demo.',

@@ -574,7 +574,7 @@
             `<a href="https://arxiv.org/abs/2203.15556" target="_blank" rel="noopener">Hoffmann et al., "Training Compute-Optimal Large Language Models"</a> (Chinchilla, 2022) — the C = 6ND relationship used in the cost explorer above.`,
             `<a href="https://arxiv.org/abs/2203.02155" target="_blank" rel="noopener">Ouyang et al., "Training Language Models to Follow Instructions with Human Feedback"</a> (InstructGPT, 2022).`,
             `<a href="https://arxiv.org/abs/2212.08073" target="_blank" rel="noopener">Bai et al., "Constitutional AI: Harmlessness from AI Feedback"</a> (2022).`,
-            `<a href="https://arxiv.org/abs/2305.18290" target="_blank" rel="noopener">Rafailov et al., "Direct Preference Optimization"</a> (2023).`,
+            `<a href="https://arxiv.org/abs/2305.18290" target="_blank" rel="noopener">Rafailov et al., "Direct Preference Optimization: Your Language Model is Secretly a Reward Model"</a> (2023).`,
             `<a href="https://arxiv.org/abs/2303.12712" target="_blank" rel="noopener">Bubeck et al., "Sparks of Artificial General Intelligence: Early Experiments with GPT-4"</a> (2023).`,
             `<a href="http://www.incompleteideas.net/IncIdeas/BitterLesson.html" target="_blank" rel="noopener">Sutton, "The Bitter Lesson"</a> (2019) — one page, and worth reading twice.`,
             `<a href="https://arxiv.org/abs/2407.21783" target="_blank" rel="noopener">Meta AI, "The Llama 3 Herd of Models"</a> (2024) — the most detailed public account of a frontier-scale training run.`,
