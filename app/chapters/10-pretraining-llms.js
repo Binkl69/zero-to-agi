@@ -256,7 +256,7 @@
 
         const [cv, g] = ctx.canvas(720, 380);
         const readout = ctx.readout();
-        const P1 = { x: 52, y: 26, w: 296, h: 292, x0: 7, x1: 12, y0: 8, y1: 14 };
+        const P1 = { x: 52, y: 26, w: 296, h: 292, x0: 7, x1: 12, y0: 8, y1: 15 };
         const P2 = { x: 424, y: 26, w: 276, h: 292, x0: 15.5, x1: 27, y0: 1.5, y1: 6.5 };
         const X1 = (lN) => P1.x + (lN - P1.x0) / (P1.x1 - P1.x0) * P1.w;
         const Y1 = (lD) => P1.y + P1.h - (lD - P1.y0) / (P1.y1 - P1.y0) * P1.h;
@@ -452,7 +452,7 @@
           sN.value = st.logN; sD.value = st.logD; draw();
         }, 'primary');
         const llamaBtn = ctx.button('Jump to Llama 3 8B', () => {
-          st.logN = snap(Math.log10(8e9), 0.05); st.logD = snap(Math.log10(1.5e13), 0.05);
+          st.logN = Math.log10(8e9); st.logD = Math.log10(1.56e13);   /* exact, so the readout says 8B and 15.6T */
           sN.value = st.logN; sD.value = st.logD; draw();
         });
         const priceSl = ctx.slider({ label: '$ per GPU-hour', min: 1, max: 6, step: 0.1, value: st.price, fmt: (v) => '$' + (+v).toFixed(1), onChange: (v) => { st.price = v; draw(); } });
@@ -527,7 +527,10 @@
           for (let l = T0; l <= T1 + 1e-9; l += DT) {
             jit = jit * 0.72 + (rnd() - 0.5) * 0.28;
             const base = lossAt(Math.pow(10, l));
-            curve.push([l, ctx.clamp(base + jit * Math.min(1, base / 3), FLOOR - 0.02, 11.4)]);
+            /* one real spike, so the thing the callout sends the reader to look
+               for exists: a sharp jump that recovers to trend on its own */
+            const spike = 2.6 * Math.exp(-Math.pow((l - 10.64) / 0.045, 2));
+            curve.push([l, ctx.clamp(base + jit * Math.min(1, base / 3) + spike, FLOOR - 0.02, 11.4)]);
           }
         })();
         const idxAt = (l) => ctx.clamp(Math.round((l - T0) / DT), 0, curve.length - 1);
@@ -698,10 +701,10 @@
         ];
         let skill = 1.0;   // 0 = random guessing, 1 = as fitted, 2 = very strong
         const VOCAB = 100000;
-        const pOf = (t) => ctx.clamp(Math.pow(t.base, 1 / Math.max(0.05, skill)), 1 / VOCAB, 0.999);
+        const pOf = (t) => ctx.clamp(Math.pow(t.base, 1 / Math.max(0.025, skill)), 1 / VOCAB, 0.999);
 
-        const sSl = ctx.slider({ label: 'how good the model is', min: 0.05, max: 2.5, step: 0.05, value: 1, digits: 2, onChange: (v) => { skill = v; } });
-        const rndBtn = ctx.button('an untrained model', () => { skill = 0.09; sSl.value = 0.09; });
+        const sSl = ctx.slider({ label: 'how good the model is', min: 0.025, max: 2.5, step: 0.025, value: 1, digits: 3, onChange: (v) => { skill = v; } });
+        const rndBtn = ctx.button('an untrained model', () => { skill = 0.025; sSl.value = 0.025; });
         const midBtn = ctx.button('the worked example', () => { skill = 1; sSl.value = 1; }, 'primary');
         const goodBtn = ctx.button('a strong model', () => { skill = 2.2; sSl.value = 2.2; });
         const ro = ctx.readout();
@@ -803,7 +806,10 @@
         ];
         let idx = 0, showChat = false, reveal = 0;
 
-        const nextBtn = ctx.button('Next prompt →', () => { idx = (idx + 1) % CASES.length; reveal = 0; });
+        const nextBtn = ctx.button('Next prompt →', () => {
+          idx = (idx + 1) % CASES.length; reveal = 0;
+          showChat = false; modeBtn.textContent = 'show: base model';
+        });
         const modeBtn = ctx.button('show: base model', () => {
           showChat = !showChat; reveal = 0;
           modeBtn.textContent = 'show: ' + (showChat ? 'after post-training' : 'base model');
@@ -855,7 +861,7 @@
         const [cv, g] = ctx.canvas(720, 330);
         let experts = 8, topK = 2, expertSize = 7, dense = false, t = 0;
         const TOKENS = ['the', 'patient', 'presented', 'with', 'acute', 'chest', 'pain', 'and', 'ST', 'elevation'];
-        const eSl = ctx.slider({ label: 'experts per block', min: 2, max: 64, step: 1, value: 8, onChange: (v) => { experts = v; topK = Math.min(topK, v); } });
+        const eSl = ctx.slider({ label: 'experts per block', min: 2, max: 64, step: 1, value: 8, onChange: (v) => { experts = v; if (topK > v) { topK = v; kSl.value = v; } } });
         const kSl = ctx.slider({ label: 'experts used per token', min: 1, max: 8, step: 1, value: 2, onChange: (v) => { topK = Math.min(v, experts); } });
         const zSl = ctx.slider({ label: 'billions of params per expert', min: 1, max: 20, step: 1, value: 7, onChange: (v) => { expertSize = v; } });
         const denseBtn = ctx.button('compare with a dense model', () => {
@@ -927,7 +933,7 @@
         });
 
         return ctx.figure(cv,
-          'In a standard dense transformer every token passes through every parameter. A mixture of experts replaces each feed-forward block with many parallel experts and a tiny router that sends each token to only one or two of them — so the model can store far more knowledge than it spends compute on. DeepSeek-V3 has 671 billion parameters of which about 37 billion are active for any given token, which is why it could be trained for a reported few million dollars of GPU time. The cost is memory: every expert must be loaded even though most sit idle for each token.',
+          'In a standard dense transformer every token passes through every parameter. A mixture of experts replaces each feed-forward block with many parallel experts and a tiny router that sends each token to just a handful of them — two of eight in Mixtral, eight of 256 in DeepSeek-V3 — so the model can store far more knowledge than it spends compute on. DeepSeek-V3 has 671 billion parameters of which about 37 billion are active for any given token, which is why it could be trained for a reported few million dollars of GPU time. The cost is memory: every expert must be loaded even though most sit idle for each token.',
           [eSl, kSl, zSl, dsBtn, denseBtn], ro);
       }
       /* ================================================================== */
@@ -983,7 +989,7 @@
 
       root.append(section('The factory: what it costs',
         p(`There is a rule of thumb accurate to within a factor of two for every transformer ever trained: <b>training FLOPs ≈ 6 × N × D</b>, where N is parameters and D is tokens. Every parameter is used about twice per token going forwards and about four times coming back.`),
-        p(`GPT-3: 6 × 175 billion × 300 billion ≈ 3 × 10<sup>23</sup> operations. Llama 3 405B on 15 trillion tokens: about 3.8 × 10<sup>25</sup>. The largest 2025 runs are estimated near 10<sup>26</sup>.`),
+        p(`GPT-3: 6 × 175 billion × 300 billion ≈ 3 × 10<sup>23</sup> operations. Llama 3 405B on 15.6 trillion tokens: about 3.8 × 10<sup>25</sup>. The largest 2025 runs are estimated near 10<sup>26</sup>.`),
         p(`A single H100 does roughly 10<sup>15</sup> useful operations per second on this arithmetic, and a real run keeps it only about 40% busy — the <em>model FLOPs utilisation</em>, with the rest lost waiting for memory and for other GPUs.`),
         callout('tryit', '🖐 Try this: spend a hundred million dollars',
           `<b>1.</b> Press <b>Jump to Llama 3 8B</b> and read the cost and the wall-clock time.<br>
@@ -1019,7 +1025,7 @@
       root.append(section('Watching it learn',
         callout('tryit', '🖐 Try this: watch a model learn to write',
           `<b>1.</b> Press <b>▶ Play</b> and read the samples as the loss falls. Early on it produces letter soup, then plausible-looking words, then grammar, then something with a topic.<br>
-           <b>2.</b> Watch the <b>shape</b> of the curve, not the number. Each new ability costs about ten times more tokens than the last, for a smaller drop in loss.<br>
+           <b>2.</b> Watch the <b>shape</b> of the curve, not the number. Each new ability costs ten to a hundred times more tokens than the last, for a smaller drop in loss — read the gaps between the checkpoint markers.<br>
            <b>3.</b> Look for the <b>loss spike</b> — the moment the curve jumps upward. That is the thing engineers actually sit and watch for.`),
         trainingRun(),
         p(`At the start the model learns token frequencies and the loss drops fast. Then short-range structure: spelling, punctuation, which tokens follow which. Then grammar, then topic, then facts, then reasoning patterns. There are no visible boundaries; the samples just get better, on a log scale.`),
@@ -1042,8 +1048,8 @@
         p(`<b>Mixture of experts.</b> In a standard transformer every token passes through every parameter. In an MoE each feed-forward block becomes many parallel experts, and a tiny router sends each token to only one or two of them.`),
         callout('tryit', '🖐 Try this',
           `<b>1.</b> Press <b>DeepSeek-V3-ish</b>. Read the two bars: an enormous amount stored, a small fraction used per token.<br>
-           <b>2.</b> Press <b>compare with a dense model</b> — now stored and used are the same number, and the bill per token jumps.<br>
-           <b>3.</b> Drag <b>experts used per token</b> up and watch the ratio close. That slider is the whole trade-off.`),
+           <b>2.</b> Drag <b>experts used per token</b> up and watch the two bars close on each other. That slider is the whole trade-off.<br>
+           <b>3.</b> Now press <b>compare with a dense model</b> — stored and used become the same number, and the bill per token jumps. (In dense mode the expert sliders have nothing left to do, which is the point.)`),
         moeLab(),
         p(`So the model can hold far more knowledge while each token touches only a fraction of it. GPT-4 was widely reported to use this design; Mixtral 8×7B made it mainstream in open models in December 2023; DeepSeek-V3 has 671 billion parameters of which about 37 billion are active per token, which is why it could be trained for a reported few million dollars of GPU time.`),
         p(`The cost is memory: every expert must be loaded even though most sit idle. And note what this does to the rule of thumb — for an MoE, the 6ND estimate uses the <i>active</i> parameter count, not the total.`),
@@ -1080,7 +1086,7 @@
           '<a href="https://arxiv.org/abs/2001.08361" target="_blank" rel="noopener">Kaplan et al. (2020), "Scaling Laws for Neural Language Models"</a> — the original power laws.',
           '<a href="https://arxiv.org/abs/2407.21783" target="_blank" rel="noopener">The Llama 3 Herd of Models (2024)</a> — an unusually candid engineering report, including the 466 job interruptions.',
           '<a href="https://huggingface.co/spaces/HuggingFaceFW/blogpost-fineweb-v1" target="_blank" rel="noopener">FineWeb: decanting the web for the finest text data at scale</a> — what the data funnel really looks like, with ablations.',
-          '<a href="https://lilianweng.github.io/posts/2021-09-25-train-large/" target="_blank" rel="noopener">Lilian Weng, "How to Train Really Large Models on Many GPUs"</a> — data, tensor and pipeline parallelism in proper detail.',
+          '<a href="https://lilianweng.github.io/posts/2021-09-25-train-large/" target="_blank" rel="noopener">Lilian Weng, "How to Train Really Large Models on Many GPUs?"</a> — data, tensor and pipeline parallelism in proper detail.',
         ])));
     },
   });
