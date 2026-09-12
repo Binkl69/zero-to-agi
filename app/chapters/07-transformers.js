@@ -746,7 +746,9 @@
       /* Interactive: attention is order-blind, and how position is restored  */
       /* ================================================================== */
       function positionLab() {
-        const PW_H = 408;
+        /* real browser text runs wider than the headless estimate: the wave caption
+           needs two more lines of room before the verdict line below it */
+        const PW_H = 452;
         const [cv, g] = ctx.canvas(720, PW_H);
         const BASE = ['the', 'dog', 'bit', 'the', 'man'];
         let swapped = false, usePE = true, probe = 0;
@@ -837,14 +839,14 @@
           g.fillText('dimension', 0, 0); g.restore();
           g.font = FONT; g.fillStyle = C.muted;
           wrapText(g, 'Sine and cosine waves at different frequencies. Fast waves at the top separate neighbouring positions; the rows further down cycle so slowly they barely move across this window, which is how they mark roughly where in a long document you are — so a single vector encodes position at every scale at once, and nothing had to be learned.',
-            PX, PY + PH + 40, 300, 16);
+            PX, PY + PH + 40, 320, 16);
 
           /* ---- the verdict on order-blindness: full width, below both columns ---- */
           g.font = 'bold ' + FONT; g.fillStyle = usePE ? C.green : C.danger; g.textAlign = 'left';
           wrapText(g, usePE
             ? 'With positional encoding, swapping two words genuinely changes the scores — the model can tell the two sentences apart.'
             : 'Without it, swapping two words only shuffles the grid. The same numbers come back in a different order, because a dot product has no idea where either token sat.',
-            34, 358, 652, 17);
+            34, 396, 652, 17);
           ro.set({ order: swapped ? 'man bit dog' : 'dog bit man', 'positional encoding': usePE ? 'on' : 'off' });
         });
 

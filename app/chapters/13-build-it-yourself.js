@@ -429,7 +429,10 @@ for step in range(max_steps):
     const cur = { a: 0, b: 0, c: 0, d: 0, e: 0, f: 0, L: 0 };
     const grad = { a: NaN, b: NaN, c: NaN, d: NaN, e: NaN, f: NaN, L: NaN };
     let phase = 'idle', prog = 0, forwardDone = false, backwardDone = false, dirty = true;
-    const DUR = 1.8, LO = -5, HI = 10;      // LO/HI must match the sliders' min/max
+    /* c starts at 10 and its gradient is negative, so descent always wants it to rise:
+       the ceiling has to sit above the starting value or Nudge visibly moves three leaves
+       out of four. */
+    const DUR = 1.8, LO = -5, HI = 12;      // LO/HI must match the sliders' min/max
     const HW = 48;                          // half the width of a node box
     const CHIP_FONT = '10px JetBrains Mono, monospace', CHIP_LH = 12;
 
@@ -707,7 +710,7 @@ for step in range(max_steps):
       {
         name: 'cannot memorise 32 examples',
         curve: (t) => LN_V - 0.9 * Math.pow(t, 0.7),
-        causes: ['the model needs more training time', 'something is wired wrong: shifted targets, a bad mask, or a broken gradient path', 'the learning rate is too low', 'the batch size is too large'],
+        causes: ['the model needs more training time', 'wired wrong: shifted targets or a dead gradient', 'the learning rate is too low', 'the batch size is too large'],
         answer: 1,
         why: 'This is the most valuable check in the list. Train on <b>one batch of 32</b> and the loss must go essentially to zero — memorising 32 examples takes no cleverness at all. If it plateaus, the bug is structural: targets shifted by one, a mask hiding the answer, or a tensor detached from the graph. No amount of tuning fixes it.',
       },
@@ -762,7 +765,11 @@ for step in range(max_steps):
         g.lineWidth = 1.5; g.strokeRect(TX, y, 300, 38);
         g.font = MONO; g.fillStyle = C.muted; g.fillText(String(i + 1), TX + 8, y + 22);
         g.font = FONT; g.fillStyle = picked < 0 ? C.muted : right ? C.green : C.text;
-        wrapLines(g, txt, 262).slice(0, 2).forEach((ln, j) => g.fillText(ln, TX + 26, y + 16 + j * 15));
+        /* the box holds two lines; if an option ever outgrows it, say so visibly
+           rather than deleting the end of the sentence */
+        const lines = wrapLines(g, txt, 262);
+        if (lines.length > 2) { lines.length = 2; lines[1] = lines[1].replace(/\s*\S*$/, '') + ' …'; }
+        lines.forEach((ln, j) => g.fillText(ln, TX + 26, y + 16 + j * 15));
       });
 
       if (picked >= 0) {
@@ -859,7 +866,7 @@ for step in range(max_steps):
           'This is a real neural language model training in your browser right now. Nothing is pre-computed.<br>' +
           '<b>1.</b> Just watch the sample box for twenty seconds. It starts as noise, then spaces appear at word-like intervals, then real words.<br>' +
           '<b>2.</b> Watch the loss start near <b>ln(V)</b> — the value a model that knows nothing must have — and fall.<br>' +
-          '<b>3.</b> It has about 2,000 parameters. It is learning English spelling from scratch, on your laptop, in under a minute.'),
+          '<b>3.</b> Read the parameter count in the readout — it is under three thousand. That is a model learning English spelling from scratch, in your browser, in under a minute.'),
         buildTrainer(ctx),
         ctx.p('Every idea in the previous twelve chapters is in those few hundred lines. The rest of this chapter is how to write them yourself.'),
 
@@ -921,7 +928,7 @@ python labs/01_perceptron.py             # each lab is one file; run it, then re
             ctx.p('Before a language model sees text, the text is chopped into tokens. Byte-pair encoding does this by repeatedly merging the most frequent adjacent pair. The algorithm is a loop of ten lines. Its consequences (why models are bad at counting letters, why code costs more tokens than prose) are felt in every product you use.'),
             ctx.ul([
               '<b>Read:</b> the merge loop: count adjacent pairs, merge the most frequent, record the merge, repeat.',
-              '<b>Change:</b> the number of merges (that is the vocabulary size). Train on prose, then on Python.',
+              '<b>Change:</b> <code class="inline">--vocab-size</code>, which sets 256 byte tokens plus N merges — so 300 buys 44 merges, not 300. Train on prose, then on Python.',
               '<b>Observe:</b> "the " becoming a single token early; numbers being split into odd pieces; the tokens-per-character ratio falling as the vocabulary grows.',
               '<b>Common bug:</b> encoding new text with the merges applied in a different order than they were learned. Order is the tokenizer.',
             ])),
@@ -932,7 +939,7 @@ python labs/01_perceptron.py             # each lab is one file; run it, then re
             ctx.ul([
               '<b>Read:</b> the mask line and the softmax axis. Both are one-liners and both are where bugs live.',
               '<b>Change:</b> delete the mask (the model can now read the answer during training). Remove the 1/√d scaling (the softmax saturates and gradients vanish). Split into several heads.',
-              '<b>Observe:</b> the T×T weight matrix plotted as a heatmap: strictly lower-triangular, rows summing to one.',
+              '<b>Observe:</b> the T×T weight matrix plotted as a heatmap: lower-triangular <i>including</i> the diagonal — a token always attends to itself — with every row summing to one.',
               '<b>Common bug:</b> masking with 0 instead of −∞ (a zero score still gets probability), or softmax over the wrong axis.',
             ])),
 
@@ -995,7 +1002,7 @@ python labs/01_perceptron.py             # each lab is one file; run it, then re
             '<b>Look at the data.</b> Decode a batch and print it. Half of all bugs are a shuffled label, a tokenizer mismatch, or validation data leaking into training.',
             '<b>Fix the seed.</b> <code class="inline">torch.manual_seed(1337)</code>. If two runs of the same code differ, the difference is not your change.',
           ]),
-          ctx.callout('tryit', 'Try it', 'Press <b>chars (65)</b> and set σ to 0.1: the loss sits on the yellow line at 4.18 ≈ ln(65). Healthy. Now drag σ up to about 3 and the loss roughly doubles, to around 8, even though the model has learned precisely nothing — it is confidently wrong. Push σ to 10 and it passes 20. Now press <b>GPT-2 BPE</b>: ln(V) jumps to 10.83, and <b>Llama 3</b> takes it to 11.76. When the first line of a real GPT-2 training run prints a loss near 10.9, you now know that is the number it is supposed to print, not a bug — and that a first line reading 15 means the last layer is initialised far too hot.'),
+          ctx.callout('tryit', 'Try it', 'Press <b>chars (65)</b> and set σ to 0.1: the loss sits on the yellow line at 4.18 ≈ ln(65). Healthy. Now drag σ up to about 3 and the loss roughly doubles, to around 8, even though the model has learned precisely nothing — it is confidently wrong. Push σ to 10 and it passes 20. Now press <b>GPT-2 BPE</b>: ln(V) jumps to 10.82, and <b>Llama 3</b> takes it to 11.76. When the first line of a real GPT-2 training run prints a loss near 10.9, you now know that is the number it is supposed to print, not a bug — and that a first line reading 15 means the last layer is initialised far too hot.'),
           buildInitChecker(ctx),
           ctx.callout('example', 'What this looks like in a real run', 'The first three lines of a healthy nanoGPT run on Shakespeare read something like <code class="inline">step 0: train loss 4.2825, val loss 4.2822</code>, then <code class="inline">step 250: train loss 2.4914</code>, then <code class="inline">step 500: train loss 2.1240</code>. Three numbers, and an experienced person has already checked three things: the first is ln(65) so the init is sane; train and val agree so nothing has leaked; and the drop is fast but not instant, so the targets are shifted correctly. When someone glances at a log and says "that looks wrong", this is what they are doing.'),
         ),
@@ -1005,7 +1012,7 @@ python labs/01_perceptron.py             # each lab is one file; run it, then re
           ctx.sub('Reproduce GPT-2',
             ctx.p('Karpathy\'s <a href="https://github.com/karpathy/nanoGPT" target="_blank">nanoGPT</a> is lab 06 grown up: the same GPT class, plus data loading, mixed precision and multi-GPU support. Point it at a web-text dataset (OpenWebText, or FineWeb) and it reproduces the 124-million-parameter GPT-2 on a rented cloud machine.'),
             ctx.p(' In <a href="https://github.com/karpathy/llm.c" target="_blank">llm.c</a>, his C/CUDA rewrite, the same reproduction on 10 billion tokens takes about an hour and a half on eight A100s and costs on the order of twenty dollars; the 1.5-billion-parameter GPT-2 XL takes about a day on eight H100s and a few hundred dollars.'),
-            ctx.p(' In 2019 GPT-2 was the most capable language model on Earth. In 2026 you can train it for the price of a dinner. That is what a 100,000× drop in the price of a given capability looks like.'),
+            ctx.p(' In 2019 GPT-2 was the most capable language model on Earth, and OpenAI trained it on 32 TPU v3 chips for a week — about $43,000 of compute. By 2026 Karpathy\'s nanochat reaches the same capability in three hours on one eight-GPU node, for roughly $73. He puts that at a 600× fall in seven years: the price of a fixed capability is dropping about 2.5× a year, and has not stopped.'),
           ),
           ctx.sub('Fine-tune an open model',
             ctx.p('Pretraining from scratch is the expensive part; you almost never need to. Open-weight models (Llama, Qwen, Gemma, Mistral, DeepSeek) are pretrained on trillions of tokens and released for free.'),

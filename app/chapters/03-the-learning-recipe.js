@@ -211,6 +211,10 @@
           const mn = toPx(1, 1);
           g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(mn.x - 8, mn.y); g.lineTo(mn.x + 8, mn.y); g.moveTo(mn.x, mn.y - 8); g.lineTo(mn.x, mn.y + 8); g.stroke();
           g.fillStyle = '#fff'; g.font = FONT; g.textAlign = 'left'; g.fillText('minimum', mn.x + 10, mn.y - 8);
+          /* The state is allowed 0.2 units past the plot range so a genuine
+             overshoot stays visible as it leaves; clipping keeps the trail and
+             its 7px marker from spilling into the legend beside the plot. */
+          g.save(); g.beginPath(); g.rect(plot.x, plot.y, plot.w, plot.h); g.clip();
           OPT.forEach((o, oi) => {
             const s = S[oi];
             g.strokeStyle = o.color; g.lineWidth = 1.6; g.globalAlpha = 0.7; g.beginPath();
@@ -218,6 +222,7 @@
             const q = toPx(s.x, s.y);
             g.beginPath(); g.arc(q.x, q.y, 7, 0, Math.PI * 2); g.fillStyle = o.color; g.fill(); g.strokeStyle = '#0a0e16'; g.lineWidth = 1.5; g.stroke();
           });
+          g.restore();
           const lx = plot.x + plot.w + 20;
           g.textAlign = 'left'; g.fillStyle = C.text; g.font = 'bold 13px Inter, system-ui, sans-serif'; g.fillText('same start, same valley', lx, 24);
           OPT.forEach((o, oi) => {

@@ -538,7 +538,9 @@
       /* Interactive F: how a modern multimodal model chops up your image    */
       /* ------------------------------------------------------------------ */
       function patchTokens() {
-        const [cv, g] = ctx.canvas(720, 384);
+        /* real browser text runs wider than the headless estimate, so both prose
+           blocks are given a full extra line of room and a wider column */
+        const [cv, g] = ctx.canvas(720, 424);
         let side = 224, patch = 16;
         const SIZES = [112, 224, 336, 448, 672];
         const sSl = ctx.slider({ label: 'image size (pixels)', min: 0, max: 4, step: 1, value: 1, fmt: (v) => SIZES[v] + '²', onChange: (v) => { side = SIZES[v]; } });
@@ -577,7 +579,7 @@
           g.fillStyle = C.warn;
           g.fillText('one token', X + step + 6, Y + step - 2);
 
-          const TX = 350, TW = 330;
+          const TX = 350, TW = 352;
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
           g.fillText('what the model is handed', TX, 32);
           g.font = MONO; g.fillStyle = C.muted;
@@ -592,16 +594,16 @@
 
           /* cost bar: attention is quadratic in the number of tokens */
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
-          g.fillText('attention cost grows with tokens²', TX, 210);
+          g.fillText('attention cost grows with tokens²', TX, 226);
           const rel = tokens * tokens / (196 * 196);
           const w = ctx.clamp(Math.log10(Math.max(1, rel)) / 3, 0.02, 1) * TW;
-          g.fillStyle = C.line; g.fillRect(TX, 220, TW, 14);
+          g.fillStyle = C.line; g.fillRect(TX, 236, TW, 14);
           g.fillStyle = rel > 20 ? C.danger : rel > 4 ? C.warn : C.green;
-          g.fillRect(TX, 220, w, 14);
+          g.fillRect(TX, 236, w, 14);
           g.font = MONO; g.fillStyle = C.muted;
-          g.fillText(rel < 1 ? (1 / rel).toFixed(1) + '× cheaper than 224²/16' : rel.toFixed(1) + '× the cost of 224²/16', TX, 250);
+          g.fillText(rel < 1 ? (1 / rel).toFixed(1) + '× cheaper than 224²/16' : rel.toFixed(1) + '× the cost of 224²/16', TX, 266);
           g.font = FONT; g.fillStyle = C.muted;
-          wrapText(g, 'Halve the patch size and you get four times the tokens and sixteen times the attention cost. Attention over those tokens grows with the SQUARE of their number, so resolution is not free inside the model — even though what you are billed grows with the pixel count itself. That is why models tile large images rather than shrinking the patch.', TX, 274, TW, 17);
+          wrapText(g, 'Halve the patch size and you get four times the tokens and sixteen times the attention cost. Attention over those tokens grows with the SQUARE of their number, so resolution is not free inside the model — even though what you are billed grows with the pixel count itself. That is why models tile large images rather than shrinking the patch.', TX, 290, TW, 17);
           ro.set({ image: side + '²', patch: patch + '²', tokens });
         });
 
