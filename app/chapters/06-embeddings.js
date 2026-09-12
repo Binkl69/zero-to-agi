@@ -21,16 +21,16 @@
   }
   const WORDS = [
     // people & royalty — the classic analogy cluster
-    { w: 'king',      v: V({ g: 1,  roy: 1,   size: 0.6 }),  c: 'people' },
-    { w: 'queen',     v: V({ g: -1, roy: 1,   size: 0.6 }),  c: 'people' },
-    { w: 'prince',    v: V({ g: 1,  roy: 0.7, size: 0.3 }),  c: 'people' },
-    { w: 'princess',  v: V({ g: -1, roy: 0.7, size: 0.3 }),  c: 'people' },
-    { w: 'man',       v: V({ g: 1,  ani: 0.3, size: 0.4 }),  c: 'people' },
-    { w: 'woman',     v: V({ g: -1, ani: 0.3, size: 0.4 }),  c: 'people' },
-    { w: 'boy',       v: V({ g: 1,  ani: 0.3, size: 0.15 }), c: 'people' },
-    { w: 'girl',      v: V({ g: -1, ani: 0.3, size: 0.15 }), c: 'people' },
-    { w: 'father',    v: V({ g: 1,  ani: 0.3, size: 0.5 }),  c: 'people' },
-    { w: 'mother',    v: V({ g: -1, ani: 0.3, size: 0.5 }),  c: 'people' },
+    { w: 'king',      v: V({ g: 0.35,  roy: 1,   size: 0.6 }),  c: 'people' },
+    { w: 'queen',     v: V({ g: -0.35, roy: 1,   size: 0.6 }),  c: 'people' },
+    { w: 'prince',    v: V({ g: 0.35,  roy: 0.7, size: 0.3 }),  c: 'people' },
+    { w: 'princess',  v: V({ g: -0.35, roy: 0.7, size: 0.3 }),  c: 'people' },
+    { w: 'man',       v: V({ g: 0.35,  ani: 0.3, size: 0.4 }),  c: 'people' },
+    { w: 'woman',     v: V({ g: -0.35, ani: 0.3, size: 0.4 }),  c: 'people' },
+    { w: 'boy',       v: V({ g: 0.35,  ani: 0.3, size: 0.15 }), c: 'people' },
+    { w: 'girl',      v: V({ g: -0.35, ani: 0.3, size: 0.15 }), c: 'people' },
+    { w: 'father',    v: V({ g: 0.35,  ani: 0.3, size: 0.5 }),  c: 'people' },
+    { w: 'mother',    v: V({ g: -0.35, ani: 0.3, size: 0.5 }),  c: 'people' },
     // animals
     { w: 'dog',       v: V({ ani: 1, size: 0.30 }), c: 'animal' },
     { w: 'cat',       v: V({ ani: 1, size: 0.20 }), c: 'animal' },
@@ -88,7 +88,10 @@
     for (const v of vecs) for (let i = 0; i < d; i++) mean[i] += v[i] / n;
     const X = vecs.map(v => v.map((x, i) => x - mean[i]));
     function topAxis(rows) {
-      let v = new Array(d).fill(0).map((_, i) => Math.sin(i * 12.9898) * 43758.5453 % 1); // deterministic seed
+      // deterministic seed — note the (i + 1): sin(0) is exactly 0, and a zero in
+      // any slot is a slot power iteration can never recover if that dimension is
+      // uncorrelated with the rest, which is exactly the case for gender here.
+      let v = new Array(d).fill(0).map((_, i) => Math.sin((i + 1) * 12.9898) * 43758.5453 % 1);
       for (let it = 0; it < 60; it++) {
         const out = new Array(d).fill(0);
         for (const r of rows) { const s = dot(r, v); for (let i = 0; i < d; i++) out[i] += s * r[i]; }
@@ -103,7 +106,7 @@
     return { mean, a1, a2 };
   }
   /* Which words PCA is fitted to is not a detail — it decides what the picture
-     can show. Fitted to all 36 words, the two directions of greatest spread are
+     can show. Fitted to all 44 words, the two directions of greatest spread are
      "what kind of thing is this" and "city or country", and gender lands in a
      third direction the screen does not have: king and queen then print on the
      same pixel and the analogy this chapter is built on becomes invisible. The
@@ -114,9 +117,9 @@
     people: { label: 'people & royalty', has: (w) => w.c === 'people' },
     place: { label: 'countries & capitals', has: (w) => w.c === 'place' },
     things: { label: 'animals, food & vehicles', has: (w) => w.c === 'animal' || w.c === 'food' || w.c === 'vehicle' },
-    all: { label: 'all 36 words at once', has: () => true },
+    all: { label: 'all 44 words at once', has: () => true },
   };
-  let PROJ = null;
+  let PROJ = null, PROJ_K = 1;
   function project(v) {
     const c = v.map((x, i) => x - PROJ.mean[i]);
     return { x: dot(c, PROJ.a1), y: dot(c, PROJ.a2) };
@@ -128,6 +131,7 @@
     let m = 0;
     for (const w of sub) { const p = project(w.v); m = Math.max(m, Math.abs(p.x), Math.abs(p.y)); }
     const k = m > 1e-9 ? 1 / m : 1;
+    PROJ_K = k;
     WORDS.forEach(w => { const p = project(w.v); w.px = p.x * k; w.py = p.y * k; });
   }
   refit('people');
@@ -148,14 +152,14 @@
         callout('tryit', '🖐 Do this first — measure how alike two words are, three different ways',
           `A computer cannot store the word "cat". It stores numbers. Below are the three ways of choosing those numbers, scored side by side.<br>
            <b>1.</b> Press <b>cat vs catalogue</b>. The numbering scheme calls them <b>almost identical</b>. They share four letters and nothing else.<br>
-           <b>2.</b> Press <b>cat vs dog</b>. Now the numbering calls them miles apart, and one-hot calls them exactly as unrelated as <b>cat vs democracy</b>.<br>
+           <b>2.</b> Press <b>cat vs dog</b>: the numbering scores 0.91. Now press <b>cat vs democracy</b>: <b>0.93</b>. By this scheme a cat is more like democracy than it is like a dog, because the only thing the number measures is alphabetical distance. Meanwhile one-hot calls both pairs exactly as unrelated as each other.<br>
            <b>3.</b> Work down the preset buttons and watch only the bottom row ever agree with your own judgement.`),
         buildThreeWays(ctx),
         p(`Two different failures there, and they fail in opposite directions.`),
       );
 
       root.append(section('Why both obvious ideas break',
-        p(`Numbering the words alphabetically — <code class="inline">aardvark = 1, … cat = 3312, catalogue = 3313, … zebra = 50000</code> — smuggles in an order that has nothing to do with meaning. It asserts that <code class="inline">cat</code> is nearly <code class="inline">catalogue</code>, and that <code class="inline">apple</code> is 3,310 units from <code class="inline">cat</code> but 1 unit from <code class="inline">apply</code>. That is false information, confidently stated.`),
+        p(`Numbering the words alphabetically — <code class="inline">aardvark = 1, … cat = 3312, catalogue = 3313, … zebra = 50000</code> — smuggles in an order that has nothing to do with meaning. It asserts that <code class="inline">cat</code> is nearly <code class="inline">catalogue</code>, one unit away, and that <code class="inline">apple</code> — sitting at 1,204, some two thousand units off — is barely related to it, while <code class="inline">apply</code> at 1,205 is apple's closest relation in the language. That is false information, confidently stated.`),
         p(`The standard fix is <em>one-hot encoding</em>: give every word its own axis. With a 50,000-word vocabulary, "cat" becomes 50,000 zeros with a single 1 in slot 3312. Now nothing is accidentally close to anything.`),
         p(`But look at the cost. <b>Every pair of distinct words is now exactly equally far apart.</b> "cat" and "dog" are as unrelated as "cat" and "bureaucracy". We removed the false information and replaced it with <i>no</i> information.`),
         callout('key', '🔑 The key idea',
@@ -169,7 +173,7 @@
         callout('tryit', '🖐 Try this — work out a word you have never seen',
           `<b>1.</b> Start with only the <b>first</b> context sentence switched on. Look at the bar chart: several candidates are plausible and the model has no idea.<br>
            <b>2.</b> Switch the sentences on one at a time. Watch the bars separate as the contexts pile up.<br>
-           <b>3.</b> With all five on, one answer is clearly ahead — and <b>nobody ever defined the word.</b> You inferred it purely from the company it keeps, and so did the bar chart.`),
+           <b>3.</b> With all five on, <i>beer</i> and <i>wine</i> pull clear of everything else and finish level with each other — which is the correct answer, not an unfinished one: they are near-synonyms here, and no amount of context separates them. <b>Nobody ever defined the word.</b> You inferred it purely from the company it keeps, and so did the bar chart.`),
         buildTesguino(ctx),
         p(`That is the <em>distributional hypothesis</em>: words appearing in similar contexts have similar meanings. Notice you could also tell that tesgüino is more like <i>beer</i> than like <i>hammer</i>, because beer turns up in the same kinds of sentences.`),
         p(`This turns a philosophical problem into an engineering one. We do not need to teach a machine what "beer" means. We need only give it a prediction task involving context, and force it to compress what it learns into a short list of numbers.`),
@@ -182,7 +186,7 @@
       ));
 
       root.append(section('The map, and the famous piece of arithmetic',
-        p(`Below is a small hand-built embedding space: 36 words, each a list of 10 numbers. The picture is a genuine <em>PCA projection</em> of those 10-dimensional vectors down to the 2 your screen has, computed in your browser when this page loaded. PCA finds the two directions along which the points spread out most, so it keeps as much structure as a flat picture can hold.`),
+        p(`Below is a small hand-built embedding space: 44 words, each a list of 10 numbers. The picture is a genuine <em>PCA projection</em> of those 10-dimensional vectors down to the 2 your screen has, computed in your browser when this page loaded. PCA finds the two directions along which the points spread out most, so it keeps as much structure as a flat picture can hold.`),
         callout('tryit', '🖐 Try this',
           `<b>1.</b> Hover a word to see its five nearest neighbours by cosine similarity. The clusters formed themselves out of the numbers — nobody drew the groups.<br>
            <b>2.</b> Drag to pan, scroll or pinch to zoom.<br>
@@ -202,7 +206,7 @@
         p(`"Near each other" needs a definition. The one nearly everyone uses is <em>cosine similarity</em>: the cosine of the angle between two vectors. It ignores length entirely and asks only whether two vectors point the same way.`),
         p(`That matters because in text a common word gets a long vector and a rare word a short one, and we do not want frequency masquerading as meaning.`),
         callout('tryit', '🖐 Try this',
-          `Drag either arrowhead. The cosine depends only on the <b>angle</b>: make one arrow twice as long and the number does not move.<br>
+          `Drag either arrowhead. The cosine depends only on the <b>angle</b>: press <b>Halve a's length</b> as many times as you like and the number does not move at all.<br>
            Then set them 90° apart and note the score of exactly zero. That is what "unrelated" means numerically.`),
         buildCosine(ctx),
         p(`The scale runs from <b>+1</b> (same direction, same meaning) through <b>0</b> (perpendicular, unrelated) to <b>−1</b> (opposite). In a real embedding space "cat" and "dog" sit around 0.8, "cat" and "democracy" around 0.05.`),
@@ -279,7 +283,7 @@
           `<a href="https://jalammar.github.io/illustrated-word2vec/" target="_blank" rel="noopener">Jay Alammar, "The Illustrated Word2vec"</a> — the clearest visual walkthrough of the training task you just ran.`,
           `<a href="https://arxiv.org/abs/1301.3781" target="_blank" rel="noopener">Mikolov et al. (2013), "Efficient Estimation of Word Representations in Vector Space"</a> — the original word2vec paper.`,
           `<a href="https://nlp.stanford.edu/projects/glove/" target="_blank" rel="noopener">GloVe (Pennington, Socher &amp; Manning, 2014)</a> — the other great early embedding method, built from co-occurrence counts rather than prediction.`,
-          `<a href="https://arxiv.org/abs/1607.06520" target="_blank" rel="noopener">Bolukbasi et al. (2016), "Man is to Computer Programmer as Woman is to Homemaker?"</a> — the bias paper, including what debiasing can and cannot do.`,
+          `<a href="https://arxiv.org/abs/1607.06520" target="_blank" rel="noopener">Bolukbasi et al. (2016), "Man is to Computer Programmer as Woman is to Homemaker? Debiasing Word Embeddings"</a> — the bias paper, including what debiasing can and cannot do.`,
           `<a href="https://distill.pub/2016/misread-tsne/" target="_blank" rel="noopener">"How to Use t-SNE Effectively" (Distill)</a> — interactive proof of why those beautiful cluster plots mislead.`,
         ])));
     },
@@ -323,7 +327,12 @@
        top of the picture. */
     function fitView() {
       const pts = shown().map(w => ({ x: w.px, y: w.py }));
-      if (result) pts.push({ x: result.px, y: result.py });
+      if (result) {
+        pts.push({ x: result.px, y: result.py });
+        /* the arrows go A → A−B → A−B+C, so the elbow has to be in view too */
+        pts.push({ x: result.a.px - result.b.px, y: result.a.py - result.b.py });
+        pts.push({ x: 0, y: 0 });
+      }
       if (!pts.length) return;
       let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
       for (const p of pts) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
@@ -365,7 +374,7 @@
         if (s > bestScore) { bestScore = s; best = w; }
       }
       const p = project(target);
-      result = { a, b, c, px: p.x, py: p.y, best, score: bestScore };
+      result = { a, b, c, px: p.x * PROJ_K, py: p.y * PROJ_K, best, score: bestScore };
       anim = 0;
       readout.set({
         'query': a.w + ' − ' + b.w + ' + ' + c.w,
@@ -535,7 +544,7 @@
     fitView();
 
     return ctx.figure(cv,
-      'A hand-built 10-dimensional embedding space, projected to 2-D with PCA computed in your browser. <b>Change what the map is fitted to and watch the whole picture reorganise.</b> PCA keeps the two directions along which the chosen words spread out most and throws the other eight away, so fitting it to all 36 words buries gender entirely — king and queen land on the same pixel — while fitting it to the people puts gender on an axis and the classic analogy becomes something you can see. Nothing about the vectors changed. Colours mark categories for your benefit only; the space itself has no idea they exist. The analogy excludes the three input words, which is how the original word2vec evaluations were scored.',
+      'A hand-built 10-dimensional embedding space, projected to 2-D with PCA computed in your browser. <b>Change what the map is fitted to and watch the whole picture reorganise.</b> PCA keeps the two directions along which the chosen words spread out most and throws the other eight away, so what survives depends entirely on what you asked it to fit. Fitted to the people, one axis is royalty and the other is gender, and the analogy cluster spreads out: king sits a clear distance from both man and queen. Fitted to all 44 words, the two widest directions become "animal or food" and "city or country" — gender drops out of the picture altogether and king and queen land on the same pixel, along with every other male/female pair. Nothing about the vectors changed; you simply asked for a different pair of directions. Colours mark categories for your benefit only; the space itself has no idea they exist. The analogy excludes the three input words, which is how the original word2vec evaluations were scored.',
       [famSel, presetSel, selA, selB, selC,
        ctx.button('Run arithmetic', () => recompute(), 'primary'),
        ctx.button('Reset view', () => fitView())],
@@ -679,7 +688,7 @@
       else {
         g.font = '600 12px Inter, system-ui, sans-serif';
         g.fillStyle = C.green; g.textAlign = 'left';
-        g.fillText('b is exactly on top of a', sa.x + 14, sa.y - 14);
+        g.fillText('b is exactly on top of a', sa.x + 14, sa.y + 22);
         g.textAlign = 'center';
       }
 
@@ -710,7 +719,8 @@
 
     return ctx.figure(cv,
       'Drag either arrowhead. Cosine similarity depends only on the angle between the vectors, never on their lengths, which is exactly why it is the standard measure for embeddings.',
-      [ctx.button('Make them identical', () => { b = { x: a.x, y: a.y }; }),
+      [ctx.button('Halve a\'s length', () => { a = { x: a.x / 2, y: a.y / 2 }; }),
+       ctx.button('Make them identical', () => { b = { x: a.x, y: a.y }; }),
        ctx.button('Make them perpendicular', () => { b = { x: -a.y, y: a.x }; }),
        ctx.button('Make them opposite', () => { b = { x: -a.x, y: -a.y }; })],
       readout);
@@ -761,7 +771,9 @@
     let Win, Wout, step, seed;
     function rnd() { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; }
     function reset() {
-      seed = 12345; step = 0;
+      /* a fresh seed each time: the step below promises a different arrangement,
+         and the old fixed seed replayed the identical run bit for bit */
+      seed = (Math.random() * 4294967296) >>> 0; step = 0;
       Win = []; Wout = [];
       for (let i = 0; i < V; i++) {
         Win.push([(rnd() - 0.5) * 1.0, (rnd() - 0.5) * 1.0]);
@@ -1099,10 +1111,10 @@
     const C = ctx.colors;
     const FONT = '13px Inter, system-ui, sans-serif';
     const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
-    let vocab = 50257, dim = 768, tied = false;
+    let vocab = 50257, dim = 768, tied = true;
     const vSl = ctx.slider({ label: 'vocabulary (tokens)', min: 8000, max: 256000, step: 1000, value: 50257, onChange: (v) => { vocab = v; } });
     const dSl = ctx.slider({ label: 'embedding dimension', min: 64, max: 8192, step: 64, value: 768, onChange: (v) => { dim = v; } });
-    const tieBtn = ctx.button('tie input and output', () => { tied = !tied; tieBtn.textContent = tied ? 'untie input and output' : 'tie input and output'; });
+    const tieBtn = ctx.button('untie input and output', () => { tied = !tied; tieBtn.textContent = tied ? 'untie input and output' : 'tie input and output'; });
     const gpt2 = ctx.button('GPT-2 small', () => { vocab = 50257; vSl.value = 50257; dim = 768; dSl.value = 768; }, 'primary');
     const frontier = ctx.button('frontier-ish', () => { vocab = 128000; vSl.value = 128000; dim = 4096; dSl.value = 4096; });
     const ro = ctx.readout();
