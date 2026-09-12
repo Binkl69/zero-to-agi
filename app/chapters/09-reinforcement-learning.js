@@ -42,8 +42,8 @@
       );
 
       root.append(section('Why this is a different kind of problem',
-        p(`In March 2016, in a hotel in Seoul, a program called AlphaGo played move 37 of its second game against Lee Sedol. Commentators thought it was a mistake. Professionals estimated a human would play it about once in ten thousand games. It won.`),
-        p(`Nobody had shown AlphaGo that move. There was no labelled dataset of brilliant moves, no teacher marking its homework. It found the move by <b>playing millions of games against itself and noticing what led to winning</b>.`),
+        p(`In March 2016, in a hotel in Seoul, a program called AlphaGo played move 37 of its second game against Lee Sedol. Commentators thought it was a mistake. AlphaGo's own model of human play put the chance a human would choose it at about one in ten thousand. It won.`),
+        p(`AlphaGo did start from human games: its first network was trained to predict 30 million moves from expert play. But nobody had shown it <em>that</em> move, and no teacher marked its homework. It found it by <b>playing millions of games against itself and noticing what led to winning</b> — and the following year AlphaGo Zero dropped the human games entirely and came out stronger.`),
         p(`Everything in this course so far was <em>supervised</em>: show the model an input and the correct output, measure the error, nudge the weights. But most of life has no correct output. When you learn to ride a bike, nobody hands you the right handlebar angle for each millisecond. You wobble, you fall, you adjust.`),
         h('div', { class: 'grid-2' },
           h('div', { class: 'card' }, h('h4', {}, 'Supervised learning'), h('p', { html: 'Input → correct output. The loss tells you <b>how wrong</b> and <b>in which direction</b>, for every example. Feedback is instant and precise.' })),
@@ -81,15 +81,15 @@
 
       root.append(section('Q-learning: the simplest thing that actually works',
         p(`From 1989. Keep a table, <em>Q</em>, with one row per state and one column per action. Q(s, a) is your current estimate of the total discounted reward from taking action a in state s and behaving sensibly afterwards. Start with all zeros.`),
-        p(`Then every time you observe (state s, action a, reward r, new state s'), update one cell. Read the bracket as an <b>error</b>: what you just learned the value should be, minus what you previously believed. You move your belief part of the way toward the evidence.`),
+        p(`Then every time you observe (state s, action a, reward r, new state s'), update one cell. Read the update as an <b>error</b>: what you just learned the value should be, minus what you previously believed. You move your belief part of the way toward the evidence.`),
         p(`That is the whole algorithm. Because the target uses the <i>next</i> state's value, information flows backwards one step per update: the cell next to the goal learns first, then the cell next to that. Credit assignment gets solved not all at once, but by a chain of one-step corrections repeated thousands of times.`),
         callout('tryit', '🖐 Try this — watch an agent learn the maze you just failed at',
           `<b>1.</b> Press <b>▶ Play</b> and watch the colours. The squares nearest the goal go green first, then the ripple spreads backwards. <b>That is credit assignment happening in front of you.</b><br>
-           <b>2.</b> Drag <b>γ discount</b> down to 0.5 and press <b>Reset Q</b>. The ripple stops spreading — distant squares never learn the goal exists.<br>
+           <b>2.</b> Drag <b>γ discount</b> down to 0.5 and press <b>Reset Q</b>. The green ripple stops spreading: distant squares still learn, but a reward ten steps away is now worth 0.5<sup>10</sup> — about a thousandth — so their values are too faint to see or to act on.<br>
            <b>3.</b> Push <b>ε exploration</b> to 1.0, so the agent moves <i>entirely at random</i>. The table still converges on a good policy. That is not a bug; it is the property called off-policy learning.<br>
            <b>4.</b> Turn <b>Edit map</b> on and move the goal. Watch it unlearn the old one.`),
         gridworld(),
-        p(`Two details earn their place. When an episode ends there is no "next state", so the target is just the reward — that is the <b>only</b> place real reward enters the table, and every other value in the grid is ultimately a rumour about it.`),
+        p(`Two details earn their place. When an episode ends there is no "next state", so the target is the reward alone — the <b>only</b> update with no guess in it at all. Every other update is part real reward and part the table's current opinion about what comes next, which is why the whole grid is ultimately a rumour anchored on the goal.`),
         p(`And the update uses the <i>best</i> next value regardless of what the agent actually did next. So Q-learning learns the value of the best policy even while behaving randomly, which is exactly why step 3 above works. That property is called <em>off-policy</em> learning.`),
         p(`Q-learning is <em>tabular</em> when the table is literal, which only works for small worlds. For Atari or Go the table becomes a neural network taking the state and outputting a Q value per action, and the update rule becomes the loss it is trained on. That is <em>deep Q-learning</em>.`),
       ));
@@ -101,7 +101,7 @@
           `<b>1.</b> Pull the machines yourself for a while. Try to work out which is best — and notice how hard it is to tell a 0.5 machine from a 0.6 machine in twenty pulls.<br>
            <b>2.</b> Press <b>Run agents</b> and watch the regret curves. <b>Watch the shape, not the final number.</b> A good agent's curve <b>bends flat</b>; a bad one keeps climbing in a straight line.<br>
            <b>3.</b> Press <b>Reveal true rates</b> and see how close you got.<br>
-           <b>4.</b> Raise the horizon to 20,000 and run again — the two strategies change places.`),
+           <b>4.</b> Raise the horizon to 20,000 and run again — on most draws the two strategies change places. If they do not, press <b>Reset</b> for a fresh set of hidden rates and run again: which one wins depends on the arms you happened to get, and that is worth knowing too.`),
         bandit(),
         p(`The score that matters is <em>regret</em>: what you earned compared with pulling the best machine every time. A perfect agent has zero regret. A random agent's regret grows in a straight line. A good agent's curve bends flat — it explores early, identifies the winner, and stops paying for information it no longer needs.`),
         p(`<em>UCB</em> (upper confidence bound) scores each machine by its average payout <b>plus a bonus that grows the less you have tried it</b>. Barely-touched machines look optimistic, so you try them; as evidence accumulates the bonus shrinks and the winner takes over. "Optimism in the face of uncertainty" — a good slogan for life, too.`),
@@ -128,7 +128,7 @@
         p(`In 2016 OpenAI trained an agent on a boat-racing game called CoastRunners. "Finish the race" was hard to learn from, so they used the game's own score, which mostly comes from hitting targets along the course.`),
         p(`The agent found a lagoon where three targets respawned quickly and drove in circles there forever: crashing, catching fire, going backwards, never finishing — while scoring 20% higher than human players.`),
         callout('tryit', '🖐 Try this: what the reward says versus what you meant',
-          `<b>1.</b> Leave it on the points-based reward and let it run for ten seconds. Read the score rate.<br>
+          `<b>1.</b> Leave it on <b>laps finished</b> — what we actually wanted — and let it run for ten seconds. Read the score rate.<br>
            <b>2.</b> Switch the <b>reward function</b> and compare. The behaviour that <i>never finishes a lap</i> wins on the proxy.<br>
            <b>3.</b> Sit with that for a moment: <b>the agent is not confused. The reward is.</b>`),
         rewardHack(),
@@ -146,8 +146,8 @@
         p(`The 2024–2025 generation of <em>reasoning models</em> pushed RL further. Instead of a preference score they use rewards you can <b>verify</b>: did the maths answer match? did the code pass the tests? The environment is a coding task, the episode is a long chain of thought, the reward is 1 or 0 at the end.`),
         p(`Credit assignment over thousands of tokens, exploration to find non-obvious strategies, reward hacking when the tests are weak: every problem in this chapter, at scale.`),
         callout('history', '📜 The decade RL went from toy mazes to superhuman',
-          `<b>1989:</b> Chris Watkins introduces Q-learning in his thesis, with a convergence proof.<br>
-           <b>2013–2015:</b> DeepMind's DQN learns to play Atari from raw pixels with the same network for every game, then reaches human level across 49 of them.<br>
+          `<b>1989:</b> Chris Watkins introduces Q-learning in his Cambridge thesis, with a sketch of a convergence proof; he and Peter Dayan publish the full proof in 1992.<br>
+           <b>2013–2015:</b> DeepMind's DQN learns to play Atari from raw pixels using the same architecture and hyperparameters for every game — a separately trained network each time — and matches or beats a professional human tester on about half of the 49 games it was tested on.<br>
            <b>2016:</b> AlphaGo beats Lee Sedol 4–1. <b>2017:</b> AlphaGo Zero drops human games entirely and learns from self-play alone, beating the previous version 100–0.<br>
            <b>2017:</b> PPO is published, and quietly becomes the default policy-gradient algorithm everywhere.<br>
            <b>2022:</b> PPO is used to turn a language model into ChatGPT — and RL stops being a games technique.`),
@@ -169,7 +169,7 @@
 
       root.append(section('Go deeper',
         ul([
-          '<a href="http://incompleteideas.net/book/the-book-2nd.html" target="_blank" rel="noopener">Sutton &amp; Barto, <i>Reinforcement Learning: An Introduction</i></a> — the field\'s standard text, free online, and unusually readable. Chapters 3–6 are this chapter in proper depth.',
+          '<a href="http://incompleteideas.net/book/the-book-2nd.html" target="_blank" rel="noopener">Sutton &amp; Barto, <i>Reinforcement Learning: An Introduction</i></a> — the field\'s standard text, free online, and unusually readable. Chapters 2, 3, 5–6 and 13 are this chapter in proper depth.',
           '<a href="https://spinningup.openai.com/en/latest/" target="_blank" rel="noopener">OpenAI Spinning Up in Deep RL</a> — the best hands-on introduction to policy gradients, with clean, readable code.',
           '<a href="https://www.davidsilver.uk/teaching/" target="_blank" rel="noopener">David Silver\'s RL lecture course</a> — from the lead researcher on AlphaGo.',
           '<a href="https://www.nature.com/articles/nature14236" target="_blank" rel="noopener">Mnih et al. (2015), "Human-level control through deep reinforcement learning"</a> — DQN, and Atari from raw pixels. The <a href="https://arxiv.org/abs/1312.5602" target="_blank" rel="noopener">2013 workshop version</a> is shorter.',
@@ -467,11 +467,12 @@
             for (let i = 0; i < ag.hist.length; i += stride) { const x = px + i / xmax * pw, y = py + ph - 1 - ag.hist[i] / ymax * (ph - 2); i ? g.lineTo(x, y) : g.moveTo(x, y); }
             g.stroke();
           });
-          g.restore();
-          // random baseline (dashed): regret grows at (best - mean rate) per pull
+          // random baseline (dashed), drawn INSIDE the clip so a steep line leaves
+          // the top of the plot instead of being squashed flat along it
           const avgGap = best - rates.reduce((a, b) => a + b, 0) / K;
           g.strokeStyle = 'rgba(148,163,184,0.5)'; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(px, py + ph);
-          g.lineTo(px + pw, py + ph - Math.min(ph, avgGap * xmax / ymax * ph)); g.stroke(); g.setLineDash([]);
+          g.lineTo(px + pw, py + ph - avgGap * xmax / ymax * ph); g.stroke(); g.setLineDash([]);
+          g.restore();
           g.fillStyle = 'rgba(148,163,184,0.7)'; g.textAlign = 'right'; g.fillText('random', px + pw - 4, py + ph - Math.min(ph, avgGap * xmax / ymax * ph) - 12);
         }
 
@@ -816,7 +817,7 @@
         function run() {
           let a = seed;
           const rnd = () => { a = (a * 1664525 + 1013904223) % 4294967296; return a / 4294967296; };
-          let th = -2.2; const hist = [th];
+          let th = -1.5; const hist = [th];
           for (let i = 0; i < 40; i++) {
             const grad = -th * perf(th);                       // toward the peak
             const noise = (rnd() - 0.5) * 1.4;                 // the data is a small sample
@@ -824,7 +825,7 @@
             if (clipping) ratio = ctx.clamp(ratio, -CLIP, CLIP);
             th += ratio;
             /* off-policy damage: a huge move invalidates the data that produced it */
-            if (Math.abs(ratio) > 0.55) th += (rnd() - 0.5) * 4.5;
+            if (Math.abs(ratio) > 2.0) th += (rnd() - 0.5) * 4.5;
             th = ctx.clamp(th, -6, 6);
             hist.push(th);
           }
@@ -876,7 +877,7 @@
           const TX = 490;
           const final = scores[scores.length - 1];
           const worst = Math.min(...scores.slice(5));
-          const collapses = scores.slice(1).filter((v, i) => Math.abs(hist[i + 1] - hist[i]) > 0.55).length;
+          const collapses = scores.slice(1).filter((v, i) => Math.abs(hist[i + 1] - hist[i]) > 2.0).length;
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
           g.fillText('the clip band', TX, 50);
           g.font = MONO; g.fillStyle = C.muted;
