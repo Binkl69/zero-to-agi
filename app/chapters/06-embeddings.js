@@ -1022,7 +1022,8 @@
 
   /* ---------- Interactive: the distributional hypothesis ---------- */
   function buildTesguino(ctx) {
-    const [cv, g] = ctx.canvas(720, 390);
+    /* six candidate bars end at y=340, so the verdict below them needs the room */
+    const [cv, g] = ctx.canvas(720, 424);
     const C = ctx.colors;
     const FONT = '13px Inter, system-ui, sans-serif';
     const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
@@ -1096,7 +1097,7 @@
           : tiedTop.length > 1
             ? tiedTop.join(' and ') + ' lead together — and that is the correct answer, not a failure: they are near-synonyms, so no amount of context separates them. Both are far ahead of hammer and democracy.'
             : '"' + scored[0].w + '" fits the company best — inferred from context alone, with no definition anywhere.',
-        30, 336, 660, 16);
+        30, 364, 660, 16);
       ro.set({ 'contexts shown': nOn, 'cue words': liveCues.size, 'best fit': scored[0].w });
     });
 

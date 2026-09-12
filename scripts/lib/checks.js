@@ -145,13 +145,12 @@ function checkFrame(ops, W, H) {
       if (B.backedBy > A.op.seq || A.backedBy > B.op.seq) continue;
       const a = inset(A.b, TEXT_INSET_X, TEXT_INSET_Y), b = inset(B.b, TEXT_INSET_X, TEXT_INSET_Y);
       const ov = overlapArea(a, b);
-      if (!ov) continue;
-      const frac = ov / Math.min(area(a), area(b));
+      const frac = ov ? ov / Math.min(area(a), area(b)) : 0;
       const i2 = intersect(a, b);
       /* Two labels side by side on the same line collide visibly long before
          either is 35% covered, so a narrow but full-height intrusion counts
          too — that is the commonest collision of the lot. */
-      const sameLine = (i2.y1 - i2.y0) > 0.45 * Math.min(a.y1 - a.y0, b.y1 - b.y0);
+      const sameLine = ov ? (i2.y1 - i2.y0) > 0.45 * Math.min(a.y1 - a.y0, b.y1 - b.y0) : false;
       /* A line of one block sitting on a line of another — an axis label under a
          paragraph, say — clips by only a few px, which the vertical inset above
          is deliberately blind to. Two lines of the SAME wrapped block share an
@@ -198,6 +197,9 @@ function checkFrame(ops, W, H) {
     if (Math.hypot(op.b.x - op.a.x, op.b.y - op.a.y) < 8) continue;
     for (const t of texts) {
       if (t.backedBy > op.seq) continue;
+      /* a label drawn after the line is painted on top of it and reads fine —
+         that is the standard remedy, so it must not be reported as the defect */
+      if (t.op.seq > op.seq) continue;
       const box = inset(t.b, 0.16, 0.30);
       if (area(box) < 12) continue;
       if (op.clip) { const c = intersect(box, op.clip); if (c.x1 <= c.x0 || c.y1 <= c.y0) continue; }

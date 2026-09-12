@@ -485,8 +485,9 @@
             g.fillText('QUERY', b.x + b.w / 2, b.y + chipH / 2 + 16);
           }
           g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'left';
-          wrapText(g, 'border colour = toy part-of-speech guess: pink = pronoun, blue = content word, orange = verb/aux, purple = conjunction, grey = determiner/function word', 14, 205, W - 28, 13);
-          if (a.truncated) { g.fillStyle = C.warn; g.fillText('(showing first 16 words)', 14, 235); }
+          /* clear of the QUERY tag that hangs below the selected chip */
+          wrapText(g, 'border colour = toy part-of-speech guess: pink = pronoun, blue = content word, orange = verb/aux, purple = conjunction, grey = determiner/function word', 14, 213, W - 28, 13);
+          if (a.truncated) { g.fillStyle = C.warn; g.fillText('(showing first 16 words)', 14, 243); }
 
           // matrix — its own heading first, then a cell size that keeps every row on the canvas
           g.fillStyle = C.text; g.font = 'bold 12px Inter, system-ui, sans-serif'; g.textAlign = 'left';

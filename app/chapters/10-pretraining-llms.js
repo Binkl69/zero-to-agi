@@ -412,7 +412,9 @@
                when the text would otherwise leave the canvas */
             const flip = px + 8 + g.measureText(wasted).width > cv.W - 6;
             g.textAlign = flip ? 'right' : 'left';
-            g.fillText(wasted, px + (flip ? -8 : 8), (py + Y2(bestL)) / 2);
+            /* when the optimum sits almost on the irreducible floor the midpoint of
+               this segment lands on the 'irreducible loss E' label; keep clear of it */
+            g.fillText(wasted, px + (flip ? -8 : 8), Math.min((py + Y2(bestL)) / 2, Y2(fit.E) - 22));
           }
           g.beginPath(); g.arc(px, py, 6, 0, Math.PI * 2);
           g.fillStyle = C.accent; g.fill(); g.strokeStyle = '#ffffff'; g.lineWidth = 2; g.stroke();

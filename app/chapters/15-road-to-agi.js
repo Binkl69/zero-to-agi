@@ -25,7 +25,9 @@
       function capabilityRadar() {
         const W = 720, H = 470;
         const [cv, g] = ctx.canvas(W, H);
-        const cx = 230, cy = 235, maxR = 168;
+        /* the axis labels are right-aligned on the left side, so the centre has to
+           sit far enough right for the longest of them to fit inside the canvas */
+        const cx = 262, cy = 235, maxR = 168;
         const AXES = [
           'Knowledge recall', 'Maths & logic', 'Coding', 'Long-horizon agency',
           'Continual learning', 'Sample efficiency', 'Physical world', 'Calibration', 'Memory', 'Energy efficiency',
@@ -78,8 +80,8 @@
             const edge = toXY(i, 10);
             g.strokeStyle = i === S.hover ? C.warn : C.line; g.lineWidth = i === S.hover ? 2 : 1;
             g.beginPath(); g.moveTo(cx, cy); g.lineTo(edge.x, edge.y); g.stroke();
-            const lx = cx + (maxR + 34) * Math.cos(-Math.PI / 2 + i * (2 * Math.PI / AXES.length));
-            const ly = cy + (maxR + 34) * Math.sin(-Math.PI / 2 + i * (2 * Math.PI / AXES.length));
+            const lx = cx + (maxR + 24) * Math.cos(-Math.PI / 2 + i * (2 * Math.PI / AXES.length));
+            const ly = cy + (maxR + 24) * Math.sin(-Math.PI / 2 + i * (2 * Math.PI / AXES.length));
             g.fillStyle = i === S.hover ? C.warn : C.text;
             g.textAlign = Math.cos(-Math.PI / 2 + i * (2 * Math.PI / AXES.length)) > 0.2 ? 'left' : Math.cos(-Math.PI / 2 + i * (2 * Math.PI / AXES.length)) < -0.2 ? 'right' : 'center';
             const words = AXES[i].split(' ');
@@ -178,17 +180,23 @@
           g.fillStyle = '#0f1520'; g.fillRect(plot.x, plot.y, plot.w, plot.h); g.strokeStyle = C.line; g.strokeRect(plot.x, plot.y, plot.w, plot.h);
           // reference model ticks
           g.font = MONO; g.textAlign = 'center';
-          REF.forEach((m) => {
+          REF.forEach((m, i) => {
             const x = xAt(m.n);
             g.strokeStyle = C.line; g.lineWidth = 1; g.beginPath(); g.moveTo(x, plot.y); g.lineTo(x, plot.y + plot.h); g.stroke();
-            g.fillStyle = C.muted; g.save(); g.translate(x, plot.y + plot.h + 14); g.rotate(0); g.fillText(m.label, 0, 0); g.restore();
+            /* the reference models crowd together at the top of the scale, so the
+               labels alternate onto two baselines instead of printing over each other */
+            g.fillStyle = C.muted; g.fillText(m.label, ctx.clamp(x, plot.x + 36, plot.x + plot.w - 36), plot.y + plot.h + (i % 2 ? 28 : 14));
           });
           // your marker
           const nx = ctx.clamp(xAt(r.N), plot.x, plot.x + plot.w);
           g.strokeStyle = C.warn; g.lineWidth = 2.5; g.beginPath(); g.moveTo(nx, plot.y - 6); g.lineTo(nx, plot.y + plot.h); g.stroke();
           g.beginPath(); g.moveTo(nx - 7, plot.y - 6); g.lineTo(nx + 7, plot.y - 6); g.lineTo(nx, plot.y + 8); g.closePath(); g.fillStyle = C.warn; g.fill();
-          g.fillStyle = C.warn; g.textAlign = 'left'; g.font = 'bold 12px "JetBrains Mono", monospace';
-          g.fillText('your compute-optimal N', Math.min(nx + 10, plot.x + plot.w - 175), plot.y + 16);
+          /* near the right edge the caption flips to the inside of the marker, so the
+             marker's own 2.5px line is never drawn across it */
+          g.fillStyle = C.warn; g.font = 'bold 12px "JetBrains Mono", monospace';
+          const flipN = nx > plot.x + plot.w - 185;
+          g.textAlign = flipN ? 'right' : 'left';
+          g.fillText('your compute-optimal N', flipN ? nx - 10 : nx + 10, plot.y + 16);
           g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'left';
           g.fillText('parameters, log scale →', plot.x, plot.y - 10);
           ro.set({
@@ -269,8 +277,8 @@
           { year: 2020.5, min: 0.2, label: 'GPT-3' },
           { year: 2022.7, min: 1.5, label: 'GPT-3.5' },
           { year: 2023.3, min: 6, label: 'GPT-4' },
-          { year: 2024.5, min: 25, label: 'Claude 3.5 / GPT-4o class' },
-          { year: 2025.1, min: 110, label: 'o3 / frontier reasoners' },
+          { year: 2024.5, min: 25, label: 'Claude 3.5' },
+          { year: 2025.1, min: 110, label: 'o3' },
         ];
         /* Least squares on log2(minutes) against year. The line used to be pinned to
            the single oldest point with a hard-coded 7-month doubling, which left the
@@ -286,7 +294,8 @@
         })();
         const DOUBLE_MONTHS = 12 / FIT.slope;
         function fit(year) { return FIT.t0 * Math.pow(2, FIT.slope * (year - Y0)); }
-        const plot = { x: 46, y: 16, w: 640, h: 240 };
+        /* wide enough for the longest y-axis label ('23.1 months'), right-aligned */
+        const plot = { x: 92, y: 16, w: 594, h: 240 };
         const X0 = 2019, X1 = 2033;
         const YMIN = 0.02, YMAX = 4e6; // minutes: ~1 sec .. ~7.6 years
         const xAt = (yr) => plot.x + (yr - X0) / (X1 - X0) * plot.w;
@@ -314,6 +323,11 @@
           // year ticks
           g.textAlign = 'center';
           for (let yr = 2019; yr <= X1; yr += 2) { const x = xAt(yr); g.fillStyle = C.muted; g.fillText(String(yr), x, plot.y + plot.h + 16); }
+          /* the year rule is drawn under the curve, the dots and their labels: it used
+             to be painted straight through whichever label it happened to cross */
+          const ex = ctx.clamp(S.extrap, X0, X1), exY = fit(ex);
+          const mx = xAt(ex), my = yAt(exY);
+          g.strokeStyle = C.danger; g.lineWidth = 1.5; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(mx, plot.y); g.lineTo(mx, plot.y + plot.h); g.stroke(); g.setLineDash([]);
           // fitted curve: solid through observed range, dashed into extrapolation
           g.lineWidth = 2.5;
           g.beginPath();
@@ -326,14 +340,13 @@
           DATA.forEach((d, i) => {
             const x = xAt(d.year), y = yAt(d.min);
             g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fillStyle = C.warn; g.fill(); g.strokeStyle = '#0a0e16'; g.lineWidth = 1; g.stroke();
-            /* every dot names itself: the try-it asks the reader to find GPT-3's */
-            g.font = MONO; g.fillStyle = C.warn; g.textAlign = 'left';
-            g.fillText(d.label, x + 7, y + (i % 2 ? 12 : -6));
+            /* every dot names itself; the dots march up and to the right, so labels
+               alternate above-left and below-right of the line rather than colliding */
+            g.font = MONO; g.fillStyle = C.warn;
+            const below = i % 2 === 0;   /* the first point sits in the bottom-left corner, on top of the y-axis labels */
+            g.textAlign = below ? 'left' : 'right';
+            g.fillText(d.label, below ? x + 7 : x - 7, below ? y + 14 : y - 7);
           });
-          // extrapolation marker
-          const ex = ctx.clamp(S.extrap, X0, X1), exY = fit(ex);
-          const mx = xAt(ex), my = yAt(exY);
-          g.strokeStyle = C.danger; g.lineWidth = 1.5; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(mx, plot.y); g.lineTo(mx, plot.y + plot.h); g.stroke(); g.setLineDash([]);
           g.beginPath(); g.arc(mx, my, 6, 0, Math.PI * 2); g.fillStyle = C.danger; g.fill();
           g.fillStyle = C.text; g.font = FONT; g.textAlign = 'left';
           g.fillText('solid = least-squares fit through the six points · dashed = extrapolation · red = your year', plot.x + 4, plot.y + 14);

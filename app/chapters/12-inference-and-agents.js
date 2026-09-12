@@ -187,7 +187,10 @@
           g.strokeStyle = C.danger; g.lineWidth = 2; g.setLineDash([5, 4]);
           g.beginPath(); g.moveTo(tickX, barY - 14); g.lineTo(tickX, barY + barH + 14); g.stroke(); g.setLineDash([]);
           g.fillStyle = C.danger; g.font = FONT; g.textAlign = 'center';
-          g.fillText('1× H100 — 80 GB', tickX, barY - 22);
+          /* at big totals the tick slides toward the left edge and the centred
+             label used to hang off the canvas */
+          const tickLbl = '1× H100 — 80 GB';
+          g.fillText(tickLbl, ctx.clamp(tickX, x0 + g.measureText(tickLbl).width / 2, x1 - g.measureText(tickLbl).width / 2), barY - 22);
           g.font = MONO; g.fillStyle = C.text; g.textAlign = 'left';
           g.fillText('weights: ' + fmtGB(R.weightGB), x0, barY + barH + 30);
           g.fillStyle = C.orange;
