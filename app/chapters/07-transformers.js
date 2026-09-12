@@ -78,7 +78,7 @@
   /* the alphabet the merges start from: every character in the corpus, plus the end-of-word mark */
   const BPE_BASE_VOCAB = new Set((CORPUS_TEXT.toLowerCase().match(/[a-z]/g) || [])).size + 1;
   const BPE_RANK = new Map(BPE_MERGES.map((k, i) => [k, i]));
-  const BPE_WORD_COUNT = new Set((CORPUS_TEXT.toLowerCase().match(/[a-z]+/g) || [])).size;
+  const BPE_WORD_COUNT = (CORPUS_TEXT.toLowerCase().match(/[a-z]+/g) || []).length;
 
   /* limit = how many of the learned merge rules the reader has switched on; the tokenizer is
      the same algorithm either way, it just stops applying rules it has not reached yet. */
@@ -640,7 +640,7 @@
         const playBtn = ctx.button('⏸ Pause', () => { S.playing = !S.playing; playBtn.textContent = S.playing ? '⏸ Pause' : '▶ Play'; }, 'primary');
         const speedSl = ctx.slider({ label: 'speed', min: 0.25, max: 2, step: 0.25, value: 1, fmt: (v) => v.toFixed(2) + '×', onChange: (v) => { S.speed = v; } });
         return ctx.figure(cv,
-          'One pulse, one full pass through the stack. Depth means the SAME two-step recipe (attention, then MLP, each followed by Add & Norm) repeats layer after layer — GPT-2 small stacks it 12 times; the largest 2026 models stack it over a hundred times. Attention itself is computed for every token in parallel; only the layer-by-layer stacking is sequential.',
+          'One pulse, one full pass through the stack. Depth means the SAME two-step recipe (attention, then MLP, each followed by Add & Norm) repeats layer after layer — GPT-2 small stacks it 12 times; the largest models today stack it a few dozen times — DeepSeek-V4-Pro uses 61 layers, and Qwen 3 dense models run from 28 to 64 — because what has grown fastest at the frontier is width and expert count, not depth. Attention itself is computed for every token in parallel; only the layer-by-layer stacking is sequential.',
           [layerSl, playBtn, speedSl], ro);
       }
 
@@ -821,7 +821,7 @@
           const PX = 380, PY = 56, PW = 300, PH = 150;
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
           g.fillText('the position signal being added', PX, 28);
-          const NPOS = 40;
+          const NPOS = 200;
           for (let pos = 0; pos < NPOS; pos++) {
             const v = pe(pos);
             for (let i = 0; i < D; i++) {
@@ -836,7 +836,7 @@
           g.save(); g.translate(PX - 8, PY + PH - 10); g.rotate(-Math.PI / 2);
           g.fillText('dimension', 0, 0); g.restore();
           g.font = FONT; g.fillStyle = C.muted;
-          wrapText(g, 'Sine and cosine waves at different frequencies. Fast waves at the top distinguish neighbouring positions; slow waves at the bottom distinguish far-apart ones — so a single vector encodes position at every scale at once, and nothing had to be learned.',
+          wrapText(g, 'Sine and cosine waves at different frequencies. Fast waves at the top separate neighbouring positions; the rows further down cycle so slowly they barely move across this window, which is how they mark roughly where in a long document you are — so a single vector encodes position at every scale at once, and nothing had to be learned.',
             PX, PY + PH + 40, 300, 16);
 
           /* ---- the verdict on order-blindness: full width, below both columns ---- */
@@ -952,7 +952,9 @@
           g.fillText('top of axis = ' + human(peak), P.x + P.w, 30);
           g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(P.x, P.y, P.w, P.h);
           const px = (t) => P.x + t / Math.max(1, gen - 1) * P.w;
-          const py = (v) => P.y + P.h - 2 - ctx.clamp(v / peak, 0, 1) * (P.h - 4);
+          /* log scale: on a linear axis normalised to the n^2 peak the cached
+             curve is flat against the floor, which is the opposite of the point */
+          const py = (v) => P.y + P.h - 2 - ctx.clamp(Math.log10(1 + Math.max(0, v)) / Math.log10(1 + peak), 0, 1) * (P.h - 4);
           const drawLine = (arr, col, wdt) => {
             g.strokeStyle = col; g.lineWidth = wdt; g.beginPath();
             arr.forEach((v, t) => { t ? g.lineTo(px(t), py(v)) : g.moveTo(px(t), py(v)); });
@@ -1005,7 +1007,7 @@
         });
 
         return ctx.figure(cv,
-          'Generation is a loop: predict one token, append it, feed the whole sequence back in, predict again. Done naively, every step recomputes the Key and Value vectors for every earlier token — but those never change, so they are stored the first time and only the newest token is computed fresh. That is the KV-cache, and it is the single biggest reason a chat reply feels fast. Both curves are drawn in the same unit — one token-to-token comparison — which is why the cached line looks almost flat: at 500 tokens of context it is doing 500× less work per token. It also explains the thing you have felt: long conversations get slower and heavier, because the cache keeps growing with everything you have said.',
+          'Generation is a loop: predict one token, append it, feed the whole sequence back in, predict again. Done naively, every step recomputes the Key and Value vectors for every earlier token — but those never change, so they are stored the first time and only the newest token is computed fresh. That is the KV-cache, and it is the single biggest reason a chat reply feels fast. Both curves are drawn in the same unit — one token-to-token comparison — on a logarithmic axis, because on a linear one the cached line sits flat against the floor: the gap between them is the whole story, and it is a factor of the context length. It also explains the thing you have felt: long conversations get slower and heavier, because the cache keeps growing with everything you have said.',
           [pSl, gSl, cBtn], ro);
       }
       /* ================================================================== */
@@ -1029,7 +1031,7 @@
         p(`Early merges fuse common letter pairs ("t"+"h" → "th"). Later merges fuse whole words ("th"+"e" → "the"). Rare words never earn their own symbol, so they end up spelled out as two, three or five pieces stitched together from parts learned elsewhere.`),
         callout('tryit', '🖐 Try this: watch a tokenizer learn',
           `The demo below runs that exact algorithm, live, on a few hundred words of built-in text.<br>
-           <b>1.</b> Step through the merges one at a time and read what each one fuses. The first few are letter pairs.<br>
+           <b>1.</b> Step through the merges one at a time and read what each one fuses. The first few glue a single letter to the end-of-word mark ‿, or to another letter — the model is learning which pairs are common before it learns any words.<br>
            <b>2.</b> Keep going and watch whole words appear as single symbols.<br>
            <b>3.</b> Notice the vocabulary growing while the token count of the same text <b>falls</b>. That trade is the entire design.`),
         tokenizerDemo(),
@@ -1042,7 +1044,7 @@
       root.append(section('The problem attention solves',
         p(`Chapter 5's recurrent networks read a sentence the way you read this one: left to right, one word at a time, carrying a running summary forward. That has two costs.`),
         p(`First, <b>speed</b>. Word 500 cannot be processed until words 1 to 499 have each taken their turn, so a GPU with thousands of idle cores sits mostly unused while the sequence trickles through.`),
-        p(`Second, <b>memory</b>. Everything the network knows about word 1 must survive, compressed into one fixed-size vector, all the way to word 500 — and in practice it does not. That is the vanishing-gradient problem from chapter 5.`),
+        p(`Second, <b>memory</b>. Everything the network knows about word 1 must survive, compressed into one fixed-size vector, all the way to word 500 — and in practice it does not. That is chapter 5's <em>bottleneck problem</em>, and the vanishing gradients from the same chapter make it worse: the path the information has to travel is also the path the learning signal has to travel back along.`),
         p(`Attention removes both with one change: instead of relaying information down a chain, let every token query every other token directly. Word 500 looks straight at word 1 in a single step, with no relay and no fading.`),
         p(`And crucially every token can do this <i>at the same time</i>, because "look at everything" is one matrix multiplication — exactly what a GPU is built to do in parallel. That is the trade the 2017 paper made in its title.`),
         callout('key', '🔑 Query, Key, Value — the dating-app analogy',
@@ -1067,10 +1069,10 @@
         p(`The classic test is a Winograd-style sentence: "The animal didn't cross the street because <b>it</b> was too tired." Every human instantly reads "it" as the animal, because a tired street makes no sense. Real trained attention heads learn exactly this kind of link from data.`),
         callout('tryit', '🖐 Try this: the attention visualiser',
           `<b>1.</b> Click the word <b>it</b> and watch where the weight goes.<br>
-           <b>2.</b> Change "tired" to "wide" and watch the link move to <i>street</i>. Nothing was reprogrammed — the rule reads the sentence.<br>
+           <b>2.</b> Now swap the two nouns round: type <b>The street didn't bother the animal because it was too wide</b>. The link follows the word order, not the meaning — which is the honest limit of a hand-written rule, and exactly what a trained head learns to do better.<br>
            <b>3.</b> Toggle <b>causal mask</b> on and off. With it on, no token can attend to anything to its right, which is the constraint every GPT-style model trains under.`),
         callout('warning', '⚠️ Illustrative, not trained',
-          `The visualiser below fakes one attention head with a few hand-written rules — a crude part-of-speech guess, a boost from pronouns toward the nearest preceding noun, a boost from "the" toward the following word, and a mild preference for nearby words.
+          `The visualiser below fakes one attention head with a few hand-written rules — a crude part-of-speech guess, a boost from pronouns back toward the sentence's first content word, a boost from "the" toward the following word, and a mild preference for nearby words.
            It shows you the <b>shape</b> of the behaviour without needing billions of trained weights. A real head is messier and was never told any of these rules.`),
         attentionVisualiser(),
         p(`One attention computation learns one <i>kind</i> of relationship — say, pronoun-to-noun. A sentence needs many at once: which adjective modifies which noun, which verb takes which object, which word agrees with which.`),
@@ -1087,7 +1089,7 @@
         positionLab(),
         p(`That is a real problem, because "the dog bit the man" and "the man bit the dog" contain exactly the same words. An RNN got order for free by reading left to right. A transformer has to be told.`),
         p(`The fix is <em>positional encoding</em>: before the first layer, add a vector to each token's embedding that encodes its position, so token 1 and token 50 differ even when the word is identical.`),
-        p(`The 2017 paper used the fixed pattern of sine and cosine waves you just dragged — no learning required, and it extends to sequences longer than any seen in training. Many models instead learn a position vector per slot.`),
+        p(`The 2017 paper used the fixed pattern of sine and cosine waves you just dragged — no learning required, and the authors hoped it would let a model handle sequences longer than any it trained on. Measured later, it does not; that is why almost every model since 2023 uses RoPE instead. Many models instead learn a position vector per slot.`),
         p(`Most models from 2023 onward use <em>RoPE</em> (rotary position embedding), which rotates each Query and Key by an angle proportional to its position, so the dot product between two tokens naturally reflects their <i>relative</i> distance rather than absolute position. Worth knowing the name of; not worth deriving here.`),
       ));
 
@@ -1111,7 +1113,7 @@
         p(`Two influential 2018 models each kept one half. <b>BERT</b> is encoder-only: full bidirectional attention, trained by hiding random words and asking the model to fill them in. Excellent for understanding text — search, classification, the embeddings of chapter 6 — but never designed to generate long free-form prose.`),
         p(`<b>GPT</b> is decoder-only, and this is where <em>causal masking</em> comes in. A decoder predicting word 50 must not peek at the real word 50 sitting in the training example — that would make training trivial and useless, since at generation time word 50 does not exist yet. So every query is masked to attend only to its own position or earlier, exactly the toggle in the visualiser above.`),
         p(`GPT won as the shape for general assistants for one economic reason: next-token prediction on plain unlabelled text needs no translation pairs and no hand-labelled examples, so it can train on virtually the whole internet. And one decoder can be prompted to translate, summarise, code or chat — tasks that used to need separate systems.`),
-        callout('history', '📜 Three papers, eighteen months, 2017–2019',
+        callout('history', '📜 Three papers, twenty months, 2017–2019',
           `<b>June 2017:</b> "Attention Is All You Need" (Vaswani et al., Google) introduces the transformer for machine translation, and beats the recurrent state of the art while training far faster.<br>
            <b>October 2018:</b> BERT (Devlin et al., Google) keeps the encoder, trains by masked-word prediction, and takes the top of nearly every language-understanding benchmark at once.<br>
            <b>February 2019:</b> GPT-2 (Radford et al., OpenAI) keeps the decoder, scales next-token prediction to 1.5 billion parameters, and produces text fluent enough that its staged release became a public argument about AI risk.<br>
@@ -1127,7 +1129,7 @@
         callout('tryit', '🖐 Try this',
           `<b>1.</b> Press <b>GPT-2 small</b>: d = 768, 12 layers, 50,257 tokens. The total lands on <b>124M</b> — the published figure.<br>
            <b>2.</b> Press <b>GPT-3</b>: d = 12,288 and 96 layers. It lands near <b>175B</b>.<br>
-           <b>3.</b> Now the lesson. Double <b>layers</b> and watch the total double. Then put it back and double <b>width</b> instead — the total roughly <b>quadruples</b>, because the per-block cost is 12<i>d</i>².`),
+           <b>3.</b> Now the lesson. Press <b>GPT-2 small</b>, then double <b>layers</b>: the <b>blocks</b> row doubles exactly, 85M to 170M, while the grand total goes 124.3M to 209.3M — the embedding tables do not grow with depth. Then put the layers back and double <b>width</b> instead: the blocks row roughly <b>quadruples</b>, because the per-block cost is 12<i>d</i>².`),
         paramCalc(),
         p(`Each block spends 4<i>d</i>² on attention — the Q, K and V matrices plus the output projection — and 8<i>d</i>² on its MLP, whose hidden layer is conventionally four times the width. That is 12<i>d</i>² per block.`),
         p(`Twelve blocks of 7.08M is about 85M. Add 38.6M of token embeddings and 0.8M of position embeddings and you get 124M. GPT-2 ties its output layer to the input embedding matrix, reusing the same numbers to turn the final vector back into probabilities, which is why there is no separate un-embedding line.`),
@@ -1151,16 +1153,16 @@
         p(`First, <b>parallel training</b>. Because attention over a whole sequence is one matrix multiplication rather than a step-by-step loop, an entire training example of thousands of tokens is processed in one shot, and thousands of examples across thousands of GPUs run simultaneously. An RNN's one-step-at-a-time nature made it structurally unable to use hardware that way, no matter how many GPUs you bought.`),
         p(`Second, <b>clean scaling</b>. Transformers reliably keep getting better as you add data, parameters and compute, in a smooth and predictable way — the subject of chapter 10's scaling laws — with no sign through years of scaling that the returns simply stop.`),
         p(`A parallelisable architecture that also scales predictably is exactly the combination that turns "bigger GPU budget" into "better model", which is the entire economic engine behind the last eight years of AI progress.`),
-        p(`Every model you can name — Claude, the GPT family, Gemini, Llama — is this decoder-only recipe: token and position embeddings in, N copies of attention-then-MLP-with-residuals, a final projection back to vocabulary-sized probabilities, generated one token at a time behind a KV-cache.`),
+        p(`Every model you can name — Claude, the GPT family, Gemini, Llama — is this decoder-only recipe: tokens in, position information supplied somehow (added at the input, or rotated into Q and K inside every layer, as RoPE does), N copies of attention-then-MLP-with-residuals, a projection back to vocabulary-sized probabilities — usually the embedding matrix reused — generated one token at a time behind a KV-cache.`),
         p(`The differences between them are almost entirely differences of degree and detail covered later in this course — how many layers, how wide, what data, what fine-tuning — not differences in this skeleton. If you understand this page, you understand mechanically what happens between pressing enter and a reply appearing, for every major model in existence.`),
       ));
 
       root.append(
         ctx.quiz([
           { q: 'Why do language models miscount the letters in "strawberry"?', options: ['Arithmetic on letters is hard for computers', 'The word arrives as a couple of opaque chunk-numbers, so the model must recall how each chunk is spelled rather than simply looking at the letters', 'The model was never trained on the word', 'Tokenizers delete repeated letters'], answer: 1, explain: 'You saw it in the opening demo: press "See it the way the model does" and only the numbers remain. Spelling is one step removed from the meaning those numbers were built to carry. Try "the" — one token, no unpacking, no problem.' },
-          { q: 'What does dividing by √d accomplish in the attention formula?', options: ['It normalises the output to length 1', 'It keeps raw dot products in a sane range as the dimension grows, so softmax does not collapse into an all-or-nothing spike and starve the gradient', 'It makes the computation faster', 'It is required for the causal mask'], answer: 1, explain: 'A dot product of longer vectors sums more terms and so grows with d. Uncorrected, the scores swing far enough that softmax saturates, gradients go to nearly zero, and training stalls.' },
+          { q: 'What does dividing by √d accomplish in the attention formula?', options: ['It normalises the output to length 1', 'It keeps raw dot products in a sane range as the dimension grows, so softmax does not collapse into an all-or-nothing spike and starve the gradient', 'It makes the computation faster', 'It is required for the causal mask'], answer: 1, explain: 'A dot product of longer vectors sums more terms, so its typical size grows like √d — which is exactly why the divisor is √d and not d. Uncorrected, the scores swing far enough that softmax saturates, gradients go to nearly zero, and training stalls.' },
           { q: 'You turned positional encoding off and swapped two words. What happened to the attention grid, and why?', options: ['It went blank', 'The same numbers came back, merely rearranged — because Q·Kᵀ compares content against content and has no idea where either token sat', 'The scores doubled', 'Nothing, because attention already tracks order'], answer: 1, explain: 'Attention is a set operation. That is why a position-dependent vector is added to every embedding before layer 1: without it, "the dog bit the man" and "the man bit the dog" are literally indistinguishable to the mechanism.' },
-          { q: 'A transformer block has 12d² parameters. What does that imply about making a model bigger?', options: ['Depth and width cost the same', 'Doubling the width roughly quadruples the parameter count, while doubling the depth only doubles it', 'Width is free', 'Parameter count does not depend on d'], answer: 1, explain: 'The per-block cost is quadratic in width and linear in the number of blocks, which you can verify on the calculator: press GPT-2 small, then double layers (total doubles), then double width instead (total roughly quadruples).' },
+          { q: 'A transformer block has 12d² parameters. What does that imply about making a model bigger?', options: ['Depth and width cost the same', 'Doubling the width roughly quadruples the per-block cost, while doubling the depth only doubles it', 'Width is free', 'Parameter count does not depend on d'], answer: 1, explain: 'The per-block cost is quadratic in width and linear in the number of blocks, which you can verify on the calculator: press GPT-2 small, then double layers (total doubles), then double width instead (total roughly quadruples).' },
           { q: 'What is a KV-cache and what does it cost you?', options: ['It stores the model weights closer to the GPU; it costs nothing', 'It stores every token\'s Key and Value so they are not recomputed each step — making replies fast, but growing with the conversation, so long chats get slower and heavier', 'It caches common prompts so repeated questions are free', 'It compresses the context window'], answer: 1, explain: 'A token\'s Key and Value never change once computed, so storing them turns each generation step into a small increment instead of redoing all the past work. The cache lives in GPU memory and grows with every token exchanged, which is exactly why a very long conversation feels slower.' },
         ]),
 
@@ -1169,7 +1171,7 @@
             `<a href="https://jalammar.github.io/illustrated-transformer/" target="_blank" rel="noopener">Jay Alammar, "The Illustrated Transformer"</a>: the same architecture with a different set of pictures. The best second explanation there is.`,
             `<a href="https://www.youtube.com/watch?v=kCc8FmEb1nY" target="_blank" rel="noopener">Karpathy, "Let's build GPT: from scratch, in code, spelled out"</a>: two hours that build everything on this page in Python. Lab 06 of this course follows it.`,
             `<a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener">Vaswani et al. (2017), "Attention Is All You Need"</a>: the paper. Eleven pages, and section 3.2 is the formula you computed by hand.`,
-            `<a href="https://arxiv.org/abs/1810.04805" target="_blank" rel="noopener">Devlin et al. (2018), "BERT"</a>: the encoder-only branch, and masked-language-model training.`,
+            `<a href="https://arxiv.org/abs/1810.04805" target="_blank" rel="noopener">Devlin et al. (2018), "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding"</a>: the encoder-only branch, and masked-language-model training.`,
             `<a href="https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf" target="_blank" rel="noopener">Radford et al. (2019), "Language Models are Unsupervised Multitask Learners"</a>: GPT-2, and the argument that one decoder can do every task.`,
           ]),
         ),
