@@ -315,7 +315,7 @@
         const eSl = ctx.slider({ label: 'how big a nudge', min: 0.005, max: 0.9, step: 0.005, value: 0.8, digits: 3, onChange: (v) => { eps = v; } });
         const tinyBtn = ctx.button('make the nudge tiny', () => { eps = 0.01; eSl.value = 0.01; }, 'primary');
         const bigBtn = ctx.button('make it big again', () => { eps = 0.8; eSl.value = 0.8; });
-        const botBtn = ctx.button('go to the bottom', () => { w = 1; wSl.value = 1; });
+        const botBtn = ctx.button('go to the bottom', () => { w = 1; wSl.value = 1; eps = 0.01; eSl.value = 0.01; });
         const ro = ctx.readout();
 
         ctx.loop(() => {
@@ -936,7 +936,7 @@
             const x = -4 + i / 220 * 8;
             let v = net(x);
             if (!isFinite(v)) v = 0;
-            v = ctx.clamp(v, -60, 60);
+            v = ctx.clamp(v, -1e12, 1e12);   /* the panel autoscales; clipping here made a straight line read as bent */
             ys.push(v); if (v < lo) lo = v; if (v > hi) hi = v;
           }
           if (hi - lo < 1e-6) { lo -= 1; hi += 1; }
@@ -983,7 +983,7 @@
         const sq = (pp) => 0.5 * (pp - target) * (pp - target);
         const ce = (pp) => -(target * Math.log(Math.max(1e-9, pp)) + (1 - target) * Math.log(Math.max(1e-9, 1 - pp)));
 
-        const pSl = ctx.slider({ label: 'model says P(correct class)', min: 0.01, max: 0.99, step: 0.01, value: 0.5, digits: 2, onChange: (v) => { p = v; } });
+        const pSl = ctx.slider({ label: 'model says P(class 1)', min: 0.01, max: 0.99, step: 0.01, value: 0.5, digits: 2, onChange: (v) => { p = v; } });
         const tSel = ctx.select({
           label: 'true answer', value: '1',
           options: [{ value: '1', label: 'class 1 (yes)' }, { value: '0', label: 'class 0 (no)' }],
@@ -1050,7 +1050,7 @@
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
           g.fillText('how hard it shoves', X, y + 4);
           g.font = MONO; g.fillStyle = C.danger;
-          g.fillText('cross-entropy: ' + (1 / Math.max(0.01, p)).toFixed(1) + '×', X, y + 26);
+          g.fillText('cross-entropy: ' + (1 / Math.max(0.01, target ? p : 1 - p)).toFixed(1) + '×', X, y + 26);
           g.fillStyle = C.accent;
           g.fillText('squared error: ' + Math.abs(p - target).toFixed(2) + '×', X, y + 46);
           g.font = FONT; g.fillStyle = C.muted;
@@ -1061,7 +1061,7 @@
           ro.set({ 'P(right)': p.toFixed(2), 'cross-entropy': cev.toFixed(3), 'squared err': sqv.toFixed(3) });
         });
 
-        return ctx.figure(cv, 'Both curves are zero when the model is certain and right (far right) and rise as it gets things wrong. They part company at the left edge: squared error tops out at 0.5, while cross-entropy goes to infinity. "How hard it shoves" is the size of the gradient — the push the wrong weights receive. A model that is 1% sure of the right answer gets a 100× shove from cross-entropy and almost nothing from squared error.', [pSl, tSel, confBtn, hedgeBtn, rightBtn], ro);
+        return ctx.figure(cv, 'Both curves are zero when the model is certain and right (far right) and rise as it gets things wrong. They part company at the left edge: squared error tops out at 0.5, while cross-entropy goes to infinity. "How hard it shoves" is how steeply each loss climbs as the probability slips — the slope in p, which is what the weight updates inherit — the push the wrong weights receive. A model that is 1% sure of the right answer gets a 100× shove from cross-entropy and almost nothing from squared error.', [pSl, tSel, confBtn, hedgeBtn, rightBtn], ro);
       }
 
       /* ------------------------------------------------------------------ */
@@ -1088,7 +1088,7 @@
         const dSl = ctx.slider({ label: 'hidden layers', min: 1, max: 8, step: 1, value: 1, onChange: (v) => { depth = v; } });
         const iSl = ctx.slider({ label: 'inputs', min: 2, max: 784, step: 1, value: 2, onChange: (v) => { inputs = v; } });
         const mnistBtn = ctx.button('Match the 1989 postcode reader', () => {
-          inputs = 256; iSl.value = 256; width = 30; wSl.value = 30; depth = 1; dSl.value = 1;
+          inputs = 256; iSl.value = 256; width = 38; wSl.value = 38; depth = 1; dSl.value = 1;
         }, 'primary');
         const ro = ctx.readout();
         const human = (n) => n >= 1e12 ? (n / 1e12).toFixed(1) + ' trillion'
@@ -1149,7 +1149,7 @@
       root.append(section('The squash between layers is not decoration',
         callout('tryit', '🖐 Try this — break it on purpose',
           `Set <b>Activation</b> to <b>linear (none)</b> and press <b>New random weights</b> ten times. Drag <b>Layers</b> up to 6.<br>
-           <b>Watch the "bendiness" number.</b> It stays at 0.0%, forever, whatever you do.
+           <b>Watch the "bendiness" number.</b> It stays at 0.0%, forever, whatever you do — the stack is always one straight line, however many layers you pile up.
            Now switch to <b>tanh</b> or <b>ReLU</b> and roll again.`),
         activationLab(),
         p(`With no squash, six layers produced exactly what one layer produces: a straight line. That is not a quirk of the random numbers. It is arithmetic.`),
@@ -1160,18 +1160,18 @@
            <b>tanh</b> is the same shape centred on zero and trains better in hidden layers.
            <b>ReLU</b> — literally <code class="inline">max(0, z)</code> — looks too crude to work, and won:
            it is cheap, and its slope is exactly 1 for positive inputs, which keeps gradients from fading in deep stacks.
-           Modern language models use polished relatives of ReLU called GELU and SwiGLU.`),
+           Modern language models use smoother descendants of ReLU: GELU, and SwiGLU — which pairs one of those smooth curves with a second, learned gate (chapter 7).`),
       ));
 
       root.append(section('Giving "wrong" a number',
         p(`The perceptron rule in chapter 1 only knew right from wrong. That is too coarse to train a million weights. We need a single number that says <i>how</i> wrong the network is — one that shrinks as predictions improve and changes smoothly when a weight moves. That is the <em>loss function</em>, and the choice of which one has consequences.`),
         callout('tryit', '🖐 Try this',
           `Press <b>Confidently wrong (1%)</b>. Read both numbers.<br>
-           Cross-entropy charges about <b>4.6</b>. Squared error charges <b>0.49</b> — barely more than the <b>0.125</b> it charges for shrugging and saying 50%.<br>
+           Cross-entropy charges about <b>4.6</b>. Squared error charges <b>0.49</b> — and <b>0.5</b> is the most it can ever charge, however wrong the model is, against the <b>0.125</b> it charges for shrugging and saying 50%. Confidence buys it almost nothing.<br>
            Now drag the slider slowly from right to left and watch the red curve leave the top of the chart.`),
         lossLab(),
-        p(`Squared error treats a confident mistake as only slightly worse than a shrug. Cross-entropy treats it as a catastrophe, because it charges you <b>−log(probability you gave the right answer)</b>, and the log of a small number is enormous.`),
-        p(`That is exactly the incentive you want. A model that says "99% sure" should be punished far harder for being wrong than one that admitted it was guessing. Cross-entropy is why language models end up roughly honest about their own uncertainty.`),
+        p(`Squared error treats a confident mistake as only slightly worse than a shrug. Cross-entropy treats it as a catastrophe, because it charges you <b>−log(probability you gave the right answer)</b>, and minus the log of a small number is enormous.`),
+        p(`That is exactly the incentive you want. A model that says "99% sure" should be punished far harder for being wrong than one that admitted it was guessing. Cross-entropy is why a language model's raw next-token probabilities end up roughly honest about their own uncertainty. The catch, which chapter 11 returns to: the fine-tuning that turns that model into an assistant measurably degrades this, so the thing you talk to is less well calibrated than the thing underneath it.`),
         callout('key', '🔑 The whole of training in one line',
           `Every model in this course — the toy below, ResNet, GPT — is trained by the same loop:
            <b>predict, measure the error with a loss function, ask the chain rule which way each weight should move, move it a little, repeat.</b>
@@ -1258,7 +1258,7 @@
           { sym: '&part;h/&part;w<sub>1</sub>', name: 'hidden value, given the weight', says: 'How that hidden neuron responds to the weight itself. Also easy: they are adjacent.', points: 'the factor picked up at the last hop.' },
         ], {
           title: '∂L/∂w₁  =  ∂L/∂y · ∂y/∂h · ∂h/∂w₁',
-          hint: 'Click along the line, right to left — the same direction the red dots travel.',
+          hint: 'Click along the line left to right — &part;L/&part;y first, then one local factor per hop. That is the order the red dots pick them up, working back from the output.',
           plain: 'The <em>chain rule</em>: to find how a far-away thing affects the loss, multiply the slopes of every link between them. Each individual link is easy. The chain is what makes it look hard.',
         }),
         callout('key', '🔑 Why this is cheap, in one observation',
@@ -1279,15 +1279,15 @@
           `The method had been derived before — Seppo Linnainmaa in 1970 as a general technique, Paul Werbos in 1974 for neural networks — and sank without trace both times.
            In 1986 David Rumelhart, Geoffrey Hinton and Ronald Williams published "Learning representations by back-propagating errors" in <i>Nature</i>,
            showed it discovering useful hidden representations, and this time the field noticed. It answered Minsky and Papert directly: multi-layer networks <i>could</i> be trained.
-           What it could not overcome was 1986 hardware and 1986 data. The algorithm was right and had to wait a quarter of a century for machines big enough to show it.`),
+           What it could not overcome was 1986 hardware and 1986 data. The algorithm was right, and it did real work within a few years — LeCun's 1989 zip-code reader, and the cheque reader descended from it. What it waited a quarter of a century for was hardware and data big enough to show what it could do <i>at scale</i>.`),
       ));
 
       root.append(section('Now train one for real',
         callout('tryit', '🖐 Try this: the playground',
           `<b>1.</b> Start with <b>XOR</b>, 4 hidden units, tanh. Press <b>▶ Play</b>. Watch the heatmap fold into four quadrants and the loss curve fall.<br>
            <b>2.</b> Switch to <b>Two circles</b>. Turn <b>Hidden-unit lines</b> on and count how many straight cuts it takes to fake a circle.<br>
-           <b>3.</b> Try <b>Spiral</b> with 4 units. It cannot, and the loss flattens out. Push hidden units to 12–16 and let it run for a minute.<br>
-           <b>4.</b> Set the learning rate to 1.0 — the loss thrashes or explodes. Set it to 0.001 and nothing visibly happens. Those are failures 2 and 3 from the fog, in a real network.`),
+           <b>3.</b> Try <b>Spiral</b> with 4 units. It cannot, and the loss flattens out. Push hidden units to 16 and let it run. Roughly half of random starts still stall around 60% — when that happens press <b>Reset weights</b> and let it go again, which is itself worth knowing about training.<br>
+           <b>4.</b> Let it converge, then set the learning rate to 1.0 — the loss jumps around and the accuracy falls back. (This playground clips its own gradients, so it will not blow up to infinity; chapter 3 shows one that does.) Set it to 0.001 and press <b>Reset weights</b>: the same boundary forms, perhaps fifty times slower. Those are failures 2 and 3 from the fog, in a real network.`),
         playground(),
         p(`Everything in this chapter is implemented by hand underneath that figure, in a few dozen lines of plain JavaScript: a forward pass, a backward pass, a gradient step, repeated a few hundred times per animation frame. Nothing is pre-computed and nothing is faked. When the boundary wobbles, that is the gradient wobbling.`),
         ctx.code(
@@ -1312,17 +1312,17 @@ b2 -= lr * dz;`),
 
       root.append(section('Why this matters for modern AI',
         callout('tryit', '🖐 Try this',
-          `Drag <b>hidden units</b> to 512 and <b>hidden layers</b> to 8 and watch your green bar crawl.
-           Then press <b>Match the 1989 postcode reader</b> — the network that read US mail is smaller than the one you just built by dragging a slider.<br>
+          `Drag <b>hidden units per layer</b> to 512 and <b>hidden layers</b> to 8 and watch your green bar crawl.
+           Then press <b>Match the 1989 postcode reader</b> — about ten thousand weights, the size of LeCun's zip-code network, and smaller than the one you just built by dragging a slider.<br>
            Now look at how far the top bar still is, on a scale where every step is 10×.`),
         paramScale(),
-        p(`Your browser toy has a few hundred weights. A frontier language model has ten to a thousand billion. It is the same kind of object: the same forward pass, the same backward pass, the same nudge. The chain rule does not care how long the chain is.`),
-        p(`So when you read that a model was "trained on 15 trillion tokens", here is what physically happened. A forward pass predicted the next token. Cross-entropy measured how wrong it was. Backpropagation computed a gradient for every one of the billions of weights in one backward sweep. An optimizer nudged each one a tiny amount.`),
+        p(`Your browser toy has a few dozen weights — seventeen, at its default four hidden units. A frontier language model has ten to a thousand billion. It is the same kind of object: the same forward pass, the same backward pass, the same nudge. The chain rule does not care how long the chain is.`),
+        p(`So when you read that a model was "trained on tens of trillions of tokens" — Llama 3 used 15 trillion in 2024, and later runs use more — here is what physically happened. A forward pass predicted the next token. Cross-entropy measured how wrong it was. Backpropagation computed a gradient for every one of the billions of weights in one backward sweep. An optimizer nudged each one a tiny amount.`),
         p(`Then again. A few million times, across tens of thousands of GPUs, for months. There is no other mechanism and no second ingredient. The network in the playground and Claude differ in size, in architecture (chapter 7), and in the data they were shown. They do not differ in what "learning" means.`),
         callout('example', '🌍 Where plain MLPs live today',
           `Every recommendation feed you scroll ends in an MLP scoring candidates.
            The feed-forward blocks inside a transformer — which hold roughly two-thirds of a large language model's weights — are exactly the 2-layer MLP from the playground, thousands of units wide.
-           AlphaGo's value head, card-fraud detectors, and most predictions on spreadsheet-shaped data are MLPs.
+           AlphaGo's value head and card-fraud scorers are MLPs, and an MLP is the default <i>neural</i> network for spreadsheet-shaped data — though on that kind of data gradient-boosted trees (XGBoost, LightGBM) usually still win, which is a point worth holding on to.
            The architectures in Part II are ways of <i>arranging</i> MLPs, not replacements for them.`),
         p(`One picture to carry into chapter 3: <b>the loss is a landscape, the gradient is the slope under your feet, and backpropagation is how you feel the slope in a billion directions at once.</b> What chapter 3 adds is everything that makes the walk actually work — batches, optimizers, and knowing when to stop.`),
       ));
@@ -1333,7 +1333,7 @@ b2 -= lr * dz;`),
           { q: 'A network has six layers but no activation function between them. Why can it still not learn XOR?', options: ['Six layers is too few', 'Without a non-linearity the layers collapse into one linear map, which still draws a single flat boundary', 'The learning rate must be zero', 'XOR needs at least four inputs'], answer: 1, explain: 'W₃·(W₂·(W₁·x)) = (W₃W₂W₁)·x, a single matrix. That is why "bendiness" stayed pinned at 0.0% however many layers you stacked. Depth without a hinge adds nothing.' },
           { q: 'You set the learning rate very high and the loss starts going <i>up</i>. What is happening?', options: ['The network has found the global minimum', 'Each step overshoots the valley and lands higher on the far slope', 'Backpropagation has stopped working', 'The data has changed'], answer: 1, explain: 'Gradient descent only knows the local slope. A stride longer than the valley is wide jumps clean across it, and each jump can land higher, until the numbers blow up. That is failure 2 in the fog demo.' },
           { q: 'What is backpropagation, in one sentence?', options: ['A way to choose the learning rate', 'A special activation function', 'The chain rule applied backwards through the layers, so every weight\'s gradient is computed in one sweep', 'A method for collecting training data'], answer: 2, explain: 'Backprop computes ∂L/∂(output) once and reuses it at every edge, multiplying by the slopes of the links in between. That is why the gradient for a million weights costs about as much as one forward pass.' },
-          { q: 'A classifier gives the correct class a probability of 1%. Roughly what is its cross-entropy loss, compared with giving it 90%?', options: ['About the same', 'About 0.1 versus 4.6: confident mistakes cost far more', 'Exactly ten times more', 'Zero, because it still ranked the class'], answer: 1, explain: '−log(0.9) ≈ 0.105 and −log(0.01) ≈ 4.6, the two numbers you read off the loss explorer. Cross-entropy punishes confidently wrong predictions hardest, which is what pushes a model toward being honest about its own uncertainty.' },
+          { q: 'A classifier gives the correct class a probability of 1%. Roughly what is its cross-entropy loss, compared with giving it 90%?', options: ['About the same', 'About 4.6 versus 0.1: confident mistakes cost far more', 'Exactly ten times more', 'Zero, because it still ranked the class'], answer: 1, explain: '−log(0.9) ≈ 0.105 and −log(0.01) ≈ 4.6, the two numbers you read off the loss explorer. Cross-entropy punishes confidently wrong predictions hardest, which is what pushes a model toward being honest about its own uncertainty.' },
         ]),
 
         section('Go deeper',
