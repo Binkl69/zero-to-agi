@@ -58,7 +58,7 @@
         ctx.decoder([
           { sym: 'w<sub>1</sub>', name: 'w one', says: 'How much the <b>first</b> thing counts toward a yes. Big number, it matters a lot; near zero, the model has decided it is irrelevant; negative, it counts <i>against</i>.', points: 'the w₁ readout above. Rotate the line and watch it move.' },
           { sym: 'x<sub>1</sub>', name: 'x one', says: 'The <b>first</b> measurement of the thing in front of you — how many links this particular email has.', points: 'the horizontal position of one dot.' },
-          '·',
+          '+',
           { sym: 'w<sub>2</sub>', name: 'w two', says: 'Same idea for the second thing. In the spam example, how much SHOUTING counts.', points: 'the w₂ readout above.' },
           { sym: 'x<sub>2</sub>', name: 'x two', says: 'The second measurement — how much of this email is capitals.', points: 'the vertical position of that same dot.' },
           '+',
@@ -97,7 +97,7 @@
           `A fair question, and the honest answer is <b>yes — at the level of the mechanism.</b> Multiply each input by how much it counts, add them up, add a bias, compare to zero, and adjust when wrong. There is no secret extra ingredient waiting in chapter 12.<br>
            What is <i>not</i> simple is everything built on top: <b>how you wire billions of these together</b> (chapters 4–7), <b>what you feed them</b> (chapter 10), <b>what you point them at</b> (chapters 9 and 11), and <b>getting it to run at all</b> (chapter 12).<br>
            A brick is fired clay in a rectangle. That genuinely is the whole of a brick, and it tells you nothing whatever about how to build a cathedral.`),
-        ctx.p(`One thing worth noticing: the dot symbol is just multiplication, and the whole left-hand side is "multiply each measurement by its importance, then add everything up". You will meet that pattern so often it gets its own name in chapter 6 — the <em>dot product</em> — and it is already the single most common operation in all of AI.`),
+        ctx.p(`One thing worth noticing: writing two symbols side by side means multiply them, so the whole left-hand side is "multiply each measurement by its importance, then add everything up". You will meet that pattern so often it gets its own name in chapter 7 — the <em>dot product</em> — and it is already the single most common operation in all of AI.`),
       ));
 
       /* ---------- what just happened ---------- */
@@ -122,7 +122,7 @@
         ctx.p(`Earlier you wrote down how a neuron <b>decides</b>. That is only half of it, and it is the half that does not learn. A pocket calculator can decide. The other half is the rule that <b>changes</b> the numbers when the decision comes out wrong — and it is three lines long.`),
         ctx.p(`Watch the readout under the trainer while it runs. <b>w₁</b>, <b>w₂</b> and <b>b</b> are the three numbers from the previous section, and they are moving. This is what is moving them.`),
         ctx.walkthrough([
-          { say: 'The machine looks at <b>one dot</b>. Just one, then the next, then the next.', note: 'The trainer above does this a few hundred times a second. Press One step to see a single one.' },
+          { say: 'The machine looks at <b>one dot</b>. Just one, then the next, then the next.', note: 'The trainer above does this eight times a second at the default speed, and thirty at the top of the slider. Press One step to see a single one.' },
           { say: 'It makes a guess about that dot: <b>yes</b> or <b>no</b>, using the line where it currently sits.' },
           { say: 'Then it compares. The true answer is called <b>y</b>. Its guess is called <b>ŷ</b> — "y-hat". The hat means "this one is estimated".', note: 'You will see that hat on every prediction for the rest of the course.' },
           { say: 'Now subtract one from the other. There are only three possible answers, and that is the whole of it.', math: 'y &minus; &#375; &nbsp;=&nbsp; +1, &nbsp; 0, &nbsp; or &nbsp;&minus;1' },
@@ -144,7 +144,7 @@
         ctx.p(`Here is that same rule as a reference you can come back to. Click any piece of it.`),
         ctx.decoder([
           { sym: 'w', name: 'w', says: 'One of the numbers the machine is allowed to change. There are three here: w₁, w₂ and b.', points: 'the w₁, w₂ and b readouts under the trainer.' },
-          { sym: '←', name: 'becomes', says: 'Not "equals". <b>Replace the old value with this new one.</b> It is an instruction, carried out over and over — a few hundred times a second in the demo you just ran.', points: 'the numbers ticking over as it trains.' },
+          { sym: '←', name: 'becomes', says: 'Not "equals". <b>Replace the old value with this new one.</b> It is an instruction, carried out over and over — eight times a second in the demo you just ran, or thirty with the speed slider pushed up.', points: 'the numbers ticking over as it trains.' },
           { sym: 'w', name: 'w again', says: 'The value it had a moment ago. Every step builds on the last one; nothing starts fresh.' },
           '+',
           { sym: '&eta;', name: 'eta — the learning rate', says: 'How big a shove to give. In this demo it is fixed at <b>0.12</b>: small enough not to overshoot, big enough to get somewhere. Chapter 3 is largely about what happens when you get this number wrong.', points: 'nothing visible — it is the one number you cannot see moving, because it never moves.' },

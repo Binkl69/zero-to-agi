@@ -94,7 +94,7 @@
            <b>3.</b> Drag <b>input slots</b> down to 4. Watch the longer sentence get chopped. Drag it to 20 and watch most of the input sit empty, wasted.`),
         buildOrderDemo(ctx),
         p(`Three problems, then. <b>Order carries meaning</b>, and a fixed input that is just a pile of word counts throws it away. <b>Length varies</b> — sentences are five words or fifty — while the classifier of chapter 4 demands exactly 224×224 pixels every time, so you must truncate or pad and waste.`),
-        p(`And <b>the word that matters can be far behind you</b>. "The trophy didn't fit in the suitcase because <b>it</b> was too big" — to know what <em>it</em> refers to, you must reach back ten words. A fixed window either misses it or has to be enormous.`),
+        p(`And <b>the word that matters can be far behind you</b>. "The trophy didn't fit in the suitcase because <b>it</b> was too big" — to know what <em>it</em> refers to, you must reach back seven words. A fixed window either misses it or has to be enormous.`),
       ));
 
       root.append(section('The recurrent network: one cell, applied over and over',
@@ -146,13 +146,13 @@
           `Recurrent networks were trained with backpropagation through time from the mid-1980s (Rumelhart, Hinton and Williams, 1986; Elman's "Finding structure in time", 1990).
            Hochreiter's 1991 thesis diagnosed the vanishing-gradient problem precisely, and in <b>1997</b> he and Schmidhuber published the LSTM to solve it.
            The idea then sat largely unused for a decade — the data and the GPUs were not there.
-           From 2013 LSTMs began winning: handwriting recognition, speech (Graves, 2013), and in <b>2014</b> the seq2seq paper from Sutskever, Vinyals and Le, followed by Bahdanau's attention.
+           LSTMs began winning: three handwriting competitions in <b>2009</b> (Graves and colleagues, with bidirectional LSTMs), speech recognition in <b>2013</b> (Graves), and in <b>2014</b> the seq2seq paper from Sutskever, Vinyals and Le, followed by Bahdanau's attention.
            By 2016 LSTMs were inside Google Translate. In <b>2017</b> the transformer arrived, and within two years RNNs had all but vanished from language research.`),
       ));
 
       root.append(section('Reading one sentence, writing another',
         p(`If an RNN can read a sentence into a summary vector, another RNN can write a sentence <i>out</i> of that vector. Sutskever, Vinyals and Le showed this in 2014: an <em>encoder</em> reads English, its final hidden state is handed to a <em>decoder</em>, and the decoder emits French one word at a time, feeding each word back in as the next input. The <em>sequence-to-sequence</em> model.`),
-        p(`It worked, and it had an obvious weakness. The entire meaning of a 40-word sentence had to squeeze through one fixed-size vector of a few hundred numbers. Translation quality fell off sharply for long sentences — the <em>bottleneck problem</em>, a whole paragraph forced through a keyhole.`),
+        p(`It worked, and it had an obvious weakness. The entire meaning of a 40-word sentence had to squeeze through one fixed-size vector — 8,000 numbers in the 2014 seq2seq paper, and that was the whole sentence, however long it ran. Translation quality fell off sharply for long sentences — the <em>bottleneck problem</em>, a whole paragraph forced through a keyhole.`),
         callout('tryit', '🖐 Try this — watch the keyhole, then remove it',
           `<b>1.</b> Start in <b>bottleneck</b> mode and press <b>▶ Play</b>. Every source word is crushed into one vector, and the decoder writes from that alone. Drag <b>source length</b> up to 20 and watch the "numbers per source word" figure collapse.<br>
            <b>2.</b> Switch to <b>attention</b>. Now the decoder looks back at <b>every</b> source word each time it writes one, and the lines show which it is leaning on.<br>

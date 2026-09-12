@@ -1271,7 +1271,7 @@
           `Smallest network that shows it: one input x, one hidden neuron h = σ(w<sub>1</sub>·x), one linear output y = w<sub>2</sub>·h, loss L = ½(y − t)².
            Take x = 1, t = 1, w<sub>1</sub> = 0.5, w<sub>2</sub> = −1.<br>
            Forward: h = σ(0.5) = 0.622, y = −0.622, L = ½(−1.622)² = 1.316.<br>
-           Backward: ∂L/∂y = y − t = −1.622. Then ∂L/∂w<sub>2</sub> = ∂L/∂y · h = <b>−1.009</b>,
+           Backward: ∂L/∂y = y − t = −1.622. Then ∂L/∂w<sub>2</sub> = ∂L/∂y · h = <b>−1.010</b>,
            and ∂L/∂w<sub>1</sub> = ∂L/∂y · w<sub>2</sub> · h(1−h) · x = −1.622 · −1 · 0.235 · 1 = <b>0.381</b>.<br>
            The same ∂L/∂y appears in both. That is the reuse, in four lines of arithmetic.`),
         p(`Note the signs. ∂L/∂w<sub>2</sub> is negative, so increasing w<sub>2</sub> <i>lowers</i> the loss and gradient descent will push it up. ∂L/∂w<sub>1</sub> is positive, so w<sub>1</sub> gets pushed down. Every weight is told which way to move and roughly how much, from one backward sweep.`),
@@ -1307,7 +1307,7 @@ for (let j = 0; j < N; j++) {
 }
 b2 -= lr * dz;`),
         p(`Two details worth pausing on. First, <code class="inline">pr - label</code>: when a sigmoid output meets cross-entropy, every messy derivative cancels and the error signal is simply <i>predicted minus actual</i>. The same cancellation happens with softmax and cross-entropy inside every language model.`),
-        p(`Second, count the lines. The backward loop is shorter than the forward pass. Computing every gradient really does cost about what one prediction costs.`),
+        p(`Second, look at what the backward half actually does. It is longer on the page, because it has to touch every weight — but there is no new forward work anywhere in it: each line is one multiply and one subtract, reusing numbers the forward pass already computed. That is why a full set of gradients costs only about twice what one prediction costs, and why training is affordable at all.`),
       ));
 
       root.append(section('Why this matters for modern AI',
