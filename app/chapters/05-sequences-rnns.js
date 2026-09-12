@@ -70,8 +70,10 @@
       root.append(
         callout('tryit', '🖐 Do this first — build a language model in two seconds, then break it',
           `The model below is trained <b>instantly</b> on the text in the box. It is nothing but a table of counts.<br>
-           <b>1.</b> Type the prefix <code class="inline">the c</code> and read the top-5 guesses for the next character.<br>
-           <b>2.</b> Move the <b>context</b> slider from 1 up to 4. The predictions get sharper — and you start seeing <b>"never seen → backed off"</b>, because the table has no entry for that exact combination.<br>
+           <b>1.</b> The box starts on the prefix <code class="inline">the </code>. Read the guesses: seventeen candidates and none of them confident.<br>
+           <b>2.</b> Move the <b>context</b> slider from 1 up to 4 and watch the candidate list shrink from seventeen to eight. More context, fewer things that can come next.<br>
+           <b>2b.</b> Now type <code class="inline">og sa</code>. At context 1 there are twelve candidates and the best is 31%; at context 4 there are two and the best is 50%. That is what a longer memory buys.<br>
+           <b>2c.</b> Now type <code class="inline">the qu</code>. Nothing in the text ever follows it, so the readout says <b>"never seen → backed off"</b> and the model falls all the way back to a single character of context. That is the wall.<br>
            <b>3.</b> Press <b>Generate</b>. Low temperature is repetitive, high temperature is gibberish.<br>
            <b>4.</b> Now find the ceiling: <b>at no setting can it hold a thought longer than its context window.</b> Edit the text box and watch it relearn instantly.`),
         buildNgramDemo(ctx),
@@ -91,7 +93,7 @@
         callout('tryit', '🖐 Try this — two sentences that mean opposite things',
           `<b>1.</b> Look at the two default sentences. They contain exactly the same words. Their word-count vectors are <b>identical</b>, so any model that ignores order must give both the same answer.<br>
            <b>2.</b> Edit either sentence and watch the verdict flip the moment the word <i>counts</i> differ — not the moment the meaning does.<br>
-           <b>3.</b> Drag <b>input slots</b> down to 4. Watch the longer sentence get chopped. Drag it to 20 and watch most of the input sit empty, wasted.`),
+           <b>3.</b> Drag <b>input slots</b> down to 4 and watch <b>both</b> sentences lose their last word — the network never gets to see who did what to whom. Drag it to 20 and watch most of the input sit empty, wasted.`),
         buildOrderDemo(ctx),
         p(`Three problems, then. <b>Order carries meaning</b>, and a fixed input that is just a pile of word counts throws it away. <b>Length varies</b> — sentences are five words or fifty — while the classifier of chapter 4 demands exactly 224×224 pixels every time, so you must truncate or pad and waste.`),
         p(`And <b>the word that matters can be far behind you</b>. "The trophy didn't fit in the suitcase because <b>it</b> was too big" — to know what <em>it</em> refers to, you must reach back seven words. A fixed window either misses it or has to be enormous.`),
@@ -107,7 +109,7 @@
         callout('tryit', '🖐 Try this: watch a hidden state absorb a sentence',
           `Press <b>▶ Play</b>, or drag straight across the picture to scrub word by word. Each word enters the cell in turn and the six coloured slots are rewritten by exactly that rule. The bars underneath show how much of each earlier word survives.<br>
            <b>1.</b> Drag <b>memory decay</b> to <b>0.5</b> and step to the end. The word "trophy" is down to 0.1% of its original strength (0.5<sup>10</sup>) — the model has no way left to know what <i>it</i> refers to.<br>
-           <b>2.</b> Push decay to <b>1.0</b>. Now nothing fades — but nothing is forgotten <i>selectively</i> either: all twelve words are stirred into the same six numbers with equal weight, and none can be pulled back out.<br>
+           <b>2.</b> Push decay to <b>1.0</b>. Now the decay term stops shrinking anything, so every bar reads 100% — but nothing is forgotten <i>selectively</i> either, and all twelve words are stirred into the same six numbers with equal weight, and none can be pulled back out.<br>
            <b>3.</b> Real RNNs learn a decay somewhere in between. <b>It is never right for every word.</b>`),
         buildUnrollDemo(ctx),
         p(`That fading is not an artefact of this toy. It is the central character flaw of the whole architecture, and the next demo shows exactly why it is so hard to escape.`),
@@ -136,7 +138,7 @@
           `The value 1.0 is written into the belt at step 3. After that, <code class="inline">c<sub>t</sub> = forget × c<sub>t−1</sub> + input × new</code>.<br>
            <b>1.</b> Press <b>Remember perfectly</b>: forget = 1.00, input = 0. The line is <b>dead flat</b> across all thirty steps, and the gradient multiplier reads exactly 1.000. Nothing vanishes.<br>
            <b>2.</b> Drag <b>forget</b> to 0.90 — the LSTM behaving like a plain RNN. Watch it decay to almost nothing, and compare against the grey plain-RNN line.<br>
-           <b>2b.</b> Put forget back to 1.00 and drag the <b>input gate</b> up. Later words now scribble over the note and the flat line turns to noise: holding a memory needs the write gate <i>shut</i>, not just the forget gate open.<br>
+           <b>2b.</b> Put forget back to 1.00 and drag the <b>input gate</b> up. Later words now pile onto the belt and the flat line starts climbing and wobbling away from the value you wrote: holding a memory needs the write gate <i>shut</i>, not just the forget gate open.<br>
            <b>3.</b> Press <b>Forget on cue</b>: the gate stays at 1.00 and then slams shut at step 20. The memory is held perfectly, then <b>deliberately</b> dropped — which is the thing a plain RNN can never do.`),
         buildLSTMDemo(ctx),
         p(`Look at what forget = 1 and input = 0 does: the cell state is copied <b>unchanged</b>. A multiplier of exactly one — precisely the value you found in the gradient demo that neither vanishes nor explodes. So a gradient can flow back through hundreds of steps along the belt.`),
@@ -154,7 +156,7 @@
         p(`If an RNN can read a sentence into a summary vector, another RNN can write a sentence <i>out</i> of that vector. Sutskever, Vinyals and Le showed this in 2014: an <em>encoder</em> reads English, its final hidden state is handed to a <em>decoder</em>, and the decoder emits French one word at a time, feeding each word back in as the next input. The <em>sequence-to-sequence</em> model.`),
         p(`It worked, and it had an obvious weakness. The entire meaning of a 40-word sentence had to squeeze through one fixed-size vector — 8,000 numbers in the 2014 seq2seq paper, and that was the whole sentence, however long it ran. Translation quality fell off sharply for long sentences — the <em>bottleneck problem</em>, a whole paragraph forced through a keyhole.`),
         callout('tryit', '🖐 Try this — watch the keyhole, then remove it',
-          `<b>1.</b> Start in <b>bottleneck</b> mode and press <b>▶ Play</b>. Every source word is crushed into one vector, and the decoder writes from that alone. Drag <b>source length</b> up to 20 and watch the "numbers per source word" figure collapse.<br>
+          `<b>1.</b> Start in <b>bottleneck</b> mode and press <b>▶ Play</b>. Every source word is crushed into one vector, and the decoder writes from that alone. Drag the source-length slider up to 20 and watch the "numbers per source word" figure collapse — the picture keeps showing six words, but the arithmetic is what matters here.<br>
            <b>2.</b> Switch to <b>attention</b>. Now the decoder looks back at <b>every</b> source word each time it writes one, and the lines show which it is leaning on.<br>
            <b>3.</b> Step through the target words and watch the bright line track across the source — the model aligning the two languages, without ever being told how.`),
         buildAttentionDemo(ctx),
@@ -221,7 +223,7 @@
     const FONT = '13px Inter, system-ui, sans-serif';
     const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
     const MAXK = 4;
-    const S = { text: DEFAULT_TEXT, k: 3, prefix: 'the c', temp: 0.6, tables: null, dist: [], usedK: -1, options: 0 };
+    const S = { text: DEFAULT_TEXT, k: 3, prefix: 'the ', temp: 0.6, tables: null, dist: [], usedK: -1, options: 0 };
     const ro = ctx.readout();
 
     function retrain() { S.tables = trainNgram(S.text && S.text.length ? S.text : ' ', MAXK); recompute(); }
@@ -296,8 +298,8 @@
       genOut.textContent = ((S.prefix || '') + out).split('').map(showChar).join('');
     }, 'primary');
     const resetBtn = ctx.button('↺ Reset', () => {
-      S.text = DEFAULT_TEXT; S.k = 3; S.prefix = 'the c'; S.temp = 0.6;
-      taWrap.value = DEFAULT_TEXT; prefIn.value = 'the c'; kSl.value = 3; tempSl.value = 0.6;
+      S.text = DEFAULT_TEXT; S.k = 3; S.prefix = 'the '; S.temp = 0.6;
+      taWrap.value = DEFAULT_TEXT; prefIn.value = 'the '; kSl.value = 3; tempSl.value = 0.6;
       genOut.textContent = PLACEHOLDER;
       retrain();
     });
@@ -305,7 +307,7 @@
     retrain();
     const body = ctx.h('div', {}, cv, genOut);
     return ctx.figure(body,
-      `Bars are the model's top-5 guesses for the very next character, recomputed live as you type or edit the text — pure counting, no learning involved. Watch the readout: raising <b>n</b> multiplies the number of stored contexts and makes exact matches rarer, which is the combinatorial wall that kills lookup tables. An <em>RNN</em> throws the whole table away and replaces it with a small vector of numbers — a compressed, <b>learned</b> memory that plays the same role without storing every combination it has ever seen.`,
+      `Bars are the model's top-5 guesses for the very next character, recomputed live as you type or edit the text — pure counting, no learning involved. Watch the readout: on this small text, raising <b>n</b> grows the table only slowly (24, 117, 196, 249 contexts) because it runs out of distinct snippets — and that is the wall from the other side. The number of contexts a language <em>could</em> need explodes as the alphabet is raised to the power of n, which is the combinatorial wall that kills lookup tables. An <em>RNN</em> throws the whole table away and replaces it with a small vector of numbers — a compressed, <b>learned</b> memory that plays the same role without storing every combination it has ever seen.`,
       [taWrap, prefWrap, kSl, tempSl, genBtn, resetBtn], ro);
   }
 
@@ -396,7 +398,7 @@
         g.fillRect(cx - gap * 0.28, by0 + bh - barH, gap * 0.56, barH);
         g.globalAlpha = 1;
         g.font = MONO; g.textAlign = 'center';
-        if (i <= S.t) { g.fillStyle = C.text; g.fillText(Math.round(frac * 100) + '%', cx, by0 + bh - barH - 4); }
+        if (i <= S.t) { g.fillStyle = C.text; g.fillText((frac * 100).toFixed(frac < 0.01 ? 1 : 0) + '%', cx, by0 + bh - barH - 4); }
         g.fillStyle = i <= S.t ? C.muted : '#7b8aa8';
         g.fillText(fitLabel(w, gap * 0.92), cx, by0 + bh + 14);
       });
@@ -523,7 +525,7 @@
       const final = magAt(n, S.m);
       g.textAlign = 'center'; g.font = 'bold 13px Inter, system-ui, sans-serif';
       g.fillStyle = final < 1e-3 ? C.warn : final > 1e3 ? C.danger : C.green;
-      const tag = final < 1e-6 ? '  (vanished)' : final > 1e6 ? '  (exploded)' : '';
+      const tag = final < 1e-2 ? '  (vanished)' : final > 1e2 ? '  (exploded)' : '';
       g.fillText('gradient reaching the first time step ≈ ' + final.toExponential(2) + tag, px + pw / 2, py - 14);
     }
     function refresh() {
@@ -533,7 +535,7 @@
         'multiplier': S.m.toFixed(2),
         'steps back': Math.round(S.n),
         'multiplier ^ steps': final.toExponential(2),
-        'verdict': final < 1e-3 ? 'vanished — step 1 cannot learn' : final > 1e3 ? 'exploded — clip the gradient' : 'signal survives',
+        'verdict': final < 1e-2 ? 'vanished — step 1 cannot learn' : final > 1e2 ? 'exploded — clip the gradient' : 'signal survives',
       });
     }
     const nSl = ctx.slider({ label: 'sequence length N (time steps back)', min: 5, max: 50, step: 1, value: 20, onChange: (v) => { S.n = ctx.clamp(Math.round(v), 1, 50); refresh(); } });
@@ -673,7 +675,7 @@
        allowed to scribble over the note. The plain-RNN line is h_t = tanh(0.8*h_{t-1} + x_t). */
     const other = (t) => 0.7 * Math.sin(t * 1.7);
     function belt() {
-      const c = [0], rnn = [0];
+      const c = [0], rnn = [0], rnnNo = [0];
       for (let t = 1; t <= STEPS; t++) {
         const isWrite = t === WRITE;
         const x = isWrite ? 1 : other(t);
@@ -681,8 +683,11 @@
         const i = isWrite ? 1 : input;                        // the write itself always lands
         c.push(f * c[t - 1] + i * x);
         rnn.push(Math.tanh(0.8 * rnn[t - 1] + x));
+        rnnNo.push(Math.tanh(0.8 * rnnNo[t - 1] + (isWrite ? other(t) : x)));
       }
-      return { c, rnn };
+      /* the retained trace: the plain RNN's state minus the same run without
+         the write, i.e. how much of the written value is still in there */
+      return { c, rnn: rnn.map((v, t) => v - rnnNo[t]) };
     }
 
     const fSl = ctx.slider({ label: 'forget gate', min: 0, max: 1, step: 0.01, value: 1, digits: 2, onChange: (v) => { forget = v; cutAt = -1; } });
@@ -697,7 +702,8 @@
       const { c, rnn } = belt();
       const P = { x: 55, y: 46, w: 610, h: 200 };
       const px = (t) => P.x + t / STEPS * P.w;
-      const py = (v) => P.y + P.h - (ctx.clamp(v, -0.4, 1.2) + 0.4) / 1.6 * P.h;
+      const top = Math.max(1.2, ...c.map(v => Math.abs(v))) * 1.05;
+      const py = (v) => P.y + P.h - (ctx.clamp(v, -0.4, top) + 0.4) / (top + 0.4) * P.h;
 
       g.font = 'bold ' + FONT; g.fillStyle = C.text;
       g.fillText('the cell state through time', P.x, 28);
@@ -719,10 +725,6 @@
         g.beginPath(); g.moveTo(px(cutAt), P.y); g.lineTo(px(cutAt), P.y + P.h); g.stroke();
       }
       g.setLineDash([]);
-      g.font = MONO; g.fillStyle = C.accent;
-      g.fillText('write 1.0', px(WRITE) + 5, P.y + 14);
-      if (cutAt >= 0) { g.fillStyle = C.danger; g.fillText('gate shuts', px(cutAt) + 5, P.y + 14); }
-
       /* plain RNN comparison, then the belt */
       g.strokeStyle = C.muted; g.lineWidth = 1.5; g.setLineDash([4, 3]);
       g.beginPath(); rnn.forEach((v, t) => { t ? g.lineTo(px(t), py(v)) : g.moveTo(px(t), py(v)); }); g.stroke();
@@ -730,6 +732,17 @@
       g.strokeStyle = C.green; g.lineWidth = 3;
       g.beginPath(); c.forEach((v, t) => { t ? g.lineTo(px(t), py(v)) : g.moveTo(px(t), py(v)); }); g.stroke();
       c.forEach((v, t) => { if (t % 3 === 0) { g.fillStyle = C.green; g.beginPath(); g.arc(px(t), py(v), 3, 0, 7); g.fill(); } });
+
+      /* marker labels last, on their own plate: the cell-state trace autoscales
+         and will otherwise be drawn straight through them */
+      g.font = MONO;
+      const plate = (txt, x, col) => {
+        const w = g.measureText(txt).width;
+        g.fillStyle = '#0a0e16'; g.fillRect(x + 3, P.y + 2, w + 6, 17);
+        g.fillStyle = col; g.fillText(txt, x + 5, P.y + 14);
+      };
+      plate('write 1.0', px(WRITE), C.accent);
+      if (cutAt >= 0) plate('gate shuts', px(cutAt), C.danger);
 
       /* Legend lives on the header row, outside the plot frame: inside the box both
          traces sweep the full height, so any in-plot key gets drawn straight through. */
@@ -765,7 +778,7 @@
     });
 
     return ctx.figure(cv,
-      'The value 1.0 is written onto the belt at step 3, and after that <code class="inline">c<sub>t</sub> = forget × c<sub>t−1</sub> + input × new</code>. The forget gate is also exactly the gradient multiplier from the previous figure, which is the whole point: at 1.00 the memory is copied through untouched and a gradient can travel back thirty steps — or three hundred — without fading. Opening the input gate lets the stream of later words write onto the belt too, which is how a held memory gets corrupted even when nothing is forgetting. The dashed grey line is a plain RNN on the same input, losing the signal almost immediately. In a real LSTM these gates are not sliders; they are small sigmoid layers that <i>learn</i> when to open.',
+      'The value 1.0 is written onto the belt at step 3, and after that <code class="inline">c<sub>t</sub> = forget × c<sub>t−1</sub> + input × new</code>. The forget gate is also exactly the gradient multiplier from the previous figure, which is the whole point: at 1.00 the memory is copied through untouched and a gradient can travel back thirty steps — or three hundred — without fading. Opening the input gate lets the stream of later words write onto the belt too, which is how a held memory gets corrupted even when nothing is forgetting. The dashed grey line shows how much of that written 1.0 is still present in a plain RNN fed the same stream — measured against an identical run in which the write never happened. It fades within a few steps. In a real LSTM these gates are not sliders; they are small sigmoid layers that <i>learn</i> when to open.',
       [fSl, iSl, holdBtn, decayBtn, cueBtn], ro);
   }
 
@@ -796,7 +809,7 @@
     modeSel.value = 'bottleneck';
     modeSel.addEventListener('change', () => { mode = modeSel.value; });
     const modeWrap = ctx.h('div', { class: 'control' }, ctx.h('label', {}, 'decoder can see'), modeSel);
-    const lenSl = ctx.slider({ label: 'source length (words)', min: 6, max: 40, step: 1, value: 6, onChange: (v) => { srcLen = v; } });
+    const lenSl = ctx.slider({ label: 'if the source were this many words', min: 6, max: 40, step: 1, value: 6, onChange: (v) => { srcLen = v; } });
     const stepBtn = ctx.button('Step', () => { tpos = (tpos + 1) % TGT.length; });
     const playBtn = ctx.button('▶ Play', () => { playing = !playing; playBtn.textContent = playing ? '⏸ Pause' : '▶ Play'; }, 'primary');
     const ro = ctx.readout();
