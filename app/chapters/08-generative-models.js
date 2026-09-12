@@ -158,13 +158,13 @@
         });
 
         const tSlider = ctx.slider({ label: 't (0 = clean data, 1 = pure noise)', min: 0, max: 1, step: 0.01, value: 0, fmt: f2, onChange: (v) => { manualT = v; mode = 'forward'; R.playing = false; playBtn.textContent = '▶ Play reverse'; } });
-        const stepsSlider = ctx.slider({ label: 'reverse steps', min: 10, max: 150, step: 5, value: 40, onChange: (v) => { R.steps = v; } });
+        const stepsSlider = ctx.slider({ label: 'reverse steps', min: 10, max: 150, step: 5, value: 40, onChange: (v) => { R.steps = v; if (mode === 'reverse') initReverse(); } });
         const playBtn = ctx.button('▶ Play reverse', () => {
           if (mode !== 'reverse' || R.k >= R.steps) { initReverse(); mode = 'reverse'; }
           R.playing = !R.playing; playBtn.textContent = R.playing ? '⏸ Pause' : '▶ Play reverse';
         }, 'primary');
         const stepBtn = ctx.button('Step once', () => {
-          if (mode !== 'reverse') { initReverse(); mode = 'reverse'; }
+          if (mode !== 'reverse' || R.k >= R.steps) { initReverse(); mode = 'reverse'; }
           R.playing = false; playBtn.textContent = '▶ Play reverse';
           reverseStep(); tSlider.value = R.t;
         });
@@ -284,7 +284,7 @@
         });
         const spSl = ctx.slider({ label: 'steps per frame', min: 1, max: 8, step: 1, value: 1, onChange: (v) => { G.speed = v; } });
         return ctx.figure(cv,
-          `The generator is a single movable Gaussian (red). The discriminator is not a trained network here — it is the exact optimal judge from Goodfellow's proof, D*(x) = p<sub>data</sub>(x) / (p<sub>data</sub>(x) + p<sub>gen</sub>(x)) (dashed yellow), so you are watching the generator's side of the game with a perfect opponent. Its mean and spread are updated every iteration by a genuine gradient step (computed by finite differences) on "fool the judge". A single Gaussian can never truly cover two separate bumps at once, which is exactly why this toy is useful: watch it either spread out to straddle both modes, or — with the toggle on — shrink and lock onto just one, ignoring the other entirely.`,
+          `The generator is a single movable Gaussian (red). The discriminator is not a trained network here — it is the exact optimal judge from Goodfellow's proof, D*(x) = p<sub>data</sub>(x) / (p<sub>data</sub>(x) + p<sub>gen</sub>(x)) (dashed yellow), so you are watching the generator's side of the game with a perfect opponent. Its mean and spread are updated every iteration by a genuine gradient step (computed by finite differences) on "fool the judge" — plus, with the mode-collapse toggle off, an explicit bonus for staying spread out, which no real GAN loss contains and which is here only so that the toggle has two distinguishable behaviours to show you. A single Gaussian can never truly cover two separate bumps at once, which is exactly why this toy is useful: watch it either spread out to straddle both modes, or — with the toggle on — shrink and lock onto just one, ignoring the other entirely.`,
           [playBtn, stepBtn, resetBtn, collapseBtn, spSl], ro);
       }
 
@@ -408,8 +408,8 @@
         function realness(gr) {
           let same = 0, tot = 0;
           for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
-            if (c < N - 1) { same += 1 - Math.abs(gr[r][c] - gr[r][c + 1]) / (LEVELS - 1); tot++; }
-            if (r < N - 1) { same += 1 - Math.abs(gr[r][c] - gr[r + 1][c]) / (LEVELS - 1); tot++; }
+            if (c < N - 1) { same += Math.abs(gr[r][c] - gr[r][c + 1]) <= 2 ? 1 : 0; tot++; }
+            if (r < N - 1) { same += Math.abs(gr[r][c] - gr[r + 1][c]) <= 2 ? 1 : 0; tot++; }
           }
           return tot ? same / tot : 0;
         }
@@ -554,7 +554,7 @@
         ctx.loop(() => {
           g.clearRect(0, 0, W, H);
           const near = nearest(zx, zy);
-          const dead = near.d > 0.30;
+          const dead = near.d > 0.22;
 
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
           g.fillText('latent space — where each image is filed', PAD.x, 34);
@@ -565,8 +565,8 @@
           for (let i = 0; i < 34; i++) for (let j = 0; j < 34; j++) {
             const q = fromPad(PAD.x + (i + 0.5) * PAD.s / 34, PAD.y + (j + 0.5) * PAD.s / 34);
             const nd = nearest(q.x, q.y).d;
-            if (nd < 0.30) {
-              g.fillStyle = 'rgba(56,217,169,' + (0.22 * (1 - nd / 0.30)) + ')';
+            if (nd < 0.22) {
+              g.fillStyle = 'rgba(56,217,169,' + (0.22 * (1 - nd / 0.22)) + ')';
               g.fillRect(PAD.x + i * PAD.s / 34, PAD.y + j * PAD.s / 34, PAD.s / 34 + 0.6, PAD.s / 34 + 0.6);
             }
           }
@@ -648,7 +648,7 @@
           for (let i = 0; i < n; i++) {
             const ang = r() * Math.PI * 2, rad = 0.35 + r() * 0.55;
             const base = { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad };
-            const t = 1 - Math.exp(-guide / 3.2);         // 0 at no guidance, →1 as it climbs
+            const t = 1 - Math.exp(-guide / 5);           // 0 at no guidance, →1 as it climbs
             out.push({ x: base.x + (TARGET.x - base.x) * t, y: base.y + (TARGET.y - base.y) * t });
           }
           return out;
@@ -735,7 +735,7 @@
         callout('tryit', '🖐 Do this first — try to find a picture by guessing',
           `Below is an 8 × 8 image in 16 shades of grey. Tiny. There are only 10<sup>77</sup> of them.<br>
            <b>1.</b> Press <b>Draw random pixels</b> a few times. Then press <b>Keep trying</b> and let it run.<br>
-           <b>2.</b> Watch the <b>best score so far</b>. It will not climb. Give it a minute if you like — it still will not climb.<br>
+           <b>2.</b> Watch <b>best random draw</b>. It creeps up a few points and then stalls — and it stalls miles short of what a real picture scores. Give it a minute if you like.<br>
            <b>3.</b> Press <b>Show me a real one</b> and look at the difference in the score bar.`),
         needleLab(),
         p(`Random pixels are never a photograph. Not rarely — effectively never, at any size, for any amount of time you are willing to wait.`),
@@ -780,7 +780,7 @@
         p(`<em>Mode collapse</em> is the distinctive GAN failure: the generator finds one narrow trick that fools the current discriminator — say, always the same face — and has no reason to look further, since that trick is already winning. The discriminator eventually catches on, the generator lurches to a different trick, and the two chase each other in circles instead of covering the real distribution.`),
         callout('example', '🌍 GANs made this real: StyleGAN and deepfakes',
           `NVIDIA's <b>StyleGAN</b> (2018) and its successors produced the photorealistic invented faces behind <i>thispersondoesnotexist.com</i> — a site that, more than any paper, made the general public understand that a picture of a person is no longer evidence that the person exists.
-           The same family produced the first convincing face-swap video tools. GANs are still used where speed matters more than variety: real-time upscaling, some super-resolution, and voice conversion that has to run live.`),
+           Face-swap video came from the other family: the original 2017 deepfake code paired two autoencoders sharing one encoder, not a GAN. GANs are still used where speed matters more than variety: real-time upscaling, some super-resolution, and voice conversion that has to run live.`),
       ));
 
       root.append(section('Family 3: ruin it on purpose, then learn to undo that',
@@ -801,11 +801,11 @@
       ));
 
       root.append(section('Turning it into "a cat wearing sunglasses"',
-        p(`Two more pieces. <em>Text conditioning</em>: a CLIP-style model (Radford and colleagues, 2021) pulls matching images and captions to nearby points in embedding space — chapter 6's idea, applied across two media. The denoising network then attends to that prompt vector at every layer via <em>cross-attention</em>, so each image patch can ask "which words describe me?"`),
+        p(`Two more pieces. <em>Text conditioning</em>: a CLIP-style model (Radford and colleagues, 2021) pulls matching images and captions to nearby points in embedding space — chapter 6's idea, applied across two media. The denoising network then attends to that whole row of per-word vectors — 77 of them in Stable Diffusion's text encoder — inside blocks at every scale of the network, via <em>cross-attention</em>, so each image patch can ask "which words describe me?"`),
         p(`<em>Classifier-free guidance</em>: train the same network with the caption randomly blanked out sometimes. At generation time you run it twice per step — with and without the prompt — and push the prediction further in the direction the prompt adds. No separate classifier network is needed, hence the name.`),
         callout('tryit', '🖐 Try this — the dial you have already used without knowing',
           `<b>1.</b> Press <b>no guidance (0)</b>. The samples scatter across everything the model could make and mostly ignore the prompt.<br>
-           <b>2.</b> Press <b>typical (7.5)</b>. Most samples now land on the prompt and the batch is still varied.<br>
+           <b>2.</b> Press <b>typical (7.5)</b>. Most of the batch now lands on the prompt — press <b>New batch</b> a few times and the figure moves around, but it is always well short of everything — and the samples are still clearly spread out.<br>
            <b>3.</b> Press <b>cranked (15)</b>. Read <i>both</i> bars. Prompt adherence goes up, <b>variety collapses</b> — which is exactly why an over-guided batch comes back looking like eight copies of one picture.`),
         guidanceLab(),
         p(`The other 2022 breakthrough was <em>latent diffusion</em> (Rombach et al., the model behind Stable Diffusion): run the whole process on a VAE-compressed grid roughly 8× smaller per side. About 64× cheaper, and the reason it fits on a consumer GPU.`),
@@ -832,7 +832,7 @@
       root.append(section('Why this matters for modern AI',
         p(`Nothing here is specific to still images. Stretch the grid to include time and you diffuse over a block of video frames: OpenAI's Sora, announced February 2024, generates up to roughly a minute this way, and Google's Veo followed later the same year.`),
         p(`Turn a sound wave into the "pixels" and the same recipe generates music (Suno, Udio) or clones a voice from a short clip. Only what counts as "the data" changes.`),
-        p(`One 2024–2025 refinement worth knowing the name of, used in Stable Diffusion 3 among others: <em>flow matching</em>. Instead of diffusion's specific noise schedule, it trains a network to predict a <em>velocity</em> — which way and how fast to move a point along a nearly straight path from noise to data. A more direct generalisation of the same idea, and it typically needs fewer steps.`),
+        p(`One 2022 idea that only reached production models in 2024, used in Stable Diffusion 3 among others: <em>flow matching</em>. Instead of diffusion's specific noise schedule, it trains a network to predict a <em>velocity</em> — which way and how fast to move a point along a nearly straight path from noise to data. A more direct generalisation of the same idea, and it typically needs fewer steps.`),
         p(`Every frontier system in Part III and beyond is, underneath, a generative model. An LLM is an autoregressive model of text. A text-to-image or text-to-video system is a latent diffusion or flow-matching model of pixels. Increasingly they generate more than one kind of data at once.`),
         p(`These three families are not historical footnotes that transformers replaced. They are the toolbox transformers got combined <i>with</i> — a diffusion model's denoiser is very often a transformer internally.`),
         callout('warning', '⚠️ The uncomfortable part: consent, credit and provenance',
