@@ -70,11 +70,12 @@
       root.append(
         callout('tryit', '🖐 Do this first — build a language model in two seconds, then break it',
           `The model below is trained <b>instantly</b> on the text in the box. It is nothing but a table of counts.<br>
-           <b>1.</b> The box starts on the prefix <code class="inline">the </code>. Read the guesses: seventeen candidates and none of them confident.<br>
+           <b>1.</b> The box starts on the prefix <code class="inline">the </code> with one character of context. Read the guesses: seventeen candidates, and the best of them only 31.8%.<br>
            <b>2.</b> Move the <b>context</b> slider from 1 up to 4 and watch the candidate list shrink from seventeen to eight. More context, fewer things that can come next.<br>
            <b>2b.</b> Now type <code class="inline">og sa</code>. At context 1 there are twelve candidates and the best is 31%; at context 4 there are two and the best is 50%. That is what a longer memory buys.<br>
            <b>2c.</b> Now type <code class="inline">the qu</code>. Nothing in the text ever follows it, so the readout says <b>"never seen → backed off"</b> and the model falls all the way back to a single character of context. That is the wall.<br>
-           <b>3.</b> Press <b>Generate</b>. Low temperature is repetitive, high temperature is gibberish.<br>
+           <b>3.</b> Put <b>context</b> back to 1 and press <b>Generate</b> at temperature 0.1, then at 2.0: cold repeats <code class="inline">the the the</code> forever, hot is unreadable.<br>
+           <b>3b.</b> Now set <b>context</b> to 4 and generate at 2.0 again. It stays in real words however hot you make it — not because it understands them, but because at four characters of context roughly two steps in three have only <i>one</i> possible next character. There is nothing left for temperature to choose between. That is memorisation wearing fluency as a costume.<br>
            <b>4.</b> Now find the ceiling: <b>at no setting can it hold a thought longer than its context window.</b> Edit the text box and watch it relearn instantly.`),
         buildNgramDemo(ctx),
         p(`You just built the oldest language model there is, and hit its wall. Everything in this chapter, and arguably everything in the rest of this course, is an attempt to get past that wall.`),
@@ -133,7 +134,8 @@
       root.append(section('The LSTM: a conveyor belt through time',
         p(`In 1997 Sepp Hochreiter and Jürgen Schmidhuber published a cell designed so the gradient could travel far without shrinking: the <em>Long Short-Term Memory</em>.`),
         p(`The idea is to give the cell a separate memory lane — the <em>cell state</em> — that runs straight through time with almost nothing multiplied into it, like a conveyor belt. Things are added to it or removed from it only when little learned switches called <em>gates</em> say so.`),
-        p(`Think of a notebook. A plain RNN rewrites the whole page every step, so old notes get smudged. An LSTM has three gates, each a small sigmoid layer producing a number between 0 and 1 for every slot: a <b>forget gate</b> deciding what to wipe, an <b>input gate</b> deciding what to write, and an <b>output gate</b> deciding what to reveal.`),
+        p(`The 1997 cell had two gates — an <b>input gate</b> deciding what to write and an <b>output gate</b> deciding what to reveal — and a belt that could never be cleared: memories were added but never removed, so a cell running for a long time simply saturated. <b>Gers, Schmidhuber and Cummins</b> added the missing switch in a 2000 paper called <i>Learning to Forget</i>, and every LSTM since has had three gates.`),
+        p(`Think of a notebook. A plain RNN rewrites the whole page every step, so old notes get smudged. The modern LSTM has three gates, each a small sigmoid layer producing a number between 0 and 1 for every slot: a <b>forget gate</b> deciding what to wipe, an <b>input gate</b> deciding what to write, and an <b>output gate</b> deciding what to reveal.`),
         callout('tryit', '🖐 Try this — hold a memory for thirty steps, then choose to drop it',
           `The value 1.0 is written into the belt at step 3. After that, <code class="inline">c<sub>t</sub> = forget × c<sub>t−1</sub> + input × new</code>.<br>
            <b>1.</b> Press <b>Remember perfectly</b>: forget = 1.00, input = 0. The line is <b>dead flat</b> across all thirty steps, and the gradient multiplier reads exactly 1.000. Nothing vanishes.<br>
@@ -223,7 +225,8 @@
     const FONT = '13px Inter, system-ui, sans-serif';
     const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
     const MAXK = 4;
-    const S = { text: DEFAULT_TEXT, k: 3, prefix: 'the ', temp: 0.6, tables: null, dist: [], usedK: -1, options: 0 };
+    /* opens at n = 1, which is where the try-it's first step starts reading */
+    const S = { text: DEFAULT_TEXT, k: 1, prefix: 'the ', temp: 0.6, tables: null, dist: [], usedK: -1, options: 0 };
     const ro = ctx.readout();
 
     function retrain() { S.tables = trainNgram(S.text && S.text.length ? S.text : ' ', MAXK); recompute(); }
@@ -282,7 +285,7 @@
     const prefIn = ctx.h('input', { type: 'text', value: S.prefix });
     prefIn.addEventListener('input', (e) => { S.prefix = (e.target && e.target.value != null) ? e.target.value : prefIn.value; recompute(); });
     const prefWrap = ctx.h('div', { class: 'control' }, ctx.h('label', {}, 'prefix typed so far'), prefIn);
-    const kSl = ctx.slider({ label: 'context length n', min: 1, max: MAXK, step: 1, value: 3, onChange: (v) => { S.k = ctx.clamp(Math.round(v), 1, MAXK); recompute(); } });
+    const kSl = ctx.slider({ label: 'context length n', min: 1, max: MAXK, step: 1, value: 1, onChange: (v) => { S.k = ctx.clamp(Math.round(v), 1, MAXK); recompute(); } });
     const tempSl = ctx.slider({ label: 'generation temperature', min: 0.1, max: 2, step: 0.05, value: 0.6, fmt: (v) => (+v).toFixed(2), onChange: (v) => { S.temp = ctx.clamp(v, 0.1, 2); } });
     const PLACEHOLDER = 'press "Generate 100 chars" …';
     const genOut = ctx.h('pre', { class: 'code' }, PLACEHOLDER);
