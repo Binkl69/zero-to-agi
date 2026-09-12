@@ -108,7 +108,7 @@
             g.fillText(label, x0 + barMax + 10, y);
           }
           g.textAlign = 'left'; g.fillStyle = C.muted; g.font = MONO;
-          g.fillText('white tick = share of the 20 samples that landed on this token', 10, H - 6);
+          g.fillText('white tick = share of the samples drawn so far that landed on this token', 10, H - 6);
         }
 
         function recompute() { S.probs = distribution(); S.counts = new Array(N).fill(0); S.samples = 0; updateRO(); draw(); }
@@ -204,7 +204,9 @@
             'params (approx.)': (R.params / 1e9).toFixed(1) + 'B',
             'context': fmtInt(R.ctxTok) + ' tok',
             'KV / sequence': fmtGB(R.kvPerSeqBytes / (1024 ** 3)),
-            'max concurrent requests @ this length on 1 H100': R.maxBatchHere <= 0 ? '0 — weights alone don’t fit' : fmtInt(R.maxBatchHere),
+            'max concurrent requests @ this length on 1 H100': R.weightGB >= H100_GB ? '0 — weights alone don’t fit'
+              : R.maxBatchHere <= 0 ? '0 — one sequence’s KV cache exceeds the free memory'
+              : fmtInt(R.maxBatchHere),
           });
         }
 
@@ -240,38 +242,38 @@
       /* Interactive C: agent loop simulator                                */
       /* ================================================================ */
       function agentSimulator() {
-        const WINDOW = 4000; // a small illustrative window so the bar visibly fills over 5 steps
+        const WINDOW = 1400; // a small illustrative window, sized so the five steps visibly fill it
         const BASE = 760; // tokens "already spent" on a system prompt + repo file listing
         const STEPS = [
           {
-            thought: 'The test suite reports test_apply_discount failing. Let me open the test to see exactly what it expects.',
+            thought: 'The test suite reports test_apply_discount failing. Let me open the test file to see exactly what it expects.',
             call: { tool: 'read_file', args: { path: 'tests/test_pricing.py' } },
-            result: 'def test_apply_discount():\n    price = apply_discount(100, 0.2)\n    assert price == 80',
-            noTools: 'The test test_apply_discount is failing. I haven’t opened the file, but going by the name it’s probably in tests/test_pricing.py and probably checks that a 20% discount on 100 gives 80. I’ll assume that and move on.',
+            result: 'import pytest\nfrom src.pricing import apply_discount, apply_tax\n\n\ndef test_apply_discount():\n    price = apply_discount(100, 0.2)\n    assert price == 80\n\n\ndef test_apply_discount_zero():\n    assert apply_discount(100, 0) == 100\n\n\ndef test_apply_tax():\n    assert apply_tax(100, 0.1) == 110',
+            noTools: 'The failing test is test_apply_discount in tests/test_pricing.py. It asserts that a 20% discount on 100 gives 80.',
           },
           {
-            thought: 'Now let’s look at the function it’s testing.',
+            thought: 'Only the first test fails, so the bug is in apply_discount, not apply_tax. Let me read the module.',
             call: { tool: 'read_file', args: { path: 'src/pricing.py' } },
-            result: 'def apply_discount(price, pct):\n    return price + price * pct',
-            noTools: 'I’ll guess the implementation without reading it: a typical apply_discount probably does "return price * (1 - pct)". That looks fine to me, so the bug must be somewhere else — maybe the test itself is wrong.',
+            result: '"""Pricing helpers."""\n\n\ndef apply_discount(price, pct):\n    return price + price * pct\n\n\ndef apply_tax(price, rate):\n    return price + price * rate\n\n\ndef line_total(price, qty, pct=0.0):\n    return apply_discount(price, pct) * qty',
+            noTools: 'I have reviewed src/pricing.py. apply_discount reads "return price * (1 - pct)", which is already correct, so the bug is in the test rather than in the implementation.',
           },
           {
-            thought: 'Found it: the discount is being <b>added</b>, not subtracted — price + price·pct makes the price go up. It should be price × (1 − pct). Applying the fix.',
+            thought: 'Found it: the discount is being <b>added</b>, not subtracted — price + price·pct makes the price go up. It was copy-pasted from apply_tax just below it, where adding <i>is</i> right. It should be price × (1 − pct).',
             call: { tool: 'edit_file', args: { path: 'src/pricing.py', find: 'return price + price * pct', replace: 'return price * (1 - pct)' } },
-            result: 'src/pricing.py updated (1 line changed).',
-            noTools: 'Since I never saw the real code, I’ll instead "fix" the test’s expected value from 80 to 120 — without any way to know whether that’s actually correct.',
+            result: '--- a/src/pricing.py\n+++ b/src/pricing.py\n@@ -4,4 +4,4 @@\n def apply_discount(price, pct):\n-    return price + price * pct\n+    return price * (1 - pct)',
+            noTools: 'Fixed: I updated the expected value in tests/test_pricing.py from 80 to 120, so it now matches what apply_discount returns.',
           },
           {
-            thought: 'Let’s rerun the test to make sure the fix actually works, not just that it looks right.',
+            thought: 'Let’s rerun the whole file, not just the one test — the fix touches line_total too.',
             call: { tool: 'run_tests', args: { path: 'tests/test_pricing.py' } },
-            result: '1 passed in 0.03s',
-            noTools: 'I have no way to run the tests without a tool. I’ll just state that it should pass now.',
+            result: '============== test session starts ==============\nplatform linux -- Python 3.11.8, pytest-8.1.1\nrootdir: /repo\ncollected 3 items\n\ntests/test_pricing.py ...                  [100%]\n\n=============== 3 passed in 0.04s ===============',
+            noTools: 'Reran the suite: 3 passed in 0.04s. Green.',
           },
           {
-            thought: 'All green. apply_discount now subtracts the discount instead of adding it. Done.',
+            thought: 'All three green, including the two that were already passing. apply_discount now subtracts the discount instead of adding it. Done.',
             call: null,
             result: null,
-            noTools: 'Done — though I never actually read the file or ran anything, so this is a guess dressed up as a report.',
+            noTools: 'Done. test_apply_discount passes, apply_discount is behaving correctly, and no other tests were affected.',
           },
         ];
         const S = { shown: 0, tools: true };
@@ -301,7 +303,8 @@
               tokens += approxTokens(st.noTools);
               trace.append(h('div', { style: { borderLeft: '3px solid ' + C.danger, paddingLeft: '10px' } },
                 h('div', {}, pill('THOUGHT (no tools)', C.danger), ' ', h('span', { html: st.noTools })),
-                h('div', { class: 'muted', style: { fontSize: '.82rem', marginTop: '4px' } }, '⚠ nothing here was read or executed — it is invented, and reads exactly as confidently as the real trace on the left.')));
+                /* the warning rides only the newest turn, so it reads as a note rather than a chant */
+                i === S.shown - 1 ? h('div', { class: 'muted', style: { fontSize: '.82rem', marginTop: '4px' } }, '⚠ nothing above was read or executed — every claim past the first turn is invented, and it reads exactly as confidently as the real trace does with tools on.') : null));
             }
           }
           const pct = clamp((tokens / WINDOW) * 100, 0, 100);
@@ -382,7 +385,9 @@
         const q = ctx.textarea({ label: 'Your question', value: 'How many vacation days do I get?', onChange: (v) => runQuery(v) });
         const b1 = ctx.button('Try: vacation days', () => { q.value = 'How many vacation days do I get?'; runQuery(q.value); });
         const b2 = ctx.button('Try: parental leave', () => { q.value = 'What is the parental leave policy?'; runQuery(q.value); });
-        const b3 = ctx.button('Try: pets at the office (no match)', () => { q.value = 'Can I bring my dog to the office?'; runQuery(q.value); });
+        /* the query is kept free of words the handbook uses ('to', 'the', 'office' all score),
+           so the genuine no-match branch below it is reachable */
+        const b3 = ctx.button('Try: can I bring my dog? (no match)', () => { q.value = 'Can I bring my dog?'; runQuery(q.value); });
         runQuery(q.value);
         return ctx.figure(h('div', { style: { padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' } },
           resultsEl, h('div', {}, h('div', { class: 'muted', style: { fontSize: '.8rem', marginBottom: '4px' } }, 'What actually gets stuffed into the prompt:'), promptEl), noteEl),
@@ -408,7 +413,8 @@
       /* Interactive: lost in the middle                                   */
       /* ================================================================ */
       function lostInMiddle() {
-        const [cv, g] = ctx.canvas(720, 360);
+        /* tall enough that the closing paragraph clears the x-axis labels above it */
+        const [cv, g] = ctx.canvas(720, 392);
         let pos = 0.5, ctxLen = 30, model = 'typical';
         /* U-shaped recall: strong at the edges, sagging in the middle, and the sag deepens
            as the context grows. Shaped after the Liu et al. (2023) curves, not measured here. */
@@ -485,7 +491,7 @@
             : 'Near an edge, where recall is reliable.', TX, 232, 190, 16);
           g.font = FONT; g.fillStyle = C.muted;
           wrapText(g, 'Doubling the window does not double how much of it gets used. Mostly it means more middle to get lost in — which is why retrieval systems put the best match first or last, not wherever it happened to rank.',
-            34, 300, 650, 17);
+            34, 320, 650, 17);
           ro.set({ position: pos < 0.15 ? 'near the start' : pos > 0.85 ? 'near the end' : 'buried in the middle', documents: ctxLen, 'found': (r0 * 100).toFixed(0) + '%' });
         });
 
@@ -506,7 +512,7 @@
 
         const pSl = ctx.slider({ label: 'prompt tokens', min: 200, max: 100000, step: 200, value: 4000, onChange: (v) => { promptTok = v; } });
         const oSl = ctx.slider({ label: 'output tokens', min: 50, max: 4000, step: 50, value: 600, onChange: (v) => { outTok = v; } });
-        const cSl = ctx.slider({ label: 'calls per day', min: 1, max: 100000, step: 100, value: 1000, onChange: (v) => { calls = v; } });
+        const cSl = ctx.slider({ label: 'calls per day', min: 100, max: 100000, step: 100, value: 1000, onChange: (v) => { calls = v; } });
         const cacheBtn = ctx.button('prompt caching: off', () => {
           cacheHit = !cacheHit;
           cacheBtn.textContent = 'prompt caching: ' + (cacheHit ? 'on' : 'off');
@@ -564,7 +570,7 @@
           g.font = FONT; g.fillStyle = C.muted;
           wrapText(g, cacheHit
             ? 'Prompt caching reuses the KV cache for a prefix you send repeatedly — a system prompt, a shared document — so the expensive prefill is paid once and later calls pay a fraction.'
-            : 'Output tokens cost several times more than input tokens, because decode is sequential and prefill is not. That single asymmetry drives most of the cost of running an assistant.',
+            : 'Output tokens are billed at ' + (OUT_PRICE / IN_PRICE).toFixed(0) + '× the rate of input tokens, because decode is sequential and prefill is not. Right now output is ' + (per > 0 ? (outCost / per * 100).toFixed(0) : '0') + '% of the bill — ' + (outCost > inCost ? 'the reply dominates, which is the ordinary chat regime.' : 'the prompt dominates, which is the agent regime: the transcript you resend costs more than anything the model says.'),
             34, y + 56, 650, 17);
           ro.set({ 'per reply': '$' + per.toFixed(4), 'per day': '$' + (per * calls).toFixed(2), latency: TOT.toFixed(2) + 's', caching: cacheHit ? 'on' : 'off' });
         });
@@ -581,7 +587,7 @@
         callout('tryit', '🖐 Do this first — make the model say the wrong thing',
           `The bars are a model's next-word distribution after <b>"The capital of Australia is"</b>. Canberra is correct. Sydney is the answer most people would guess.<br>
            <b>1.</b> At the defaults, press <b>Sample 20×</b>. Canberra wins nearly every time.<br>
-           <b>2.</b> Now raise <b>temperature</b> and sample again. Somewhere around 1.3 Sydney starts winning — <b>the model has not changed at all</b>, only how you are drawing from it.<br>
+           <b>2.</b> Now push <b>temperature</b> to 2 and sample again. Canberra's share halves, from 52% to 26% — three draws in four are now something other than the right answer. But watch what <i>never</i> happens: Sydney never overtakes Canberra. Temperature divides every logit by the same number, so it cannot change which token the model prefers — only how often it wanders off it.<br>
            <b>3.</b> Set temperature back and pull <b>top-k</b> down to 1. Now it is frozen on one answer forever, however high you push the temperature afterwards.<br>
            <b>4.</b> That is the entire difference between a model that feels creative and one that feels reliable, and it is a dial, not a retraining run.`),
         samplingPlayground(),
@@ -604,16 +610,17 @@
           p(`Generating a reply happens in two phases. <em>Prefill</em> reads your whole prompt at once — every token processed in one big, parallel matrix multiplication — so a long prompt is "digested" almost instantly. <em>Decode</em> is what follows: the reply is produced one token at a time, each new token depending on every token before it, so the same computation repeats, single-file, for as long as the reply runs. Decode, not prefill, is why a long answer visibly takes time.`),
           p(`Naively, producing token 500 would mean recomputing attention over all 499 tokens before it from scratch — and token 501 over 500, redoing nearly all of the same work every step.`),
           p(` The <em>KV cache</em> avoids that: every layer stores the Key and Value vectors it computes for each token, once, and reuses them for every later step; decode then only computes one new token's own Key/Value pair. That reuse is what makes generation feel roughly linear in speed — but the cache is memory, and it grows with every token kept around.`),
-          p(`Its size is roughly <code class="inline">2 × layers × d<sub>model</sub> × tokens × batch × bytes-per-value</code> (2 for Key and Value). A 7B-shaped model — 32 layers, d<sub>model</sub> = 4096, fp16 — at 8,000 tokens: 2×32×4096×8000×1×2 ≈ 4.2 billion bytes, about <b>4 GB</b> of cache. Stretch to 128,000 tokens (16× longer) and the cache grows 16× too, to roughly <b>67 GB</b> — most of an H100's 80 GB, before the model's own ~14 GB of weights even load. Long context is a standing memory bill, multiplied by every concurrent conversation.`),
+          p(`Its size is roughly <code class="inline">2 × layers × d<sub>model</sub> × tokens × batch × bytes-per-value</code> (2 for Key and Value). A 7B-shaped model — 32 layers, d<sub>model</sub> = 4096, fp16 — at 8,192 tokens: 2×32×4096×8192×1×2 = 4,294,967,296 bytes, exactly <b>4 GB</b> of cache. Stretch to 131,072 tokens (16× longer) and the cache grows 16× too, to exactly <b>64 GB</b> — most of an H100's 80 GB, before the model's own 12 GB of weights even load. Long context is a standing memory bill, multiplied by every concurrent conversation.`),
+          p(`That formula assumes every attention head keeps its own Key and Value pair, which was true of the first generation of these models and is what the calculator below computes. Nearly every model shipping a long window today uses <em>grouped-query attention</em>, where several query heads share one Key/Value head — Llama-3-8B has 32 query heads but only 8 KV heads — dividing the cache by that ratio, commonly 4–8×. The shape of the bill is unchanged: still linear in tokens, still multiplied by every concurrent request. Read the numbers below as an upper bound.`),
           p(`Several tricks push that bill down:`),
           ul([
             `<b>Batching</b> processes many users' decode steps together in one pass — efficient for the GPU, but it multiplies the KV cache by however many requests are in flight.`,
             `<b>Speculative decoding</b> (Leviathan et al. and Chen et al., both 2023) has a small, cheap "draft" model guess several tokens ahead; the large model checks the whole guess in one parallel pass and keeps whatever prefix was right. A good draft yields the large model's exact output two to three times faster.`,
             `<b>Quantization</b> rounds the weights themselves after training: fp16 (2 bytes/weight) can become int8 (1 byte) or int4 (0.5 bytes) — why a 7B model needing ~14 GB at fp16 fits under 4 GB at int4, comfortably on a laptop, at some cost in quality (usually minor at int8, noticeable but often acceptable at int4).`,
             `<b>Distillation</b> trains a smaller "student" model to mimic a larger "teacher's" outputs instead of shrinking one model's numbers; most cheap "mini"/"flash" tiers are distilled relatives of a bigger sibling.`,
-            `<b>Mixture-of-experts (MoE)</b> serving (chapter 8) trades memory for speed the other way: it holds far more total parameters than a same-quality dense model but activates only a fraction per token — more memory to hold everything, less compute per token than its size suggests.`,
+            `<b>Mixture-of-experts (MoE)</b> serving (chapter 10) trades memory for speed the other way: it holds far more total parameters than a same-quality dense model but activates only a fraction per token — more memory to hold everything, less compute per token than its size suggests.`,
           ]),
-          callout('tryit', 'Try it: watch a laptop-sized model become a datacenter model', `<b>1.</b> Leave the preset at 7B, fp16, and slide context from 512 tokens up to 200K+: watch the orange KV segment swallow the chart and blow past the red H100 line. <b>2.</b> Switch precision to int4 with the same settings: the whole bar shrinks by roughly 4×. <b>3.</b> Pick the 70B preset, and watch "max concurrent requests" in the readout collapse toward 0 or 1 at long context — that number is the entire reason API providers cap context and charge more for it. <b>4.</b> Push batch up to 64 at a long context on the MoE preset: this is the regime real inference clusters live in.`),
+          callout('tryit', 'Try it: watch a laptop-sized model become a datacenter model', `<b>1.</b> Leave the preset at 7B, fp16, and slide context from 512 tokens up to 200K+: watch the orange KV segment swallow the chart and blow past the red H100 line. <b>2.</b> Switch precision to int4 with the same settings: the whole bar shrinks by roughly 4×. <b>3.</b> Pick the 70B preset: at fp16 the readout says the weights alone don't fit — 120 GB against 80, before a single token of context. Switch precision to <b>int8</b> to halve them, then sweep context: "max concurrent requests" falls 32 → 8 → 2 → 0 between 512 and 32K tokens. That number is the entire reason API providers cap context and charge more for it. <b>4.</b> Push batch up to 64 at a long context on the MoE preset: this is the regime real inference clusters live in.`),
           kvCalculator(),
         ),
 
@@ -637,7 +644,7 @@
         section('Retrieval-augmented generation: giving a frozen model fresh facts',
           p(`A model's knowledge is frozen at training time and can't cover this morning's news or your company's wiki. <em>Retrieval-augmented generation</em> (RAG) works around that with no retraining: turn documents into vectors (<em>embeddings</em>, chapter 6) that capture meaning, do the same to the question, retrieve whichever documents' vectors sit closest, and paste — "stuff" — their text into the prompt before answering. The model still only predicts the next token; it just has better material in front of it now.`),
           p(`RAG works well when an answer is a fact living, close to verbatim, in a handful of retrievable documents — a policy, a spec, a ticket. It fails when the retriever misses the right document because the question is worded too differently; when the true answer needs combining documents that weren't all retrieved together; or when retrieved text is noisy enough that the model blends it with its own, possibly wrong, prior beliefs. Retrieval quality, far more than model size, is the real bottleneck.`),
-          callout('tryit', 'Try it: break the retriever on purpose', `<b>1.</b> Ask about vacation days with the default question and watch the top document win clearly, with "vacation" and "days" highlighted. <b>2.</b> Click "parental leave" and see a different document take over — the ranking really is reading the question. <b>3.</b> Click "pets at the office": no document in this ten-document handbook mentions pets, so every score collapses toward zero. Notice what gets stuffed into the prompt anyway — three irrelevant policies — and consider what a model that isn't instructed to admit uncertainty might do with that.`),
+          callout('tryit', 'Try it: break the retriever on purpose', `<b>1.</b> Ask about vacation days with the default question and watch the top document win clearly, with "vacation" and "days" highlighted. <b>2.</b> Click "parental leave" and see a different document take over — the ranking really is reading the question. <b>3.</b> Click "can I bring my dog?": no document in this ten-document handbook shares a single word with that question, so all three scores are exactly zero. Notice what gets stuffed into the prompt anyway — three irrelevant policies — and consider what a model that isn't instructed to admit uncertainty might do with that.`),
           ragDemo(),
         ),
 

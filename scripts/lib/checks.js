@@ -152,9 +152,24 @@ function checkFrame(ops, W, H) {
          either is 35% covered, so a narrow but full-height intrusion counts
          too — that is the commonest collision of the lot. */
       const sameLine = (i2.y1 - i2.y0) > 0.45 * Math.min(a.y1 - a.y0, b.y1 - b.y0);
-      if (frac < OVERLAP_FRAC && !(sameLine && (i2.x1 - i2.x0) > 3)) continue;
+      /* A line of one block sitting on a line of another — an axis label under a
+         paragraph, say — clips by only a few px, which the vertical inset above
+         is deliberately blind to. Two lines of the SAME wrapped block share an
+         x-origin and are spaced by their own line height, so they are exempt;
+         anything else that touches vertically while covering the narrower box
+         horizontally is a real collision. */
+      const rawA = A.b, rawB = B.b;
+      const vi = Math.min(rawA.y1, rawB.y1) - Math.max(rawA.y0, rawB.y0);
+      const hi = Math.min(rawA.x1, rawB.x1) - Math.max(rawA.x0, rawB.x0);
+      const sameBlock = Math.abs(rawA.x0 - rawB.x0) < 2;
+      const stacked = !sameBlock
+        && vi > 0.25 * Math.min(rawA.y1 - rawA.y0, rawB.y1 - rawB.y0)
+        && hi > 0.2 * Math.min(rawA.x1 - rawA.x0, rawB.x1 - rawB.x0);
+      if (frac < OVERLAP_FRAC && !(sameLine && (i2.x1 - i2.x0) > 3) && !stacked) continue;
       add('text-overlap', JSON.stringify(A.op.str.slice(0, 34)) + ' and ' + JSON.stringify(B.op.str.slice(0, 34))
-        + (frac >= OVERLAP_FRAC ? ' overlap by ' + r0(100 * frac) + '%' : ' collide by ' + r0(i2.x1 - i2.x0) + 'px on the same line')
+        + (frac >= OVERLAP_FRAC ? ' overlap by ' + r0(100 * frac) + '%'
+          : sameLine && (i2.x1 - i2.x0) > 3 ? ' collide by ' + r0(i2.x1 - i2.x0) + 'px on the same line'
+          : ' sit ' + r0(vi) + 'px into each other across ' + r0(hi) + 'px')
         + ' near (' + r0(a.x0) + ',' + r0(a.y0) + ')');
     }
   }
