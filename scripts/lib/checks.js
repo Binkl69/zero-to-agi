@@ -65,6 +65,9 @@ function checkFrame(ops, W, H) {
       texts.push({ op, b, backedBy: -1 });
       /* A label the reader can read is a claim the course is making. These
          spellings are never a claim anyone meant to make. */
+      const markup = op.str.match(/<\/?[a-z][a-z0-9]*\b[^<>]*>|&[a-z]+;|&#\d+;/i);
+      if (markup) add('markup-on-canvas', 'a label reads ' + JSON.stringify(op.str.slice(0, 60))
+        + ' — canvas text is drawn literally, so ' + JSON.stringify(markup[0]) + ' appears on screen');
       const bad = op.str.match(/NaN|Infinity|undefined|\bnull\b|\[object Object\]/);
       /* chapter 5 legitimately writes "symptom: shoots to NaN" in its prose, so
          only short, value-shaped labels count — and [object Object] never is */

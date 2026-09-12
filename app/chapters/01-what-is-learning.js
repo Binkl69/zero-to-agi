@@ -48,7 +48,7 @@
         ctx.p(`<b>Perfect is a property of toys.</b> Four dots split 4 out of 4. A hundred real ones do not — spam tops out at 91.2%, the tumours at 92.5% — and the interesting number stops being "did I win" and becomes "how close to the ceiling am I".`),
         ctx.p(`<b>Not all mistakes are the same mistake.</b> Letting fraud through costs money. Freezing an honest customer's card at a petrol station costs a customer. The line you pick <i>is</i> that trade-off, and no amount of cleverness removes the choice — it is a business decision wearing a maths costume. Chapter 3 gives it names: precision and recall.`),
         ctx.p(`<b>And the fraud one really is beyond a line</b>, for exactly the reason puzzle 3 was. Fraud lives at <i>both</i> extremes: tiny "card testing" payments to check a stolen number still works, and one large cash-out. Genuine spending sits in the middle.`),
-        ctx.p(`One line cannot cut both ends off a stick and leave the middle. That is XOR wearing a suit, and it costs real banks real money. Note the ceiling of 80.1% is not obviously terrible until you see that always guessing "genuine" already scores 58.8% — <b>a number can look respectable and still mean the model has learned almost nothing.</b> Chapter 3 makes that trap explicit.`),
+        ctx.p(`One line cannot cut both ends off a stick and leave the middle. That is XOR wearing a suit, and it costs real banks real money. Note that 80.1% means nothing until you know what guessing "genuine" every time already scores: 58.8%. Read together they say something real — 80.1% cuts the mistakes from 56 in 136 to 27 — and reading them together is the whole skill, because <b>and still mean the model has learned almost nothing.</b> Chapter 3 makes that trap explicit.`),
       ));
 
       /* ---------- maths beat 1: notation for the line they just dragged ---------- */
@@ -83,12 +83,12 @@
             options: ['They weigh the clouds differently', 'How much they mind getting wet, before looking outside at all', 'One of them is simply wrong'], answer: 1,
             explain: 'They start from different places. One is umbrella-inclined before any evidence arrives at all. That standing lean is the bias.' },
           { say: '<b>That is the bias.</b> Where you start, before any evidence. And it is <b>added</b> at the end — never multiplied by anything.', math: 'clouds &times; 3 &nbsp;+&nbsp; day &times; 0 &nbsp;<b>+</b>&nbsp; 2' },
-          { say: 'Here is the proof that a bias has to exist. In the demo above, drag <b>bias</b> to exactly 0.', note: 'Then drag the two weight sliders around and watch what the line can and cannot do.' },
+          { say: 'Here is the proof that a bias has to exist. Later in this chapter there is a neuron with all three numbers on sliders and the line they describe drawn beside them. Drag its <b>bias</b> to exactly 0.', note: 'The line jumps to the bottom-left corner and is stuck there. The weights can spin it, but nothing can move it off that corner until the bias is non-zero.' },
           { say: 'With bias at zero the line can spin freely — but it is <b>stuck passing through the corner of the grid.</b> It can never move away from it.', note: 'The weights set the angle. The bias is the only thing that can slide the line across the page.' },
           { ask: 'So what does the bias do, geometrically?',
             options: ['Rotates the line', 'Slides the line away from the corner', 'Makes the line curve'], answer: 1,
             explain: 'Weights turn it, the bias moves it. Without a bias, every decision boundary in every model would be pinned to the corner — and almost nothing useful lives there.' },
-          { say: 'These two words never change meaning again, in any chapter, at any size.', note: 'A frontier model holds on the order of a trillion weights and biases. They are these ones, in unimaginable number, each still doing exactly this job.' },
+          { say: 'These two words never change meaning again, in any chapter, at any size.', note: 'A frontier model holds somewhere between a few hundred billion and a few trillion of them — no frontier lab publishes the exact number any more. They are these ones, in unimaginable number, each still doing exactly this job.' },
         ], {
           title: 'Weight and bias, with an umbrella',
           recap: 'a weight is how much one thing counts. A bias is where you start before anything counts. Weights are multiplied; the bias is added.',
@@ -105,16 +105,16 @@
         ctx.p(`You were a <em>neuron</em>. Not a metaphor for one, the actual thing. An artificial neuron has exactly one move available to it: <b>draw a straight line and call one side "yes" and the other side "no"</b>. That is its entire repertoire.`),
         ctx.p(`Puzzles 1 and 2 fell over easily. Puzzle 3 did not, and it is worth being precise about why: <b>it is not hard, it is impossible.</b> The two red dots sit in opposite corners with the blue dots in the other two, so any straight line you draw strands somebody on the wrong side. You cannot win, and neither can any machine that only draws one line.`),
         ctx.callout('key', '🔑 The one idea in this chapter',
-          `One neuron equals one straight line. Some problems cannot be split with one straight line. That single sentence explains a machine built in 1958, why the field collapsed in 1969, and why the word "deep" appears in "deep learning".`),
+          `One neuron equals one straight line. Some problems cannot be split with one straight line. That single sentence explains a machine demonstrated in 1958, why neural networks were abandoned in 1969, and why the word "deep" appears in "deep learning".`),
       ));
 
       /* ---------- now the machine does it ---------- */
       root.append(ctx.section('Now let the machine find the line',
         ctx.p(`You moved the line by feel. A machine has no feel, so it uses a rule so simple you could do it on paper: <b>look at one dot; if you got it wrong, shove the line a little bit toward getting it right; repeat.</b> Nothing cleverer than that.`),
         ctx.callout('tryit', '🖐 Try this',
-          `Press <b>Train</b> and watch the line stagger toward an answer on puzzle 1. Then switch to <b>puzzle 3</b> and press Train again. Leave it running. Watch the mistake counter at the bottom: it drops, rises, and never reaches zero. It is not thinking. It is stuck in a loop, redoing the same moves forever.`),
+          `Press <b>Train</b> and watch the line stagger toward an answer on puzzle 1. Then switch to <b>puzzle 3</b> — it stops, so press <b>Train</b> again and leave it running. Watch the mistake counter at the bottom: it wobbles for a few passes and then locks solid at 4 mistakes out of 4. Every dot wrong, every pass, for as long as you care to watch. It is not thinking. It is stuck in a loop, redoing the same moves forever.`),
         buildTrainer(ctx),
-        ctx.p(`That flailing is exactly what your own program printed in the terminal. The machine is not broken and it is not slow. It is looking for something that does not exist.`),
+        ctx.p(`That flailing is the machine doing exactly what it was told, forever: the same four corrections, undone and redone. It is not broken and it is not slow. It is looking for something that does not exist.`),
       ));
 
       /* ---------- maths beat 2: the rule the machine uses to learn ---------- */
@@ -134,7 +134,7 @@
           { say: 'How little? That is set by one number, <b>&eta;</b> — "eta", the <b>learning rate</b>. Here it is fixed at 0.12.', note: 'Too big and the line thrashes about. Too small and it crawls. Chapter 3 is largely about getting this number right.' },
           { say: 'One last piece. The correction is also multiplied by the input itself, <b>x</b>.', note: 'So an input that pushed hard toward the wrong answer gets corrected hard, and an input near zero barely moves. Blame, in proportion to who caused it.' },
           { say: 'Put the four pieces together and you have the entire learning algorithm.', math: 'w &nbsp;&larr;&nbsp; w &nbsp;+&nbsp; &eta; (y &minus; &#375;) x' },
-          { ask: 'Watch the readout under the trainer. Most of the time it shows <b>0 — no change</b>. Why?',
+          { ask: 'Run the trainer on puzzle 1 until it settles. From then on the readout shows <b>0 — no change</b> at every step and the three numbers freeze. Why?',
             options: ['The demo has paused', 'It is getting those dots right, so the correction is zero', 'The learning rate is too small'], answer: 1,
             explain: 'Exactly. Right answers produce no learning at all. All the movement you see comes from the mistakes.' },
         ], {
@@ -153,7 +153,7 @@
           '&minus;',
           { sym: 'ŷ', name: 'y-hat — the guess', says: 'What the neuron actually said. The little hat means "estimated", and you will see it on every prediction in this course from here on.', points: 'which side of the line that dot currently falls on.' },
           ')',
-          { sym: 'x', name: 'x — the input', says: 'The measurement itself. This is the clever part: the correction is <b>scaled by the input</b>, so an input that pushed hard toward the wrong answer gets corrected hard, and an input that was near zero barely moves at all.', points: 'how far the dot sits from the origin.' },
+          { sym: 'x', name: 'x — the input', says: 'The measurement itself. This is the clever part: the correction is <b>scaled by the input</b>, so an input that pushed hard toward the wrong answer gets corrected hard, and an input that was near zero barely moves at all.', points: 'the dot&rsquo;s position along one axis — its horizontal position when correcting w&#8321;, its vertical position when correcting w&#8322;. A dot at x&#8321; = 0 corrects w&#8321; not at all.' },
         ], {
           title: 'w ← w + η (y − ŷ) x',
           hint: 'Click any symbol. This is the entire learning algorithm — every one of these is something you watched happen.',
@@ -162,7 +162,7 @@
         ctx.callout('key', '🔑 The bit worth sitting with: (y − ŷ)',
           `That bracket can only be three things. <b>y − ŷ = 0</b> when the guess was right — and then the whole correction is zero, so <b>nothing changes at all</b>.
            <b>+1</b> when it said no and should have said yes. <b>−1</b> the other way.<br>
-           So the machine <b>only ever learns from its mistakes</b>. When it is right it does not even pat itself on the back; it does nothing. You can watch this directly: the "last error" line in the readout shows <code class="inline">0 — no change</code> most of the time, and the numbers freeze.<br>
+           So the machine <b>only ever learns from its mistakes</b>. When it is right it does not even pat itself on the back; it does nothing. You can watch this directly: on puzzles 1 and 2, once the line is found, the "last error" line in the readout shows <code class="inline">0 — no change</code> at every step and the numbers freeze.<br>
            The whole of modern AI is a more sophisticated answer to the question buried in that bracket: <b>how wrong were we, and which direction is less wrong?</b>`),
         ctx.p(`Three things in that rule carry forward without ever changing meaning, so they are worth naming now.`),
         ctx.ul([
@@ -184,7 +184,7 @@
         buildBruteForce(ctx),
         ctx.p(`Out of 10,800 lines tried, <b>414</b> work for puzzle 1 and <b>zero</b> work for puzzle 3. That is not the machine giving up early. There is no answer of that shape anywhere.`),
         ctx.callout('history', '📜 The book that froze the field',
-          `In 1969 Marvin Minsky and Seymour Papert published <i>Perceptrons</i>, proving exactly this on paper. Frank Rosenblatt's perceptron, built in 1958 and breathlessly covered in the press, could never learn XOR. Funding dried up and neural-network research went cold for over a decade, a period now called the first <em>AI winter</em>. The irony is that the fix was already understood in principle. Nobody yet knew how to train it.`),
+          `In 1969 Marvin Minsky and Seymour Papert published <i>Perceptrons</i>, proving exactly this on paper. Frank Rosenblatt's perceptron — demonstrated to the press in 1958, then built as dedicated hardware — could never learn XOR. Funding for neural networks dried up and the approach went cold for over a decade. (The better-known <em>first AI winter</em> came a few years later, 1974–80, when funding collapsed across the whole of AI after the Lighthill report; the 1969 freeze was the connectionist one, and it lasted longer.) A period now called the first <em>AI winter</em>. The irony is that the fix was already understood in principle. Nobody yet knew how to train it.`),
       ));
 
       /* ---------- the fix ---------- */
@@ -193,7 +193,7 @@
         ctx.callout('tryit', '🖐 Try this',
           `Drag the slider from 1 line to 2 lines and watch the impossible puzzle become possible.`),
         buildTwoLines(ctx),
-        ctx.p(`Each line is one neuron. To combine them you need a third neuron that watches the first two and answers "am I between them?". That stack is a <em>network</em>, and the middle row is a <em>hidden layer</em>. Add more layers and you can cut out any shape at all, which is where the "deep" in deep learning comes from.`),
+        ctx.p(`Each line is one neuron. To combine them you need a third neuron that watches the first two and answers "am I between them?". That stack is a <em>network</em>, and the middle row is a <em>hidden layer</em>. Add more neurons to that middle row and you can cut out any shape at all. What extra <em>layers</em> buy is doing it efficiently — each layer hands the next an easier version of the question, instead of one enormous row brute-forcing the whole thing — and that is where the "deep" in deep learning comes from.`),
         ctx.p(`Which raises a fair objection: <b>there are only two lines on that picture. Where is the third one?</b>`),
         ctx.callout('tryit', '🖐 Try this — go and find the third line',
           `It is real, but it is not in that square — and a third line drawn <i>there</i> could not help anyway, because this chapter opened by proving no straight line in that square works.<br>
@@ -203,16 +203,16 @@
         buildThirdNeuron(ctx),
         ctx.p(`So a hidden layer does not solve the problem. <b>It rearranges the problem until a straight line can solve it.</b> That is the most important sentence in this chapter, and it is what "deep" means: do it again, and again, each layer handing the next an easier version of the question.`),
         ctx.callout('key', '🔑 So why did this take until the 2010s?',
-          `Nobody doubted more layers were more powerful. The problem was <b>training</b> them: with a hidden layer, it is no longer obvious which weight to blame for a mistake. The answer, <em>backpropagation</em>, is chapter 2. It needed the maths to be popularised in 1986, then twenty more years of faster chips and bigger datasets before it paid off.`),
+          `Nobody doubted more layers were more powerful. The problem was <b>training</b> them: with a hidden layer, it is no longer obvious which weight to blame for a mistake. The answer, <em>backpropagation</em>, is chapter 2. It needed the maths to be popularised in 1986, then another twenty-five years of faster chips and bigger datasets before it paid off.`),
       ));
 
       /* ---------- inside the neuron ---------- */
       root.append(ctx.section('What the neuron is actually doing with numbers',
         ctx.p(`You have now met both halves as formulas. Here they are as a machine you can take apart: the same weighted sum from the first maths beat, with the three numbers on sliders instead of on a readout.`),
         ctx.callout('tryit', '🖐 Try this',
-          `Move the weight sliders and watch the line in the previous demos rotate. Learning <b>is</b> the search for these three numbers. There is nothing else in there.`),
+          `Move the two weight sliders and watch the line in the panel underneath rotate; move the bias and watch it slide without turning. Set the bias to exactly 0 and it snaps to the corner — that is the proof from the walkthrough earlier, in your hands. Learning <b>is</b> the search for these three numbers. There is nothing else in there.`),
         buildNeuronAnatomy(ctx),
-        ctx.p(`Those three numbers are the neuron's <em>parameters</em>. Training means adjusting them until the answers come out right. A model you talk to today is this same arrangement with a few hundred billion parameters instead of three.`),
+        ctx.p(`Those three numbers are the neuron's <em>parameters</em>. Training means adjusting them until the answers come out right. A model you talk to today is this same arrangement with somewhere between a few hundred billion and a few trillion parameters instead of three.`),
       ));
 
       /* ---------- rules vs learning ---------- */
@@ -280,7 +280,7 @@
           explain: 'If you can articulate the rule, writing it is exact, cheap and auditable. Learning is for the cases where you recognise the answer but cannot describe the rule.',
         },
         {
-          q: 'What caused the first AI winter?',
+          q: 'Why did neural-network research stall for over a decade after 1969?',
           options: [
             'Computers became too expensive to run',
             'A 1969 proof that a single-layer perceptron could not learn XOR, which drained confidence and funding',
@@ -1119,7 +1119,7 @@
         { value: 'XOR', label: '3 · exactly one switch on' },
       ],
       value: 'AND',
-      onChange: (v) => { puzzle = v; reset(); },
+      onChange: (v) => { puzzle = v; reset(); running = false; playBtn.textContent = 'Train'; },
     });
 
     return ctx.figure(cv,
@@ -1312,7 +1312,7 @@
      ================================================================== */
   function buildNeuronAnatomy(ctx) {
     const C = ctx.colors;
-    const [cv, g] = ctx.canvas(700, 300);
+    const [cv, g] = ctx.canvas(700, 470);
     const x1 = ctx.slider({ label: 'input A', min: 0, max: 1, step: 1, value: 1 });
     const x2 = ctx.slider({ label: 'input B', min: 0, max: 1, step: 1, value: 1 });
     const w1 = ctx.slider({ label: 'weight on A', min: -1, max: 1, step: 0.05, value: 0.5, digits: 2 });
@@ -1386,14 +1386,73 @@
       g.textAlign = 'left';
       g.font = '13px JetBrains Mono, monospace'; g.fillStyle = C.muted;
       g.fillText('(' + a + ' × ' + wa.toFixed(2) + ') + (' + bb + ' × ' + wb.toFixed(2) + ') + ' + bias.toFixed(2)
-                 + '  =  ' + sum.toFixed(2) + '   ' + (sum > 0 ? '> 0, so fire' : '≤ 0, so stay quiet'), 24, cv.H - 26);
+                 + '  =  ' + sum.toFixed(2) + '   ' + (sum > 0 ? '> 0, so fire' : '≤ 0, so stay quiet'), 24, 296);
       g.textAlign = 'center';
+
+      /* ---- the same three numbers, drawn as the line they describe ---- */
+      const PX = 40, PY = 330, PS = 124, PAD = 14, IN = PS - PAD * 2;
+      const sx = (v) => PX + PAD + v * IN;
+      const sy = (v) => PY + PS - PAD - v * IN;
+      g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+      g.font = '600 13px Inter, system-ui, sans-serif'; g.fillStyle = C.text;
+      g.fillText('the same three numbers, as a line', PX, PY - 14);
+      g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(PX, PY, PS, PS);
+
+      g.save();
+      g.beginPath(); g.rect(PX, PY, PS, PS); g.clip();
+      /* w·x + b = 0. Draw it long and let the clip trim it to the box. */
+      const nn = Math.hypot(wa, wb);
+      if (nn > 1e-6) {
+        const cx0 = -bias * wa / (nn * nn), cy0 = -bias * wb / (nn * nn);
+        const dx = -wb / nn, dy = wa / nn;
+        /* shade the side that fires, so the bias reads as "which side wins" */
+        g.fillStyle = 'rgba(56,217,169,0.10)';
+        g.beginPath();
+        g.moveTo(sx(cx0 - dx * 6), sy(cy0 - dy * 6));
+        g.lineTo(sx(cx0 + dx * 6), sy(cy0 + dy * 6));
+        g.lineTo(sx(cx0 + dx * 6 + wa * 6), sy(cy0 + dy * 6 + wb * 6));
+        g.lineTo(sx(cx0 - dx * 6 + wa * 6), sy(cy0 - dy * 6 + wb * 6));
+        g.closePath(); g.fill();
+        g.strokeStyle = C.text; g.lineWidth = 2;
+        g.beginPath();
+        g.moveTo(sx(cx0 - dx * 6), sy(cy0 - dy * 6));
+        g.lineTo(sx(cx0 + dx * 6), sy(cy0 + dy * 6));
+        g.stroke();
+      } else {
+        g.font = '11px Inter, system-ui, sans-serif'; g.fillStyle = C.muted; g.textAlign = 'center';
+        g.fillText('both weights are zero —', PX + PS / 2, PY + PS / 2 - 6);
+        g.fillText('there is no line left', PX + PS / 2, PY + PS / 2 + 10);
+        g.textAlign = 'left';
+      }
+      /* the input you have dialled in, on whichever side it lands */
+      g.beginPath(); g.arc(sx(a), sy(bb), 7, 0, Math.PI * 2);
+      g.fillStyle = out ? C.green : C.danger; g.fill();
+      g.strokeStyle = '#0a0e16'; g.lineWidth = 2; g.stroke();
+      g.restore();
+
+      g.font = '11px JetBrains Mono, monospace'; g.fillStyle = C.muted; g.textAlign = 'center';
+      g.fillText('A', sx(0.5), PY + PS + 15);
+      g.save(); g.translate(PX - 9, PY + PS / 2); g.rotate(-Math.PI / 2);
+      g.fillText('B', 0, 0); g.restore();
+
+      g.textAlign = 'left';
+      const TX2 = PX + PS + 26;
+      g.font = '13px Inter, system-ui, sans-serif'; g.fillStyle = C.muted;
+      /* canvas text is drawn literally — no markup here */
+      wrapText(g, 'This is the line you dragged by hand earlier, except now you set it with the numbers instead. '
+        + 'The two weights ROTATE it. The bias SLIDES it without turning it. The dot is the input you have dialled in, '
+        + 'and it is green exactly when it sits on the shaded side.', TX2, PY + 16, 700 - TX2 - 24, 18);
+      g.font = '600 13px Inter, system-ui, sans-serif';
+      g.fillStyle = Math.abs(bias) < 1e-9 ? C.warn : C.muted;
+      g.fillText(Math.abs(bias) < 1e-9
+        ? 'bias = 0: the line is pinned through the bottom-left corner.'
+        : 'Set bias to exactly 0 and watch the line jump to the corner.', TX2, PY + PS - 6);
 
       readout.set({ 'total': sum.toFixed(2), 'output': out });
     });
 
     return ctx.figure(cv,
-      'Thicker wire means a bigger weight; red pushes toward firing and blue pushes against it. The bias is how much evidence the neuron demands before it fires at all. Three numbers, and that is the whole neuron.',
+      'Thicker wire means a bigger weight; red pushes toward firing and blue pushes against it. The bias is how much evidence the neuron demands before it fires at all. The panel underneath draws the <b>same three numbers as a line</b>: move the weights and it rotates, move the bias and it slides. Three numbers, and that is the whole neuron.',
       [x1, x2, w1, w2, bi],
       readout);
   }
