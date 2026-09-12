@@ -69,7 +69,7 @@ const PASSTHROUGH = new Set(['fillStyle', 'strokeStyle', 'lineWidth', 'globalAlp
 class Recorder {
   constructor(canvas) {
     this.__canvas = canvas;
-    this.recording = false;
+    this.recording = true;   /* always on: frames are delimited by full-canvas clears, not by rAF */
     this.ops = [];          /* visible paint operations in this frame, in order */
     this.seq = 0;
     this.reset();
@@ -187,6 +187,12 @@ class Recorder {
   clearRect(x, y, w, h) {
     if (!this.recording) return;
     const b = bboxOf([apply(this.m, x, y), apply(this.m, x + w, y), apply(this.m, x + w, y + h), apply(this.m, x, y + h)]);
+    /* A clear that covers the canvas IS the start of a frame. Keying off this
+       rather than off requestAnimationFrame is what lets a figure that draws
+       imperatively — on a slider's onChange, or once at build time — be checked
+       at all; thirteen of the course's ninety canvases never call ctx.loop. */
+    const CW = this.__canvas.width || 0, CH = this.__canvas.height || 0;
+    if (CW && CH && b.x0 <= 1 && b.y0 <= 1 && b.x1 >= CW - 1 && b.y1 >= CH - 1) { this.ops = []; this.seq = 0; }
     this.ops.push({ kind: 'clear', box: b, alpha: 1, clip: this.clipRect, seq: this.seq++ });
   }
   stroke() {
@@ -230,8 +236,11 @@ class Recorder {
   get canvas() { return this.__canvas; }
 
   /* ---- frame control ---- */
+  /* Recording is always on; a full-canvas clearRect delimits frames (above).
+     startFrame only drops whatever a canvas that never clears is still holding
+     from the previous scene. */
   startFrame() { this.recording = true; this.ops = []; this.seq = 0; }
-  endFrame() { this.recording = false; return this.ops; }
+  endFrame() { return this.ops; }
 }
 
 /* Unknown members must not explode: chapters use a wide slice of the API. */

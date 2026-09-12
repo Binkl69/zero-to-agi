@@ -303,7 +303,7 @@ for step in range(max_steps):
       for (let v = 0; v <= yMax; v += 1) { const y = yOf(v); g.beginPath(); g.moveTo(padL, y); g.lineTo(W - padR, y); g.stroke(); g.fillText(v.toFixed(0), padL - 6, y + 4); }
       // uniform-guess baseline
       g.setLineDash([5, 4]); g.strokeStyle = ctx.colors.warn; g.beginPath(); g.moveTo(padL, yOf(lnV)); g.lineTo(W - padR, yOf(lnV)); g.stroke(); g.setLineDash([]);
-      g.textAlign = 'left'; g.fillStyle = ctx.colors.warn; g.fillText('ln(V) = ' + lnV.toFixed(2) + '  (uniform guessing)', padL + 6, yOf(lnV) - 5);
+      const lnVLabel = 'ln(V) = ' + lnV.toFixed(2) + '  (uniform guessing)';
       const n = hist.length;
       if (n > 1) {
         g.save(); g.beginPath(); g.rect(padL, padT, pw, ph); g.clip();
@@ -329,6 +329,12 @@ for step in range(max_steps):
         g.fillStyle = ctx.colors.accent; g.beginPath(); g.arc(lx, ly, DOT, 0, Math.PI * 2); g.fill();
         g.restore();
       }
+      /* drawn after the curve, on its own backing: the first steps sit on the ln(V)
+         line, so the trace would otherwise be painted straight through this label */
+      g.font = '11px JetBrains Mono, monospace'; g.textAlign = 'left';
+      const lblW = g.measureText(lnVLabel).width;
+      g.fillStyle = 'rgba(10,14,22,0.82)'; g.fillRect(padL + 4, yOf(lnV) - 16, lblW + 5, 14);
+      g.fillStyle = ctx.colors.warn; g.fillText(lnVLabel, padL + 6, yOf(lnV) - 5);
       g.fillStyle = ctx.colors.muted; g.textAlign = 'left'; g.fillText('loss (cross-entropy, nats)', padL + 6, padT + 10);
       g.textAlign = 'right'; g.fillText('step ' + step.toLocaleString() + (hist.length ? '  ·  smoothed ' + (emaLoss || 0).toFixed(3) : ''), W - padR, HH - 8);
       if (!playing) { g.fillStyle = ctx.colors.warn; g.textAlign = 'center'; g.font = '600 13px Inter, sans-serif'; g.fillText('paused', W / 2, padT + 14); }

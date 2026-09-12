@@ -272,19 +272,31 @@
           { year: 2024.5, min: 25, label: 'Claude 3.5 / GPT-4o class' },
           { year: 2025.1, min: 110, label: 'o3 / frontier reasoners' },
         ];
-        const Y0 = 2019, DOUBLE_MONTHS = 7;
-        const T0 = DATA[0].min / Math.pow(2, (DATA[0].year - Y0) * 12 / DOUBLE_MONTHS);
-        function fit(year) { return T0 * Math.pow(2, (year - Y0) * 12 / DOUBLE_MONTHS); }
+        /* Least squares on log2(minutes) against year. The line used to be pinned to
+           the single oldest point with a hard-coded 7-month doubling, which left the
+           most important point — o3 at 110 minutes — a factor of 2.8 above its own
+           "fit". These six points give a 6.4-month doubling. */
+        const Y0 = 2019;
+        const FIT = (() => {
+          const n = DATA.length;
+          let sx = 0, sy = 0, sxx = 0, sxy = 0;
+          for (const d of DATA) { const x = d.year - Y0, y = Math.log2(d.min); sx += x; sy += y; sxx += x * x; sxy += x * y; }
+          const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx);
+          return { slope, t0: Math.pow(2, (sy - slope * sx) / n) };
+        })();
+        const DOUBLE_MONTHS = 12 / FIT.slope;
+        function fit(year) { return FIT.t0 * Math.pow(2, FIT.slope * (year - Y0)); }
         const plot = { x: 46, y: 16, w: 640, h: 240 };
         const X0 = 2019, X1 = 2033;
-        const YMIN = 0.02, YMAX = 4e5; // minutes: ~1 sec .. ~9 months
+        const YMIN = 0.02, YMAX = 4e6; // minutes: ~1 sec .. ~7.6 years
         const xAt = (yr) => plot.x + (yr - X0) / (X1 - X0) * plot.w;
         const yAt = (min) => plot.y + plot.h - (Math.log10(ctx.clamp(min, YMIN, YMAX)) - Math.log10(YMIN)) / (Math.log10(YMAX) - Math.log10(YMIN)) * plot.h;
         function humanLabel(min) {
           if (min < 1) return Math.round(min * 60) + ' sec';
           if (min < 90) return f1(min) + ' min';
           if (min < 60 * 24 * 2) return f1(min / 60) + ' hr';
-          if (min < 60 * 24 * 60) return f1(min / (60 * 24)) + ' days';
+          if (min < 60 * 24 * 14) return f1(min / (60 * 24)) + ' days';
+          if (min < 60 * 24 * 60) return f1(min / (60 * 24 * 7)) + ' weeks';
           return f1(min / (60 * 24 * 30)) + ' months';
         }
         const S = { extrap: 2026 };
@@ -311,9 +323,12 @@
           for (let yr = 2025.1; yr <= X1; yr += 0.1) { const x = xAt(yr), y = yAt(fit(yr)); yr === 2025.1 ? g.moveTo(x, y) : g.lineTo(x, y); }
           g.strokeStyle = C.accent; g.globalAlpha = 0.6; g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
           // observed points
-          DATA.forEach((d) => {
+          DATA.forEach((d, i) => {
             const x = xAt(d.year), y = yAt(d.min);
             g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fillStyle = C.warn; g.fill(); g.strokeStyle = '#0a0e16'; g.lineWidth = 1; g.stroke();
+            /* every dot names itself: the try-it asks the reader to find GPT-3's */
+            g.font = MONO; g.fillStyle = C.warn; g.textAlign = 'left';
+            g.fillText(d.label, x + 7, y + (i % 2 ? 12 : -6));
           });
           // extrapolation marker
           const ex = ctx.clamp(S.extrap, X0, X1), exY = fit(ex);
@@ -321,8 +336,8 @@
           g.strokeStyle = C.danger; g.lineWidth = 1.5; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(mx, plot.y); g.lineTo(mx, plot.y + plot.h); g.stroke(); g.setLineDash([]);
           g.beginPath(); g.arc(mx, my, 6, 0, Math.PI * 2); g.fillStyle = C.danger; g.fill();
           g.fillStyle = C.text; g.font = FONT; g.textAlign = 'left';
-          g.fillText('solid = fit to observed points · dashed = extrapolation · red = your year', plot.x + 4, plot.y + 14);
-          ro.set({ year: f1(ex), 'projected 50%-task horizon': humanLabel(exY), 'doubling assumption': DOUBLE_MONTHS + ' months' });
+          g.fillText('solid = least-squares fit through the six points · dashed = extrapolation · red = your year', plot.x + 4, plot.y + 14);
+          ro.set({ year: f1(ex), 'projected 50%-task horizon': humanLabel(exY), 'fitted doubling time': f1(DOUBLE_MONTHS) + ' months' });
         }
         const sl = ctx.slider({ label: 'extrapolate to year', min: 2019, max: 2033, step: 0.1, value: 2026, fmt: (v) => f1(v), onChange: (v) => { S.extrap = v; draw(); } });
         draw();

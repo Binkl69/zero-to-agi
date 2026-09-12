@@ -53,7 +53,10 @@ function checkFrame(rec, out, scene) {
 /* ---------- driving a chapter through its states ---------- */
 function runFrames(n, record, out, scene) {
   for (let i = 0; i < n; i++) {
-    if (record && i === n - 1) recorders.forEach(r => r.startFrame());
+    /* No startFrame here: the recorder is always on and delimits frames on a
+       full-canvas clear, so a figure that draws on a control's onChange instead
+       of inside ctx.loop is captured too. Thirteen of the course's ninety
+       canvases never call ctx.loop and were silently unchecked before. */
     const q = rafQueue.splice(0);
     for (const fn of q) { try { fn(Date.now() + i * 16); } catch (e) { /* smoke.js owns runtime errors */ } }
     if (record && i === n - 1) { recorders.forEach(r => { r.endFrame(); if (r.ops.length) checkFrame(r, out, scene); }); }
