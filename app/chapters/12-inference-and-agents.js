@@ -710,7 +710,7 @@
             `<a href="https://arxiv.org/abs/2307.03172" target="_blank" rel="noopener">Liu et al., "Lost in the Middle: How Language Models Use Long Contexts"</a> (2023) — the paper behind the U-shaped curve above.`,
             `<a href="https://arxiv.org/abs/2211.17192" target="_blank" rel="noopener">Leviathan, Kalman & Matias, "Fast Inference from Transformers via Speculative Decoding"</a> (ICML 2023) — the draft-and-verify trick, explained properly.`,
             `<a href="https://arxiv.org/abs/2005.11401" target="_blank" rel="noopener">Lewis et al., "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks"</a> (2020) — the paper that named RAG.`,
-            `<a href="https://github.com/ggerganov/llama.cpp" target="_blank" rel="noopener">llama.cpp</a> — the project that made running a quantized 7B (and much larger) model on an ordinary laptop routine.`,
+            `<a href="https://github.com/ggml-org/llama.cpp" target="_blank" rel="noopener">llama.cpp</a> — the project that made running a quantized 7B (and much larger) model on an ordinary laptop routine.`,
           ]),
         ),
       );

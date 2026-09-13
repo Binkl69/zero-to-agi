@@ -48,7 +48,7 @@
         ctx.p(`<b>Perfect is a property of toys.</b> Four dots split 4 out of 4. A hundred real ones do not — spam tops out at 91.2%, the tumours at 92.5% — and the interesting number stops being "did I win" and becomes "how close to the ceiling am I".`),
         ctx.p(`<b>Not all mistakes are the same mistake.</b> Letting fraud through costs money. Freezing an honest customer's card at a petrol station costs a customer. The line you pick <i>is</i> that trade-off, and no amount of cleverness removes the choice — it is a business decision wearing a maths costume. Chapter 3 gives it names: precision and recall.`),
         ctx.p(`<b>And the fraud one really is beyond a line</b>, for exactly the reason puzzle 3 was. Fraud lives at <i>both</i> extremes: tiny "card testing" payments to check a stolen number still works, and one large cash-out. Genuine spending sits in the middle.`),
-        ctx.p(`One line cannot cut both ends off a stick and leave the middle. That is XOR wearing a suit, and it costs real banks real money. Note that 80.1% means nothing until you know what guessing "genuine" every time already scores: 58.8%. Read together they say something real — 80.1% cuts the mistakes from 56 in 136 to 27 — and reading them together is the whole skill, because <b>and still mean the model has learned almost nothing.</b> Chapter 3 makes that trap explicit.`),
+        ctx.p(`One line cannot cut both ends off a stick and leave the middle. That is XOR wearing a suit, and it costs real banks real money. Note that 80.1% means nothing until you know what guessing "genuine" every time already scores: 58.8%. Read together they say something real — 80.1% cuts the mistakes from 56 in 136 to 27, less than half as many — and reading them together is the whole skill, because <b>a number can look respectable on its own and still mean the model has learned almost nothing.</b> Chapter 3 makes that trap explicit.`),
       ));
 
       /* ---------- maths beat 1: notation for the line they just dragged ---------- */
@@ -131,7 +131,7 @@
             explain: 'Zero. And here is the consequence: the whole correction gets multiplied by that zero, so NOTHING CHANGES. The machine only ever learns from mistakes.' },
           { say: 'When it <i>is</i> wrong, that bracket is +1 or &minus;1 — and the sign says which way the line needs to move.', note: '+1 means it said no and should have said yes. &minus;1 is the other way round.' },
           { say: 'So: take the weight you had, and move it a little in that direction.', math: 'w &nbsp;&larr;&nbsp; w &nbsp;+&nbsp; (a little, in that direction)' },
-          { say: 'How little? That is set by one number, <b>&eta;</b> — "eta", the <b>learning rate</b>. Here it is fixed at 0.12.', note: 'Too big and the line thrashes about. Too small and it crawls. Chapter 3 is largely about getting this number right.' },
+          { say: 'How little? That is set by one number, <b>&eta;</b> — "eta", the <b>learning rate</b>. Here it is fixed at 0.12.', note: 'Too big and the line thrashes about. Too small and it crawls. Chapter 2 lets you push it until a model explodes; chapter 3 is about how to choose it.' },
           { say: 'One last piece. The correction is also multiplied by the input itself, <b>x</b>.', note: 'So an input that pushed hard toward the wrong answer gets corrected hard, and an input near zero barely moves. Blame, in proportion to who caused it.' },
           { say: 'Put the four pieces together and you have the entire learning algorithm.', math: 'w &nbsp;&larr;&nbsp; w &nbsp;+&nbsp; &eta; (y &minus; &#375;) x' },
           { ask: 'Run the trainer on puzzle 1 until it settles. From then on the readout shows <b>0 — no change</b> at every step and the three numbers freeze. Why?',
@@ -147,7 +147,7 @@
           { sym: '←', name: 'becomes', says: 'Not "equals". <b>Replace the old value with this new one.</b> It is an instruction, carried out over and over — eight times a second in the demo you just ran, or thirty with the speed slider pushed up.', points: 'the numbers ticking over as it trains.' },
           { sym: 'w', name: 'w again', says: 'The value it had a moment ago. Every step builds on the last one; nothing starts fresh.' },
           '+',
-          { sym: '&eta;', name: 'eta — the learning rate', says: 'How big a shove to give. In this demo it is fixed at <b>0.12</b>: small enough not to overshoot, big enough to get somewhere. Chapter 3 is largely about what happens when you get this number wrong.', points: 'nothing visible — it is the one number you cannot see moving, because it never moves.' },
+          { sym: '&eta;', name: 'eta — the learning rate', says: 'How big a shove to give. In this demo it is fixed at <b>0.12</b>: small enough not to overshoot, big enough to get somewhere. Chapter 2 lets you set it wrong and watch what happens.', points: 'nothing visible — it is the one number you cannot see moving, because it never moves.' },
           '(',
           { sym: 'y', name: 'y — the truth', says: 'What the answer <i>should</i> have been for the dot it is looking at right now. 1 or 0.', points: 'the colour of the dot.' },
           '&minus;',
@@ -184,7 +184,7 @@
         buildBruteForce(ctx),
         ctx.p(`Out of 10,800 lines tried, <b>414</b> work for puzzle 1 and <b>zero</b> work for puzzle 3. That is not the machine giving up early. There is no answer of that shape anywhere.`),
         ctx.callout('history', '📜 The book that froze the field',
-          `In 1969 Marvin Minsky and Seymour Papert published <i>Perceptrons</i>, proving exactly this on paper. Frank Rosenblatt's perceptron — demonstrated to the press in 1958, then built as dedicated hardware — could never learn XOR. Funding for neural networks dried up and the approach went cold for over a decade. (The better-known <em>first AI winter</em> came a few years later, 1974–80, when funding collapsed across the whole of AI after the Lighthill report; the 1969 freeze was the connectionist one, and it lasted longer.) A period now called the first <em>AI winter</em>. The irony is that the fix was already understood in principle. Nobody yet knew how to train it.`),
+          `In 1969 Marvin Minsky and Seymour Papert published <i>Perceptrons</i>, proving exactly this on paper. Frank Rosenblatt's perceptron — demonstrated to the press in 1958, then built as dedicated hardware — could never learn XOR. Funding for neural networks dried up and the approach went cold for over a decade. (The better-known <em>first AI winter</em> came a few years later, 1974–80, when funding collapsed across the whole of AI after the Lighthill report; the 1969 freeze was the connectionist one, and it lasted longer.) The irony is that the fix was already understood in principle. Nobody yet knew how to train it.`),
       ));
 
       /* ---------- the fix ---------- */

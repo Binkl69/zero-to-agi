@@ -1083,7 +1083,7 @@
 
       root.append(section('Go deeper',
         ul([
-          '<a href="https://www.youtube.com/watch?v=7xTGNNLPyMI" target="_blank" rel="noopener">Karpathy, "Let\'s build the GPT Tokenizer"</a> and <a href="https://www.youtube.com/watch?v=zjkBMFhNj_g" target="_blank" rel="noopener">"Intro to Large Language Models"</a> — the best available explanations of what pretraining actually produces.',
+          '<a href="https://www.youtube.com/watch?v=zduSFxRajkE" target="_blank" rel="noopener">Karpathy, "Let\'s build the GPT Tokenizer"</a> and <a href="https://www.youtube.com/watch?v=zjkBMFhNj_g" target="_blank" rel="noopener">"Intro to Large Language Models"</a> — the best available explanations of what pretraining actually produces.',
           '<a href="https://arxiv.org/abs/2203.15556" target="_blank" rel="noopener">Hoffmann et al. (2022), "Training Compute-Optimal Large Language Models"</a> — the Chinchilla paper, and the 20-tokens-per-parameter result that recalibrated the field.',
           '<a href="https://arxiv.org/abs/2001.08361" target="_blank" rel="noopener">Kaplan et al. (2020), "Scaling Laws for Neural Language Models"</a> — the original power laws.',
           '<a href="https://arxiv.org/abs/2407.21783" target="_blank" rel="noopener">The Llama 3 Herd of Models (2024)</a> — an unusually candid engineering report, including the 466 job interruptions.',

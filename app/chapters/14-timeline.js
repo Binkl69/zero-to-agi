@@ -955,7 +955,7 @@
 
         ctx.section('Go deeper',
           ctx.ul([
-            '<a href="https://openai.com/research/ai-and-compute" target="_blank">OpenAI — AI and Compute (2018)</a>: the 3.4-month doubling analysis, with the chart that started the conversation.',
+            '<a href="https://openai.com/index/ai-and-compute/" target="_blank">OpenAI — AI and Compute (2018)</a>: the 3.4-month doubling analysis, with the chart that started the conversation.',
             '<a href="https://epoch.ai/trends" target="_blank">Epoch AI — Trends</a>: continually updated data on training compute, model sizes, hardware and data across the whole history of ML.',
             '<a href="https://academic.oup.com/mind/article/LIX/236/433/986238" target="_blank">Turing (1950) — Computing Machinery and Intelligence</a>: still the best essay on the subject; read the objections section.',
             '<a href="https://www.nature.com/articles/nature14539" target="_blank">LeCun, Bengio, Hinton (2015) — Deep Learning (Nature review)</a>: the three pioneers summarise the field at the moment it took off.',

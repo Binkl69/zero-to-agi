@@ -6,7 +6,25 @@
    somewhere that does not say what we claimed it says. This reports status,
    redirects and the page title, so both can be caught.
 
-   Usage: node scripts/link-check.js [--json <file>] */
+   Usage: node scripts/link-check.js [--json <file>]
+
+   NOTE ON THE 2026-09 AUDIT. This script needs open outbound HTTPS, which the
+   authoring environment's egress policy denies (403 on CONNECT for arxiv.org,
+   github.com, and essentially every host here). All 102 unique links were
+   instead verified one at a time through web search on 2026-09-13, matching
+   each URL against the title the chapter claims for it. Four were wrong and
+   are fixed:
+     - the "Let's build the GPT Tokenizer" link pointed at 7xTGNNLPyMI, which
+       is Karpathy's "Deep Dive into LLMs Like ChatGPT" (correct: zduSFxRajkE)
+     - the "Responsible Scaling Policy" link pointed at Core Views on AI Safety
+     - OpenAI's "AI and Compute" moved from /research/ to /index/
+     - llama.cpp moved from ggerganov/ to ggml-org/
+   Two anchor titles were stale (the METR paper was retitled "…Long Software
+   Tasks"; Levels of AGI's arXiv title has a colon, not "for").
+   One link could not be positively confirmed either way: the 1997 LSTM paper
+   at bioinf.jku.at/publications/older/2604.pdf. That directory is real and
+   serves other Hochreiter PDFs, but no search result names 2604.pdf itself.
+   Re-run this script somewhere with open egress before publishing. */
 const { execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
