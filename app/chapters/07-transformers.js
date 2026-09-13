@@ -218,7 +218,7 @@
         const b3 = ctx.button('Preset: a normal sentence', () => { S.text = 'The transformer changed how machines read language forever.'; ta.value = S.text; render(); });
         render();
         return ctx.figure(wrap,
-          `This is a real byte-pair-encoding (BPE) tokenizer, trained right now, in your browser, on a ${BPE_WORD_COUNT}-word built-in corpus about language models (not the internet) — it learned ${BPE_MERGES.length} merge rules by repeatedly fusing the most frequent adjacent pair of symbols. Each coloured chip is one token; “${'‿'}” marks the end of a word, the way real tokenizers mark word boundaries. Drag <b>merge rules learned</b> back to 0 and every token collapses to a single character; walk it forward and watch letter pairs, then endings, then whole words appear as single chips while the token count of the same sentence falls. Common words from its training text often survive as one piece; rare or unfamiliar ones fragment into smaller chunks. A production tokenizer (GPT-4's, Claude's) is the same algorithm trained on hundreds of billions of characters, so it recognises far more whole words — but any invented or rare-enough string still gets chopped up exactly like this.`,
+          `This is a real byte-pair-encoding (BPE) tokenizer, trained right now, in your browser, on a ${BPE_WORD_COUNT}-word built-in corpus about language models (not the internet) — it learned ${BPE_MERGES.length} merge rules by repeatedly fusing the most frequent adjacent pair of symbols. Each coloured chip is one token; “${'‿'}” marks the end of a word, the way real tokenizers mark word boundaries. Drag <b>merge rules learned</b> back to 0 and every token collapses to a single character; walk it forward and watch letter pairs, then endings, then whole words appear as single chips while the token count of the same sentence falls. Common words from its training text often survive as one piece; rare or unfamiliar ones fragment into smaller chunks. A production tokenizer (GPT-4's, Claude's) is the same algorithm fitted on a very large sample of web text, so it recognises far more whole words — but any invented or rare-enough string still gets chopped up exactly like this.`,
           [ta, mSl, b1, b2, b3], ro);
       }
 
@@ -739,7 +739,7 @@
         });
 
         return ctx.figure(cv,
-          'Press <b>See it the way the model does</b> and the letters disappear, which is the honest picture: the first layer of a transformer receives a short row of numbers and nothing else. "strawberry" is not common enough to earn its own symbol, so it arrives as two chunks — GPT-4\'s tokenizer does roughly this. Counting letters then requires the model to recall how each chunk is spelled, which is not what the chunk-number was designed to carry. Try "the": one token, nothing hidden, and the problem evaporates.',
+          'Press <b>See it the way the model does</b> and the letters disappear, which is the honest picture: the first layer of a transformer receives a short row of numbers and nothing else. "strawberry" is not common enough to earn its own symbol, so it arrives in pieces — real tokenizers cut it into two or three, depending on the vocabulary, and none of the pieces is the letter r. Counting letters then requires the model to recall how each chunk is spelled, which is not what the chunk-number was designed to carry. Try "the": one token, nothing hidden, and the problem evaporates.',
           [wIn, lIn, hideBtn, ...presets], ro);
       }
 
@@ -1041,7 +1041,7 @@
         callout('key', '🔑 Why this costs you money',
           `Every API that serves a language model charges by the token, for what you send and what comes back, because a token is the model's actual unit of work — one forward pass per token produced.<br>
            A rough rule for English is about <b>four characters per token</b>, so a 500-word email is roughly 650–700 tokens.
-           Code, dense mathematics, or a language whose script rarely appeared in training (many Southeast Asian and African languages) can cost <b>two to five times more tokens for the same content</b>, because the tokenizer never learned efficient chunks for it.`),
+           Code, dense mathematics, or a language whose script rarely appeared in training (many Southeast Asian and African languages) can cost <b>several times more tokens for the same content</b> — measured at more than ten times English for some low-resource scripts — because the tokenizer never learned efficient chunks for it.`),
       ));
 
       root.append(section('The problem attention solves',
@@ -1101,12 +1101,12 @@
         p(`Wrap each of the two in a <em>residual connection</em> — add the sublayer's output back onto its input rather than replacing it — plus a normalisation step that keeps activations in a stable range, and you have the standard block.`),
         callout('key', '🔑 The residual stream',
           `Think of <b>x</b>, the running vector at each token position, as a highway down the length of the network.
-           Attention and the MLP are off-ramps: they read the highway, do their work, and merge their result back on. <b>The highway itself is never overwritten, only added to.</b><br>
+           Attention and the MLP are off-ramps: they read the highway, do their work, and merge their result back on. <b>Nothing ever removes information from the highway; every block only adds to it.</b> (In the 2017 original the sum was renormalised straight after each block — the "Add &amp; Norm" in the diagram. Modern models normalise the <i>input</i> to each block instead and leave the highway untouched end to end, which is much of why hundred-layer stacks train at all.)<br>
            This is what lets networks stack dozens or hundreds of blocks without gradients vanishing on the way back — the same failure that limited pre-2015 networks, and the same fix as the LSTM's conveyor belt in chapter 5.
            A gradient can always flow straight back down the highway, with every sublayer offering an optional shortcut rather than a mandatory bottleneck.`),
         callout('tryit', '🖐 Try this: follow the pulse',
           `Watch one pulse make a full pass through the stack, and note that the <b>same two-step recipe</b> repeats layer after layer.<br>
-           Drag the layer slider: GPT-2 small stacks it 12 times, and the largest 2026 models stack it over a hundred.<br>
+           Drag the layer slider to its end: that is GPT-2 small's 12. The largest models today stack the same block over a hundred times, which the slider does not reach and the picture would not fit.<br>
            Attention is computed for every token in parallel; only the layer-by-layer stacking is sequential.`),
         blockDiagram(),
       ));
@@ -1139,7 +1139,7 @@
       ));
 
       root.append(section('Generating: why the reply arrives word by word',
-        p(`Training sees a whole sentence at once and predicts every next-token in parallel. Using the model — <em>inference</em> — is different: it only knows the tokens generated so far, so it produces its reply <em>autoregressively</em>. Predict the most likely next token, append it, feed the now-longer sequence back in, predict again.`),
+        p(`Training sees a whole sentence at once and predicts every next-token in parallel. Using the model — <em>inference</em> — is different: it only knows the tokens generated so far, so it produces its reply <em>autoregressively</em>. Draw a next token from the distribution, append it, feed the now-longer sequence back in, predict again. (<i>How</i> it draws — always the top one, or sampled with a temperature — is chapter 12, and it changes the model\'s personality without changing a single weight.)`),
         p(`That loop, repeated hundreds or thousands of times, is why a chat response streams into view word by word. It is not a UI affectation. It is the actual order of computation.`),
         callout('tryit', '🖐 Try this — the optimisation you have already felt',
           `<b>1.</b> With the <b>KV-cache on</b>, the work curve is a straight line. Turn it <b>off</b> and watch it bend upward.<br>
@@ -1154,8 +1154,8 @@
       root.append(section('Why this matters for modern AI',
         p(`Two properties, working together, ended the architecture argument.`),
         p(`First, <b>parallel training</b>. Because attention over a whole sequence is one matrix multiplication rather than a step-by-step loop, an entire training example of thousands of tokens is processed in one shot, and thousands of examples across thousands of GPUs run simultaneously. An RNN's one-step-at-a-time nature made it structurally unable to use hardware that way, no matter how many GPUs you bought.`),
-        p(`Second, <b>clean scaling</b>. Transformers reliably keep getting better as you add data, parameters and compute, in a smooth and predictable way — the subject of chapter 10's scaling laws — with no sign through years of scaling that the returns simply stop.`),
-        p(`A parallelisable architecture that also scales predictably is exactly the combination that turns "bigger GPU budget" into "better model", which is the entire economic engine behind the last eight years of AI progress.`),
+        p(`Second, <b>clean scaling</b>. Transformers reliably keep getting better as you add data, parameters and compute, in a smooth and predictable way — the subject of chapter 10's scaling laws — and for years no sign of the returns stopping. That held cleanly through about 2023; since then the gains from simply pretraining bigger have got harder and more expensive to buy, which is much of why the field\'s effort moved to post-training and to spending compute at inference instead (chapters 11 and 12).`),
+        p(`A parallelisable architecture that also scales predictably is exactly the combination that turns "bigger GPU budget" into "better model", which has been the entire economic engine of AI progress since 2017.`),
         p(`Every model you can name — Claude, the GPT family, Gemini, Llama — is this decoder-only recipe: tokens in, position information supplied somehow (added at the input, or rotated into Q and K inside every layer, as RoPE does), N copies of attention-then-MLP-with-residuals, a projection back to vocabulary-sized probabilities — usually the embedding matrix reused — generated one token at a time behind a KV-cache.`),
         p(`The differences between them are almost entirely differences of degree and detail covered later in this course — how many layers, how wide, what data, what fine-tuning — not differences in this skeleton. If you understand this page, you understand mechanically what happens between pressing enter and a reply appearing, for every major model in existence.`),
       ));
@@ -1173,7 +1173,7 @@
           ul([
             `<a href="https://jalammar.github.io/illustrated-transformer/" target="_blank" rel="noopener">Jay Alammar, "The Illustrated Transformer"</a>: the same architecture with a different set of pictures. The best second explanation there is.`,
             `<a href="https://www.youtube.com/watch?v=kCc8FmEb1nY" target="_blank" rel="noopener">Karpathy, "Let's build GPT: from scratch, in code, spelled out"</a>: two hours that build everything on this page in Python. Lab 06 of this course follows it.`,
-            `<a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener">Vaswani et al. (2017), "Attention Is All You Need"</a>: the paper. Eleven pages, and section 3.2 is the formula you computed by hand.`,
+            `<a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener">Vaswani et al. (2017), "Attention Is All You Need"</a>: the paper — fifteen pages on arXiv, eleven in the NeurIPS proceedings — and section 3.2 is the formula you computed by hand.`,
             `<a href="https://arxiv.org/abs/1810.04805" target="_blank" rel="noopener">Devlin et al. (2018), "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding"</a>: the encoder-only branch, and masked-language-model training.`,
             `<a href="https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf" target="_blank" rel="noopener">Radford et al. (2019), "Language Models are Unsupervised Multitask Learners"</a>: GPT-2, and the argument that one decoder can do every task.`,
           ]),

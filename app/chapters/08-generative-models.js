@@ -622,7 +622,7 @@
             .forEach((ln, i) => g.fillText(ln, OX, OY + OS + 24 + i * 19));
           g.font = FONT; g.fillStyle = C.muted;
           wrapText(g, mode === 'ae'
-            ? 'A plain autoencoder is only ever asked to rebuild the images it was shown. Nothing requires the space between those codes to mean anything, so it fills with dead zones — and sampling randomness lands in one almost every time.'
+            ? 'A plain autoencoder is only ever asked to rebuild the images it was shown. Nothing requires the space between those codes to mean anything, so it fills with dead zones — and sampling randomness lands in one about five times in six.'
             : 'The VAE encodes each image to a small cloud rather than a point, and a second loss term pulls every cloud toward one shared standard normal. The islands merge, the gaps close, and fresh randomness now lands somewhere the decoder understands.',
             PAD.x, 382, W - 2 * PAD.x, 17);
           ro.set({ mode: mode === 'ae' ? 'plain autoencoder' : 'VAE', z: '(' + zx.toFixed(2) + ', ' + zy.toFixed(2) + ')', landed: dead ? 'dead space' : 'trained region' });
@@ -759,7 +759,7 @@
         callout('tryit', '🖐 Try this — find the dead space yourself',
           `<b>1.</b> You start in plain-autoencoder mode. Press <b>Sample fresh randomness</b> about ten times and count how often the output is coherent. It will be rare.<br>
            <b>2.</b> Drag the ring slowly between two coloured islands. Watch the output fall apart in the gap — the decoder was never asked to explain that region, so it has nothing sensible to say.<br>
-           <b>3.</b> Switch to <b>variational autoencoder</b> and repeat step 1. The islands have merged into one blob and the gaps are gone.`),
+           <b>3.</b> Switch to <b>variational autoencoder</b> and repeat step 1. The islands have merged into one blob and the dead space has all but closed — about one sample in twelve, against five in six.`),
         vaeLab(),
         p(`Kingma and Welling's 2013 fix adds one idea. Encode each image not to one exact point but to a small Gaussian cloud — a mean and a spread — and train the decoder to work for a <i>sample</i> from that cloud, not its exact centre. A second loss term pulls every cloud toward a shared standard normal at the origin.`),
         p(`Two consequences follow. The latent space becomes <em>smooth</em>: nearby points decode to similar outputs, with no gaps. And because every cloud is pulled toward the same standard normal, at generation time you can sample fresh randomness from it directly, with no real image to start from.`),
@@ -797,7 +797,7 @@
         p(`Ho, Jain and Abbeel's 2020 paper, "Denoising Diffusion Probabilistic Models", found the recipe that made this reliably work and set off the modern wave.`),
         callout('key', '🔑 Why diffusion beat GANs',
           `Training is regression toward a known target. There is <b>no adversarial game to destabilise</b>, and every training image contributes a clean gradient at every noise level — so there is no shortcut equivalent to mode collapse.<br>
-           The cost is speed: many small steps instead of one pass, though modern samplers need as few as 20–50.`),
+           The cost is speed: many small steps instead of one pass. Better samplers brought that to 20–50, and distilled models (SDXL-Turbo, FLUX.1-schnell) to between one and four — at some cost in variety.`),
       ));
 
       root.append(section('Turning it into "a cat wearing sunglasses"',
@@ -808,9 +808,9 @@
            <b>2.</b> Press <b>typical (7.5)</b>. Most of the batch now lands on the prompt — press <b>New batch</b> a few times and the figure moves around, but it is always well short of everything — and the samples are still clearly spread out.<br>
            <b>3.</b> Press <b>cranked (15)</b>. Read <i>both</i> bars. Prompt adherence goes up, <b>variety collapses</b> — which is exactly why an over-guided batch comes back looking like eight copies of one picture.`),
         guidanceLab(),
-        p(`The other 2022 breakthrough was <em>latent diffusion</em> (Rombach et al., the model behind Stable Diffusion): run the whole process on a VAE-compressed grid roughly 8× smaller per side. About 64× cheaper, and the reason it fits on a consumer GPU.`),
+        p(`The other 2022 breakthrough was <em>latent diffusion</em> (Rombach et al., the model behind Stable Diffusion): run the whole process on a VAE-compressed grid roughly 8× smaller per side. Stable Diffusion's version takes 512×512×3 = 786,432 numbers down to 64×64×4 = 16,384 — 48× fewer values to denoise at every one of the steps, which is the reason it fits on a consumer GPU.`),
         p(`DALL·E 2 arrived in April 2022, pairing a CLIP embedding with a diffusion decoder. Stable Diffusion followed four months later and released its weights publicly — a big reason diffusion, not GANs, became what the world built on.`),
-        callout('history', '📜 Six years, three papers, one obsession',
+        callout('history', '📜 Nine years, five papers, one obsession',
           `<b>2013:</b> Kingma and Welling's variational autoencoder makes latent-variable generation trainable by gradient descent.<br>
            <b>2014:</b> Goodfellow's GAN replaces the loss function with an opponent, and dominates image generation for six years.<br>
            <b>2015:</b> Sohl-Dickstein's diffusion paper appears and is largely ignored — the sampling was far too slow to be practical.<br>
@@ -830,10 +830,10 @@
       ));
 
       root.append(section('Why this matters for modern AI',
-        p(`Nothing here is specific to still images. Stretch the grid to include time and you diffuse over a block of video frames: OpenAI's Sora, announced February 2024, generates up to roughly a minute this way, and Google's Veo followed later the same year.`),
+        p(`Nothing here is specific to still images. Stretch the grid to include time and you diffuse over a block of video frames: OpenAI's Sora, announced February 2024 with demos up to a minute long, works this way, and Google's Veo followed later the same year. Shipped versions have generally offered far shorter clips than the announcements — video is where the compute bill bites hardest.`),
         p(`Turn a sound wave into the "pixels" and the same recipe generates music (Suno, Udio) or clones a voice from a short clip. Only what counts as "the data" changes.`),
         p(`One 2022 idea that only reached production models in 2024, used in Stable Diffusion 3 among others: <em>flow matching</em>. Instead of diffusion's specific noise schedule, it trains a network to predict a <em>velocity</em> — which way and how fast to move a point along a nearly straight path from noise to data. A more direct generalisation of the same idea, and it typically needs fewer steps.`),
-        p(`Every frontier system in Part III and beyond is, underneath, a generative model. An LLM is an autoregressive model of text. A text-to-image or text-to-video system is a latent diffusion or flow-matching model of pixels. Increasingly they generate more than one kind of data at once.`),
+        p(`Every frontier system in Part III and beyond is, underneath, a generative model. An LLM is an autoregressive model of text. A text-to-image or text-to-video system is usually a latent diffusion or flow-matching model of pixels — though not always: OpenAI's native image generation in GPT-4o produces images autoregressively, token by token, like text. Increasingly they generate more than one kind of data at once.`),
         p(`These three families are not historical footnotes that transformers replaced. They are the toolbox transformers got combined <i>with</i> — a diffusion model's denoiser is very often a transformer internally.`),
         callout('warning', '⚠️ The uncomfortable part: consent, credit and provenance',
           `These models learn from enormous scrapes of the public internet, which include the work of living artists, photographers and writers who were not asked and are not paid.
@@ -856,7 +856,7 @@
           ul([
             `<a href="https://lilianweng.github.io/posts/2021-07-11-diffusion-models/" target="_blank" rel="noopener">Lilian Weng, "What are Diffusion Models?"</a>: the clearest maths-forward walkthrough, and the standard reference for people implementing one.`,
             `<a href="https://arxiv.org/abs/2006.11239" target="_blank" rel="noopener">Ho, Jain &amp; Abbeel (2020), "Denoising Diffusion Probabilistic Models"</a>: the paper that made diffusion practical.`,
-            `<a href="https://arxiv.org/abs/2112.10752" target="_blank" rel="noopener">Rombach et al. (2022), "High-Resolution Image Synthesis with Latent Diffusion Models"</a>: Stable Diffusion, and the 64× saving that put it on consumer hardware.`,
+            `<a href="https://arxiv.org/abs/2112.10752" target="_blank" rel="noopener">Rombach et al. (2022), "High-Resolution Image Synthesis with Latent Diffusion Models"</a>: Stable Diffusion, and the compression that put it on consumer hardware.`,
             `<a href="https://arxiv.org/abs/1406.2661" target="_blank" rel="noopener">Goodfellow et al. (2014), "Generative Adversarial Networks"</a>: the original two-network fight.`,
             `<a href="https://arxiv.org/abs/1312.6114" target="_blank" rel="noopener">Kingma &amp; Welling (2013), "Auto-Encoding Variational Bayes"</a>: the VAE, and where the second loss term comes from.`,
           ]),
