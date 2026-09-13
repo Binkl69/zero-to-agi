@@ -245,7 +245,7 @@
         const adamSl = ctx.slider({ label: 'Adam learning rate', min: 0.01, max: 0.4, step: 0.01, value: 0.09, digits: 2, onChange: (v) => { OPT[2].lr = v; } });
         const playBtn = ctx.button('▶ Start', () => { playing = !playing; playBtn.textContent = playing ? '⏸ Pause' : '▶ Start'; }, 'primary');
         const resetBtn = ctx.button('Reset', () => { reset(); playing = false; playBtn.textContent = '▶ Start'; });
-        return ctx.figure(cv, 'Three optimizers descending the same curved valley (a tamed Rosenbrock surface; white cross marks the true minimum). SGD (grey) fights the curvature every step; momentum (yellow) builds speed down the slope and reaches the floor about twelve times sooner than SGD, wobbling only where it first turns into the valley; Adam (green) rescales every direction by its own gradient history and glides down with far less zig-zag.', [sgdSl, momSl, adamSl, playBtn, resetBtn]);
+        return ctx.figure(cv, 'Three optimizers descending the same curved valley (a tamed Rosenbrock surface; white cross marks the true minimum). SGD (grey) fights the curvature at every step and needs about 850 of them to reach the floor; momentum (yellow) builds speed down the slope and gets there in about 85, wobbling where it first turns into the valley; Adam (green) rescales every direction by its own gradient history and arrives in about 65. Adam\'s path is not straighter than SGD\'s — look closely and it ripples more near the cross. What it buys is stride: it does this on a learning rate twenty-five times SGD\'s, and tolerates a far wider range of them.', [sgdSl, momSl, adamSl, playBtn, resetBtn]);
       }
 
       /* ================================================================== */
@@ -795,8 +795,8 @@
         callout('tryit', '🖐 Try this: three optimizers, one nasty valley',
           `Darker background is lower loss; the white cross is the true minimum. All three start together.<br>
            <b>1.</b> Press <b>▶ Start</b>. Plain SGD (grey) crawls — it fights the curvature at every step.<br>
-           <b>2.</b> Momentum (yellow) builds speed down the slope and gets there about twelve times sooner, wobbling only at the turn into the valley.<br>
-           <b>3.</b> Adam (green) takes a similar path but needs a twentieth of SGD's steps — and, unlike the other two, it survives every setting its slider offers.<br>
+           <b>2.</b> Momentum (yellow) builds speed down the slope and gets there about ten times sooner, wobbling at the turn into the valley.<br>
+           <b>3.</b> Adam (green) takes a wigglier path, not a smoother one — but reaches the floor in a thirteenth of SGD's steps, and unlike the other two it survives every setting its slider offers.<br>
            <b>4.</b> Push the SGD or momentum learning rate up until its ball bounces off the walls. Then do the same to Adam — it tolerates a far wider range before misbehaving.`),
         optimizerRace(),
         p(`<em>Momentum</em> fixes the first problem by changing the metaphor. Instead of a marble that stops dead when you stop pushing, imagine a heavy ball: it keeps most of its previous velocity and adds the new gradient on top. Down a narrow valley it builds speed along the floor, while the side-to-side component flips sign each step and largely cancels itself out.`),

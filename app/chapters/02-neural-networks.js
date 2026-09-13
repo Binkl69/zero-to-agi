@@ -911,18 +911,26 @@
           g.strokeStyle = C.line; g.lineWidth = 1;
           g.beginPath(); g.moveTo(L.x, ly(0)); g.lineTo(L.x + L.w, ly(0)); g.stroke();
           g.beginPath(); g.moveTo(lx(0), L.y); g.lineTo(lx(0), L.y + L.h); g.stroke();
+          /* The curve used to be clamped into the panel's y-range, which drew
+             'linear (none)' as flat, then diagonal, then flat — a saturating
+             shape, in the panel whose whole job is to show that linear does not
+             bend. Clip instead, so a line that leaves the frame looks like a
+             line that leaves the frame. */
+          g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(L.x, L.y, L.w, L.h);
+          g.save(); g.beginPath(); g.rect(L.x, L.y, L.w, L.h); g.clip();
           g.strokeStyle = A.col; g.lineWidth = 2.5; g.beginPath();
           for (let i = 0; i <= 160; i++) {
-            const z = -4 + i / 160 * 8, a = ctx.clamp(A.f(z), -1.6, 3.1);
+            const z = -4 + i / 160 * 8, a = A.f(z);
             i ? g.lineTo(lx(z), ly(a)) : g.moveTo(lx(z), ly(a));
           }
           g.stroke();
+          g.restore();
           const pa = A.f(probe);
           g.setLineDash([3, 3]); g.strokeStyle = C.muted; g.lineWidth = 1;
-          g.beginPath(); g.moveTo(lx(probe), L.y + L.h); g.lineTo(lx(probe), ly(ctx.clamp(pa, -1.6, 3.1))); g.stroke();
+          g.beginPath(); g.moveTo(lx(probe), L.y + L.h); g.lineTo(lx(probe), ly(ctx.clamp(pa, -1.4, 2.9))); g.stroke();
           g.setLineDash([]);
           g.fillStyle = A.col;
-          g.beginPath(); g.arc(lx(probe), ly(ctx.clamp(pa, -1.6, 3.1)), 6, 0, 7); g.fill();
+          g.beginPath(); g.arc(lx(probe), ly(ctx.clamp(pa, -1.4, 2.9)), 6, 0, 7); g.fill();
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
           g.fillText('the squash: one neuron', L.x, 26);
           g.font = MONO; g.fillStyle = C.muted;

@@ -108,7 +108,7 @@
            Because the <i>same</i> weights are used at every step, the network handles a sequence of any length — it just keeps going. This is weight sharing again, exactly as in chapter 4, but shared across <b>time</b> instead of across space.`),
         p(`Shrink it to one number to watch it move. Let the hidden state be a single value with the rule <code class="inline">h_t = tanh(0.8·h_{t−1} + 0.5·x_t)</code>, fed the inputs 1, 1, 0, 0, 0. After the two "1"s the state rises; then it decays — multiplied by 0.8 and squashed, every step.`),
         callout('tryit', '🖐 Try this: watch a hidden state absorb a sentence',
-          `Press <b>▶ Play</b>, or drag straight across the picture to scrub word by word. Each word enters the cell in turn and the six coloured slots are rewritten by exactly that rule. The bars underneath show how much of each earlier word survives.<br>
+          `Press <b>▶ Play</b>, or drag straight across the picture to scrub word by word. Each word enters the cell in turn and the six coloured slots are rewritten by exactly that rule. The bars underneath show the decay factor still riding on each earlier word — the tanh squashes on top of that, so they are an upper bound on what could be recovered, not a measurement.<br>
            <b>1.</b> Drag <b>memory decay</b> to <b>0.5</b> and step to the end. The word "trophy" is down to 0.1% of its original strength (0.5<sup>10</sup>) — the model has no way left to know what <i>it</i> refers to.<br>
            <b>2.</b> Push decay to <b>1.0</b>. Now the decay term stops shrinking anything, so every bar reads 100% — but nothing is forgotten <i>selectively</i> either, and all twelve words are stirred into the same six numbers with equal weight, and none can be pulled back out.<br>
            <b>3.</b> Real RNNs learn a decay somewhere in between. <b>It is never right for every word.</b>`),
@@ -150,7 +150,7 @@
           `Recurrent networks were trained with backpropagation through time from the mid-1980s (Rumelhart, Hinton and Williams, 1986; Elman's "Finding structure in time", 1990).
            Hochreiter's 1991 thesis diagnosed the vanishing-gradient problem precisely, and in <b>1997</b> he and Schmidhuber published the LSTM to solve it.
            The idea then sat largely unused for a decade — the data and the GPUs were not there.
-           LSTMs began winning: three handwriting competitions in <b>2009</b> (Graves and colleagues, with bidirectional LSTMs), speech recognition in <b>2013</b> (Graves), and in <b>2014</b> the seq2seq paper from Sutskever, Vinyals and Le, followed by Bahdanau's attention.
+           LSTMs began winning: three handwriting competitions in <b>2009</b> (Graves and colleagues, with bidirectional LSTMs), speech recognition in <b>2013</b> (Graves), and in September <b>2014</b> both the seq2seq paper from Sutskever, Vinyals and Le and Bahdanau's attention, nine days apart.
            By 2016 LSTMs were inside Google Translate. In <b>2017</b> the transformer arrived, and within two years RNNs had all but vanished from language research.`),
       ));
 
@@ -170,11 +170,11 @@
            Their answer was the transformer — attention and nothing else. Everything in chapter 7 builds on the idea you just watched:
            <b>a weighted look-back over all previous positions, with learned weights.</b>`),
         callout('example', '🌍 Google Translate, November 2016',
-          `Google replaced its phrase-based statistical translator with GNMT — an 8-layer LSTM encoder–decoder with attention, trained on hundreds of millions of sentence pairs.
+          `Google replaced its phrase-based statistical translator with GNMT — an 8-layer LSTM encoder–decoder with attention, trained on internal corpora the paper describes as two to three orders of magnitude larger than the 36-million-pair public benchmark — billions of sentence pairs.
            Overnight, translation errors dropped by roughly 60% on the language pairs Google measured, and users noticed that translations suddenly read like sentences instead of word salad.
            It was the biggest single quality jump in the product's history.`),
         callout('example', '🌍 Voice recognition and your keyboard',
-          `From about 2015 to 2019 the speech recognisers in Siri, Google Voice and Alexa were LSTMs reading audio frames — tiny sound snapshots, 100 per second — and emitting characters.
+          `From about 2015 to 2019 the speech recognisers in Siri, Google Voice and Alexa were LSTMs reading audio frames — tiny sound snapshots, 100 per second — and emitting phone units that a pronunciation lexicon and decoder turned into words.
            The autocomplete on your phone keyboard was for years a small LSTM running on-device, and so was the "Smart Reply" that suggests "Sounds good!" under an email.
            RNNs also read heartbeat traces, predicted the next note in a melody, and generated fake Shakespeare one character at a time — Andrej Karpathy's 2015 essay on that last trick convinced a generation of engineers that sequence models could learn structure nobody programmed.`),
       ));
@@ -186,7 +186,7 @@
         callout('warning', '⚠️ The twist: recurrence came back',
           `Transformers have their own cost — attention over <i>n</i> tokens takes <i>n</i><sup>2</sup> work, so a million-token context is expensive.
            From 2023 researchers went back to recurrence with better tools. <em>State-space models</em> such as Mamba (Gu and Dao, December 2023) keep a compressed running state like an RNN, but with learned, input-dependent gates that can be trained in parallel — fixing the exact two things that killed the RNN.
-           <em>Linear-attention</em> variants and hybrids (RWKV, Griffin, Jamba, and hybrid layers in several 2024–2025 production models) mix a few attention layers with many recurrent ones.
+           <em>Linear-attention</em> variants replace softmax attention outright — RWKV has no attention layers at all, which is what lets it run inference as a pure RNN at constant memory. <em>Hybrids</em> (Griffin, Jamba, and a growing share of models shipped from 2025 on) take the other route: a few attention layers among many recurrent ones.
            The hidden-state idea did not die. It was rebuilt with everything learned in between.`),
       ));
 
@@ -329,7 +329,8 @@
     const tx0 = 20;
     const f2 = (v) => (Math.abs(v) < 0.005 ? 0 : v).toFixed(2);   // avoid printing "-0.00"
 
-    const S = { t: -1, decay: 0.85, playing: false, h: new Array(DIM).fill(0), acc: 0, dirty: true };
+    /* 0.8 to match the worked rule stated just above the figure, h_t = tanh(0.8·h + 0.5·x) */
+    const S = { t: -1, decay: 0.8, playing: false, h: new Array(DIM).fill(0), acc: 0, dirty: true };
 
     /* Replay the sentence from scratch up to step `upto`. Replaying (rather than mutating in place)
        keeps the state exactly consistent after the decay slider moves or the reader scrubs. */
@@ -389,7 +390,7 @@
       // fading trail
       const by0 = 176, bh = 74, barMax = bh - 16;
       g.font = FONT; g.fillStyle = C.muted; g.textAlign = 'left';
-      g.fillText('how much of each word is still in the summary  =  decay ^ (steps ago)', tx0, by0 - 12);
+      g.fillText('decay still riding on each word  =  decay ^ (steps ago)  —  an upper bound; tanh squashes further', tx0, by0 - 12);
       g.strokeStyle = C.line;
       g.beginPath(); g.moveTo(tx0, by0 + bh + 0.5); g.lineTo(W - 20, by0 + bh + 0.5); g.stroke();
       tokens.forEach((w, i) => {
@@ -424,7 +425,7 @@
     }
 
     const decaySl = ctx.slider({
-      label: 'memory decay', min: 0.5, max: 1.0, step: 0.01, value: 0.85, fmt: (v) => (+v).toFixed(2),
+      label: 'memory decay', min: 0.5, max: 1.0, step: 0.01, value: 0.8, fmt: (v) => (+v).toFixed(2),
       onChange: (v) => { S.decay = ctx.clamp(v, 0.5, 1); replay(S.t); },
     });
     const playBtn = ctx.button('▶ Play', () => {
@@ -899,7 +900,7 @@
     });
 
     return ctx.figure(cv,
-      'The same translation under both designs. In <b>bottleneck</b> mode the encoder crushes the whole sentence into one fixed vector and the decoder writes from that alone — so the longer the source, the less of each word survives, which is exactly why quality collapsed on long sentences. In <b>attention</b> mode every encoder state is kept and the decoder takes a fresh weighted average each time it writes a word; line thickness is that weight. The alignment shown here is illustrative, but the real thing looked much like it — and nobody supplied it, it fell out of training.',
+      'The same translation under both designs; the 256 in the picture is this toy\'s vector size, not the 8,000 of the 2014 paper. In <b>bottleneck</b> mode the encoder crushes the whole sentence into one fixed vector and the decoder writes from that alone — so the longer the source, the less of each word survives, which is exactly why quality collapsed on long sentences. In <b>attention</b> mode every encoder state is kept and the decoder takes a fresh weighted average each time it writes a word; line thickness is that weight. The alignment shown here is illustrative, but the real thing looked much like it — and nobody supplied it, it fell out of training.',
       [modeWrap, lenSl, stepBtn, playBtn], ro);
   }
 })();

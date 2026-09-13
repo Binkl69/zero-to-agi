@@ -391,7 +391,10 @@
           const ref = imageAt(HOME.x, HOME.y), now = imageAt(ox, oy);
           const fRef = convolve(ref), fNow = convolve(now);
           const pRef = pool(fRef), pNow = pool(fNow);
-          const cIn = changed(ref, now), cF = moved(fRef, fNow), cP = moved(pRef, pNow);
+          /* one metric across the row: the count and the normalised distance are not
+             comparable, and printing 12/256 next to 39% told the reader the feature map
+             had changed eight times more than the picture did */
+          const cIn = changed(ref, now), mIn = moved(ref, now), cF = moved(fRef, fNow), cP = moved(pRef, pNow);
 
           /* ---- the image ---- */
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
@@ -463,7 +466,9 @@
           g.fillText('(9 numbers per colour channel)', TX, 444);
           g.fillText('That is the whole layer.', TX, 460);
 
-          ro.set({ shift: '(' + ox + ', ' + oy + ')', 'pixels changed': cIn.n + '/' + cIn.tot, 'feature map changed': (cF.frac * 100).toFixed(0) + '%', 'pooled changed': (cP.frac * 100).toFixed(0) + '%' });
+          const pct = (m) => (m.frac * 100).toFixed(0) + '%';
+          ro.set({ shift: '(' + ox + ', ' + oy + ')', 'pixels differing': cIn.n + '/' + cIn.tot,
+            'picture changed': pct(mIn), 'feature map changed': pct(cF), 'pooled changed': pct(cP) });
         });
 
         return ctx.figure(cv, 'The same shape, moved. Red marks every value that is different from where it started. A fully-connected layer has no notion that two pixels are neighbours — it sees a list of 256 unrelated numbers, so a one-pixel nudge rewrites twelve of those numbers and it must learn the shape afresh at every position. The filter has nine weights in total, reused at all 196 positions, and its response simply <i>moves with the shape</i>. Pooling then throws away some of that movement, which is where genuine position-blindness starts.', [xSl, ySl, nudge, home], ro);
