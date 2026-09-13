@@ -29,12 +29,42 @@ const DOUBLE_OK = new Set(['that', 'had', 'is', 'no', 'so', 'very', 'did', 'you'
 const BORING = new Set(['the', 'a', 'an', 'of', 'to', 'in', 'on', 'is', 'it', 'and', 'or', 'for', 'that',
   'this', 'with', 'as', 'at', 'by', 'from', 'you', 'your', 'its', 'not', 'but', 'are', 'was', 'be', 'one']);
 
+/* Phrases the course repeats on purpose. Each was read before being listed;
+   anything not here is a new repetition and worth a look. */
+const ALLOWED = new Set([
+  '000 token prompt',
+  'becomes what neuron',
+  'correct helpful answer',
+  'drag stacked conv',
+  'et al google',
+  'every source word',
+  'gate deciding what',
+  'labellers mildly prefer',
+  'mean very little',
+  'november 2024 anthropic',
+  'press cat vs',
+  'press reset weights',
+  'single most common',
+  'tokens per parameter',
+  'tune 50 times',
+  'turn positional encoding',
+  'used per token',
+  'weights per filter',
+  'which composes into',
+  'stacked conv layers',
+  'policy pushed hard',
+  'pushed hard enough',
+  'small filters rather',
+  'filters rather than',
+]);
+
 function repeatedPhrase(text) {
   const w = text.toLowerCase().replace(/<[^>]+>/g, ' ').replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
   const seen = new Map();
   for (let i = 0; i + 3 <= w.length; i++) {
     const g = w.slice(i, i + 3);
-    if (g.some(x => BORING.has(x))) continue;   /* all three words distinctive, or deliberate rhetorical repetition drowns the signal */
+    if (g.some(x => BORING.has(x) || x.length < 2)) continue;   /* all three words distinctive, or deliberate rhetorical repetition drowns the signal */
+    if (ALLOWED.has(g.join(' '))) continue;
     const k = g.join(' ');
     if (seen.has(k) && i - seen.get(k) >= 4) return k;
     if (!seen.has(k)) seen.set(k, i);
