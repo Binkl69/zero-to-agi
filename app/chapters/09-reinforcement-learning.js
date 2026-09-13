@@ -44,7 +44,7 @@
       root.append(section('Why this is a different kind of problem',
         p(`In March 2016, in a hotel in Seoul, a program called AlphaGo played move 37 of its second game against Lee Sedol. Commentators thought it was a mistake. AlphaGo's own model of human play put the chance a human would choose it at about one in ten thousand. It won.`),
         p(`AlphaGo did start from human games: its first network was trained to predict 30 million moves from expert play. But nobody had shown it <em>that</em> move, and no teacher marked its homework. It found it by <b>playing millions of games against itself and noticing what led to winning</b> — and the following year AlphaGo Zero dropped the human games entirely and came out stronger.`),
-        p(`Everything in this course so far was <em>supervised</em>: show the model an input and the correct output, measure the error, nudge the weights. But most of life has no correct output. When you learn to ride a bike, nobody hands you the right handlebar angle for each millisecond. You wobble, you fall, you adjust.`),
+        p(`Almost everything in this course so far was <em>supervised</em>: show the model an input and the correct output, measure the error, nudge the weights. (Chapter 8's GAN generator was the exception — it never saw a correct output, only another network's opinion, which is much closer to a reward than to a label.) But most of life has no correct output. When you learn to ride a bike, nobody hands you the right handlebar angle for each millisecond. You wobble, you fall, you adjust.`),
         h('div', { class: 'grid-2' },
           h('div', { class: 'card' }, h('h4', {}, 'Supervised learning'), h('p', { html: 'Input → correct output. The loss tells you <b>how wrong</b> and <b>in which direction</b>, for every example. Feedback is instant and precise.' })),
           h('div', { class: 'card' }, h('h4', {}, 'Reinforcement learning'), h('p', { html: 'State → action → reward, repeat. The reward tells you <b>how it went</b>, often much later, and never tells you what you should have done instead.' })),
@@ -67,7 +67,7 @@
       root.append(section('How far ahead should it look?',
         p(`A reward of 10 now is worth more than a reward of 10 in fifty steps — partly because the world is uncertain, partly because we want quick wins. So RL multiplies future rewards by a <em>discount factor</em> γ per step.`),
         callout('tryit', '🖐 Try this — make an agent walk past a prize',
-          `Two rewards down one corridor: a <b>+3</b> two steps away and a <b>+20</b> twelve steps away.<br>
+          `Two rewards down one corridor: a <b>+3</b> two steps away and a <b>+20</b> ten steps beyond it. The question is not which to take — the walk to the far one passes over the near one — but whether the far one is worth walking for.<br>
            <b>1.</b> Press <b>impatient (0.50)</b>. The distant +20 is now worth about 0.005 — the agent grabs the +3 and stops.<br>
            <b>2.</b> Press <b>far-sighted (0.99)</b>. The +20 is worth around 17.7 and easily wins.<br>
            <b>3.</b> Drag γ slowly and find the exact value where the agent changes its mind. <b>Nothing about the world changed. Only its patience did.</b>`),
@@ -120,7 +120,7 @@
            <b>3.</b> Press <b>New run</b> a few times to confirm it is not one unlucky seed.`),
         ppoClip(),
         p(`Here is why RL breaks in a way supervised learning never does: <b>the model chooses its own next training set</b>. Take too big a step and the policy that generated your data no longer resembles the policy you now have, so the data becomes worthless and performance collapses.`),
-        p(`<em>TRPO</em> (2015) enforced a hard constraint on how far the policy could move. <em>PPO</em> (2017) got almost the same effect far more cheaply by clipping the update whenever action probabilities move more than about 20%.`),
+        p(`<em>TRPO</em> (2015) enforced a hard constraint on how far the policy could move. <em>PPO</em> (2017) got almost the same effect far more cheaply. It does not clip the update itself; it clips the <i>objective</i>. For each sampled action it forms the ratio between the new policy's probability and the old one, and once that ratio leaves a band of roughly ±20% in the direction that would keep improving the score, the sample stops contributing any gradient at all — so there is no longer anything pushing the policy further away.`),
         p(`PPO is the algorithm later used to train ChatGPT, so remember the name — and remember the reason for the clip, because it comes back in chapter 11.`),
       ));
 
@@ -799,7 +799,7 @@
         });
 
         return ctx.figure(cv,
-          'γ is the single number that decides how far ahead an agent bothers to look. A reward n steps away is worth γⁿ times its face value today, so the curve above is how quickly the future stops mattering. Drag γ down to 0.50 and the distant +20 is worth less than a quarter of a point — the agent takes the +3 and never sees the bigger prize. Push it to 0.99 and the +20 dominates easily. Nothing about the world changed; only the agent\'s patience did.',
+          'γ is the single number that decides how far ahead an agent bothers to look. A reward n steps away is worth γⁿ times its face value today, so the curve above is how quickly the future stops mattering. Drag γ down to 0.50 and the distant +20 is worth about 0.005 of a point — the agent takes the +3 and never sees the bigger prize. Push it to 0.99 and the +20 dominates easily. Nothing about the world changed; only the agent\'s patience did.',
           [gSl, impatient, typical, patient], ro);
       }
 

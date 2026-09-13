@@ -154,7 +154,7 @@
           '7b': { layers: 32, dModel: 4096, label: '~7B dense (e.g. Llama-2-7B shape)' },
           '13b': { layers: 40, dModel: 5120, label: '~13B dense' },
           '70b': { layers: 80, dModel: 8192, label: '~70B dense' },
-          'moe': { layers: 120, dModel: 12288, label: 'Frontier-scale MoE, ≈217B <i>active</i> params (est.)' },
+          'frontier': { layers: 120, dModel: 12288, label: 'Frontier-scale dense, ≈217B params (est.)' },
         };
         const W = 720, H = 210;
         const [cv, g] = ctx.canvas(W, H);
@@ -235,7 +235,7 @@
           ]
         );
         return h('div', {},
-          ctx.figure(cv, 'Live for the sliders above: the blue segment is model-weight memory, the orange segment is total KV-cache memory across every concurrent request, and the red dashed line marks one H100’s 80 GB. Longer context and more concurrent users both push the orange segment right — that is the entire cost story of serving a model.', [presetSel, layersSl, dModelSl, ctxSl, batchSl, precSel], ro),
+          ctx.figure(cv, 'Live for the sliders above, on a dense-model approximation (an MoE would have to hold all of its experts resident, not just the ones a token uses): the blue segment is model-weight memory, the orange segment is total KV-cache memory across every concurrent request, and the red dashed line marks one H100’s 80 GB. Longer context and more concurrent users both push the orange segment right — that is the entire cost story of serving a model.', [presetSel, layersSl, dModelSl, ctxSl, batchSl, precSel], ro),
           p('<b>Rough, order-of-magnitude only</b> — real throughput and pricing depend on the specific hardware, software stack, batching strategy and provider margin, and change every few months. Treat this table as "which order of magnitude", not a quote:'),
           costTable,
         );
@@ -623,7 +623,7 @@
             `<b>Distillation</b> trains a smaller "student" model to mimic a larger "teacher's" outputs instead of shrinking one model's numbers; most cheap "mini"/"flash" tiers are distilled relatives of a bigger sibling.`,
             `<b>Mixture-of-experts (MoE)</b> serving (chapter 10) trades memory for speed the other way: it holds far more total parameters than a same-quality dense model but activates only a fraction per token — more memory to hold everything, less compute per token than its size suggests.`,
           ]),
-          callout('tryit', 'Try it: watch a laptop-sized model become a datacenter model', `<b>1.</b> Leave the preset at 7B, fp16, and slide context from 512 tokens up to 200K+: watch the orange KV segment swallow the chart and blow past the red H100 line. <b>2.</b> Switch precision to int4 with the same settings: the whole bar shrinks by roughly 4×. <b>3.</b> Pick the 70B preset: at fp16 the readout says the weights alone don't fit — 120 GB against 80, before a single token of context. Switch precision to <b>int8</b> to halve them, then sweep context: "max concurrent requests" falls 32 → 8 → 2 → 0 between 512 and 32K tokens. That number is the entire reason API providers cap context and charge more for it. <b>4.</b> Push batch up to 64 at a long context on the MoE preset: this is the regime real inference clusters live in.`),
+          callout('tryit', 'Try it: watch a laptop-sized model become a datacenter model', `<b>1.</b> Leave the preset at 7B, fp16, and slide context from 512 tokens up to 200K+: watch the orange KV segment swallow the chart and blow past the red H100 line. <b>2.</b> Switch precision to int4 with the same settings: the whole bar shrinks by roughly 4×. <b>3.</b> Pick the 70B preset: at fp16 the readout says the weights alone don't fit — 120 GB against 80, before a single token of context. Switch precision to <b>int8</b> to halve them, then sweep context: "max concurrent requests" falls 32 → 8 → 2 → 0 between 512 and 32K tokens. That number is the entire reason API providers cap context and charge more for it. <b>4.</b> Push batch up to 64 at a long context on the frontier preset: this is the regime real inference clusters live in.`),
           kvCalculator(),
         ),
 

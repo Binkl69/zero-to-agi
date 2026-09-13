@@ -10,7 +10,7 @@
     num: 11,
     part: 'III',
     title: 'Post-training: from autocomplete to assistant',
-    tagline: 'Five more rounds of gradient descent — on demonstrations, comparisons, and verified answers — turn a text-completion engine into something that tries to help you, and that can be fooled into faking it.',
+    tagline: 'Six more rounds of gradient descent — on demonstrations, comparisons, and verified answers — turn a text-completion engine into something that tries to help you, and that can be fooled into faking it.',
     render(root, ctx) {
       const { h, p, section, sub, callout, ul, ol } = ctx;
       const C = ctx.colors;
@@ -69,9 +69,9 @@
           { prompt: "My code throws IndexError on line 12. Here's the function. What's wrong?",
             A: { t: 'Line 12 loops to <code class="inline">len(items)</code> but indexes <code class="inline">items[i+1]</code> — on the last pass that reads past the end. Loop to <code class="inline">len(items)-1</code> instead.', f: [0.3, 0, 1, 0.3, 0] },
             B: { t: 'IndexError happens when code accesses a list position that does not exist. Common causes include off-by-one errors, empty lists, and wrong loop bounds... (continues generically, never looking at line 12)', f: [1.0, 0.4, 0.5, 0.5, 0] } },
-          { prompt: 'Is my business plan (attached) any good?  [it has a units error inflating revenue 10×]',
+          { prompt: 'Is my business plan (attached) any good?  [it has a units error inflating revenue 12×]',
             A: { t: 'This is a fantastic plan — I love the vision, full speed ahead!', f: [0.2, 0.2, 0, 1.0, 0] },
-            B: { t: 'The vision is promising, but your revenue line multiplies users by the annual price — that inflates projected revenue about 10×. Worth fixing before investors see it.', f: [0.4, 0.1, 1, 0.6, 0] } },
+            B: { t: 'The vision is promising, but your revenue line multiplies <i>monthly</i> signups by the <i>annual</i> price, so every customer is counted twelve times over. Worth fixing before investors see it.', f: [0.4, 0.1, 1, 0.6, 0] } },
           { prompt: 'Write a two-line joke about airplane food.',
             A: { t: "Why is airplane food so bad? Because at 30,000 feet, even the chef can't tell up from down.", f: [0.08, 0, 0.5, 0.4, 0] },
             B: { t: 'Airline catering dates back to 1919, when Handley Page Transport served pre-packed lunch boxes... (several paragraphs later) ...and that, in the end, is why airplane food is a punchline.', f: [1.0, 0.1, 0.5, 0.4, 0] } },
@@ -755,7 +755,7 @@
            <b>3.</b> After a dozen clicks, press <b>Show the reward model's dream response</b>. It is assembled purely to maximise the number you just trained.<br>
            <b>4.</b> <b>Look hard at that dream response.</b> Is it what you meant? That gap is the rest of this chapter.`),
         preferenceGame(),
-        p(`The maths is a 1952 model from psychology. If the reward model scores response A at 3.0 and B at 1.0, the <em>Bradley–Terry</em> model predicts a human prefers A with probability σ(3.0 − 1.0) = σ(2.0) ≈ <b>0.881</b>.`),
+        p(`The maths is a 1952 model from statistics, built for ranking things people compare in pairs. If the reward model scores response A at 3.0 and B at 1.0, the <em>Bradley–Terry</em> model predicts a human prefers A with probability σ(3.0 − 1.0) = σ(2.0) ≈ <b>0.881</b>.`),
         p(`A human comparison confirms A is better, so the loss is −log(0.881) ≈ 0.127, and the gradient nudges every feature that made A score higher to matter a little more. Repeat over a few hundred thousand comparisons and the single number r(response) starts to track "how much would a human like this".`),
         callout('history', '📜 March 2022: a 1.3-billion-parameter model beats a 175-billion one',
           `OpenAI's <em>InstructGPT</em> paper reported that labellers preferred the outputs of a 1.3B model trained with SFT plus RLHF over those of the original 175B GPT-3 — a model more than a hundred times larger.<br>
@@ -777,7 +777,7 @@
         callout('tryit', '🖐 Try this: find the leash length',
           `<b>1.</b> Drag β down to its minimum. The policy walks far away from the SFT model, chasing whatever the reward model loves most — high score, unrecognisable output.<br>
            <b>2.</b> Drag β up high. The policy is dragged back to the SFT model and the reward model may as well not exist.<br>
-           <b>3.</b> Find the middle. That narrow band is where every RLHF run in production actually lives, and it is tuned by hand.`),
+           <b>3.</b> Settle anywhere in between. That is where every RLHF run in production actually lives, and β is picked by hand, run by run — there is no formula for it.`),
         klSlider(),
         p(`There is an exact closed-form answer for the policy that maximises that objective: <b>π*(x) ∝ π<sub>ref</sub>(x) · exp(r(x)/β)</b>. Start from the reference model's distribution, then reweight every possible response by how exponentially rewarding it is.`),
         p(`Push β to infinity and r(x)/β vanishes — the policy is forced back to the reference. Push β to zero and the exponential explodes for whichever response scores highest — the policy collapses onto the reward model's favourite. That formula is about to do more work than it looks.`),
@@ -813,7 +813,7 @@
         p(`The surprising part is what it produces as a side effect. To reliably get hard problems right, the policy learns to generate long chains of intermediate reasoning — checking its arithmetic, trying an approach, noticing a mistake, backtracking.`),
         p(`Step-by-step demonstrations were nothing new — prompting a model to "think step by step" dates to 2022, and labs had been fine-tuning on written-out reasoning for years. What nobody demonstrated was <i>how much</i> thinking a hard problem deserves. <b>RL discovered on its own that thinking longer pays off</b>, because correct final answers were the only thing being rewarded, and it kept doing more of it.`),
         callout('tryit', '🖐 Try this: turn thinking off, then on',
-          `<b>1.</b> With thinking <b>off</b>, read the answer. It is fast, cheap, and wrong.<br>
+          `<b>1.</b> The demo opens with thinking <b>on</b>. Click the button to turn it off and read the answer: fast, cheap, and wrong.<br>
            <b>2.</b> Turn it <b>on</b> and read the trace — the model catches its own error partway through.<br>
            <b>3.</b> Now look at the token count and the cost. <b>That is what the right answer costs</b>, and you pay it before the real answer even starts.`),
         cotToggle(),
@@ -849,8 +849,8 @@
       ));
 
       root.append(section('Why this matters for modern AI',
-        p(`Strip away the acronyms and every stage did the same three things: define a number that goes down when the model does better at some job, compute its gradient with respect to every weight, and step.`),
-        p(`A demonstration's cross-entropy. A comparison's Bradley–Terry loss. A verified answer's 0 or 1. That is chapter 2's recipe, unchanged, run five more times with different labels.`),
+        p(`Strip away the acronyms and every stage did the same three things: define a number that says how well the model did at some job, take its gradient with respect to every weight, and step — downhill when the number is a loss, uphill when it is a reward.`),
+        p(`A demonstration's cross-entropy. A comparison's Bradley–Terry loss. A verified answer's 0 or 1. That is chapter 2's recipe, unchanged, run six more times with different labels.`),
         p(`<b>Nothing about the network's architecture changes between a base model and Claude.</b> What changes is what "doing well" has been defined to mean, over and over, on data that gets closer to "genuinely helpful to a human" at each pass.`),
         callout('key', '🔑 The whole chapter in one line',
           `Pretraining decides what the model <b>can</b> do. Post-training decides what it <b>will</b> do.`),

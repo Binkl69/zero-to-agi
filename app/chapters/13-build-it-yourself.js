@@ -128,7 +128,7 @@ for i in range(10):
 opt = torch.optim.AdamW(model.parameters(), lr=1e-3, betas=(0.9, 0.95), weight_decay=0.1)
 
 for step in range(max_steps):
-    xb, yb = get_batch('train')             # (B, T) ints; yb is xb shifted one to the right
+    xb, yb = get_batch('train')             # (B, T) ints; yb[t] is xb[t+1] — the next token
     logits = model(xb)                      # (B, T, vocab)
     loss = F.cross_entropy(logits.view(-1, logits.size(-1)), yb.view(-1))
     opt.zero_grad(set_to_none=True)         # forget last step's gradients
@@ -878,7 +878,7 @@ for step in range(max_steps):
 
         ctx.p('You have spent twelve chapters watching models learn. Sliders moved, loss curves fell, decision boundaries bent. But every one of those demos was written by someone else. There is a particular moment, and most people who work on AI remember theirs, when you type a training loop yourself, run it, and watch numbers you fully understand turn into behaviour you never explicitly programmed. After that moment the whole field looks different: less like magic, more like plumbing you could fix.'),
         ctx.p('Richard Feynman left a line on his blackboard: <em>"What I cannot create, I do not understand."</em> Andrej Karpathy adopted it as the motto for his from-scratch tutorials, and it is the motto of this chapter. The question we answer is practical. What is the shortest sequence of programs, each small enough to read in one sitting, that takes you from a single artificial neuron to a working GPT, and what do you do after that?'),
-        ctx.p('The answer is a ladder of eight labs in the <code class="inline">labs/</code> folder of this repository. Every rung is a complete, runnable model. Together they are under two thousand lines of code. Read them, break them, fix them. But before you open a terminal, train a language model right here, in the next section, and watch it learn to spell.'),
+        ctx.p('The answer is a ladder of eight labs in the <code class="inline">labs/</code> folder of this repository. Every rung is a complete, runnable model. Together they are about 2,900 lines, a third of which is comments and blank space. Read them, break them, fix them. But before you open a terminal, train a language model right here, in the next section, and watch it learn to spell.'),
 
         ctx.section('First, watch a language model learn to spell',
           ctx.p('The model below is the smallest thing that deserves the name <em>neural language model</em>. It is the architecture Yoshua Bengio\'s group proposed in 2003, and the one Karpathy uses in his "makemore" series. It reads the previous three characters and predicts the next one. That is the entire task, and it is the same task GPT does, with two differences: GPT reads thousands of tokens instead of three characters, and it uses a transformer instead of one hidden layer.'),
@@ -965,7 +965,7 @@ python labs/01_perceptron.py             # each lab is one file; run it, then re
             ])),
 
           ctx.sub('07 · Q-learning — ' + lab('07_q_learning.py'),
-            ctx.p('A tabular agent in a grid world. No neural network yet; a table of numbers, one per (state, action), updated by the Bellman rule until the numbers point the way to the goal. This is the algorithm behind DQN, which is the algorithm behind Atari, which is the grandparent of the RL used to train reasoning models.'),
+            ctx.p('A tabular agent in a grid world. No neural network yet; a table of numbers, one per (state, action), updated by the Bellman rule until the numbers point the way to the goal. This is the algorithm behind DQN, which is the algorithm behind Atari. The RL that trains reasoning models is a different branch of the same family — policy gradients, from REINFORCE through PPO to GRPO — but the loop is the one you build here: act, observe a reward, update.'),
             ctx.ul([
               '<b>Read:</b> the update: <code class="inline">Q[s,a] += alpha * (r + gamma * max(Q[s2]) - Q[s,a])</code>. The bracket is the <em>temporal-difference error</em>: what you got versus what you expected.',
               '<b>Change:</b> ε (exploration), γ (how much the future matters), α (learning rate), and the reward for stepping (try a small negative one).',
@@ -1010,7 +1010,7 @@ python labs/01_perceptron.py             # each lab is one file; run it, then re
           ]),
           ctx.callout('tryit', 'Try it', 'Press <b>chars (65)</b> and set σ to 0.1: the loss sits on the yellow line at 4.18 ≈ ln(65). Healthy. Now drag σ up to about 3 and the loss roughly doubles, to around 8, even though the model has learned precisely nothing — it is confidently wrong. Push σ to 10 and it passes 20. Now press <b>GPT-2 BPE</b>: ln(V) jumps to 10.82, and <b>Llama 3</b> takes it to 11.76. When the first line of a real GPT-2 training run prints a loss near 10.9, you now know that is the number it is supposed to print, not a bug — and that a first line reading 15 means the last layer is initialised far too hot.'),
           buildInitChecker(ctx),
-          ctx.callout('example', 'What this looks like in a real run', 'The first three lines of a healthy nanoGPT run on Shakespeare read something like <code class="inline">step 0: train loss 4.2825, val loss 4.2822</code>, then <code class="inline">step 250: train loss 2.4914</code>, then <code class="inline">step 500: train loss 2.1240</code>. Three numbers, and an experienced person has already checked three things: the first is ln(65) so the init is sane; train and val agree so nothing has leaked; and the drop is fast but not instant, so the targets are shifted correctly. When someone glances at a log and says "that looks wrong", this is what they are doing.'),
+          ctx.callout('example', 'What this looks like in a real run', 'The first three lines of a healthy nanoGPT run on Shakespeare read something like <code class="inline">step 0: train loss 4.2825, val loss 4.2822</code>, then <code class="inline">step 250: train loss 2.4914</code>, then <code class="inline">step 500: train loss 2.1240</code>. Three numbers, and an experienced person has already checked three things: the first is a whisker above ln(65) = 4.17, which is what a sane init gives; train and val agree so nothing has leaked; and the drop is fast but not instant, so the targets are shifted correctly. When someone glances at a log and says "that looks wrong", this is what they are doing.'),
         ),
 
         ctx.section('Scaling the ladder',

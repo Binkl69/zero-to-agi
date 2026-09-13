@@ -1005,7 +1005,7 @@
            <b>Tensor parallelism.</b> Split each individual matrix multiply across several GPUs, each holding a slice of every weight matrix. Needs very fast links, so it stays within one server.<br>
            <b>Pipeline parallelism.</b> Layers 1–10 on one GPU, 11–20 on the next, activations passed down like an assembly line, with the batch split into micro-batches so nobody idles.<br>
            Real runs use all three at once: tensor within a node, pipeline across a few nodes, data parallel across the remaining thousands.`),
-        p(`Two more essentials. <b>Mixed precision</b>: weights kept in 32-bit while the heavy arithmetic runs in 16-bit or increasingly 8-bit, which is faster and uses half the memory.`),
+        p(`Two more essentials. <b>Mixed precision</b>: a 32-bit master copy of the weights is kept for the updates while the heavy arithmetic runs in 16-bit, or increasingly 8-bit. The weights themselves cost slightly more this way, not less — what halves is the activations stored for the backward pass and the bytes moved between memory and the arithmetic units, which is where the time actually goes.`),
         p(`And <b>checkpointing</b>: the full model state is saved every hour or so, because with that many GPUs <i>something</i> fails every few hours. Meta reported 466 job interruptions in 54 days of Llama 3 training, mostly GPU faults. You do not want to lose a day of a fifty-day run.`),
       ));
 
