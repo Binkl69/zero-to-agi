@@ -6,9 +6,11 @@
 # nothing but a check catches it.
 name: checks
 
+# push is limited to main because a pull_request event already covers every
+# branch that has a PR open; listening to both ran the whole suite twice per push
 on:
   push:
-    branches: ['**']
+    branches: [main]
   pull_request:
 
 jobs:
