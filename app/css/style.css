@@ -177,3 +177,116 @@ table.tbl th { color: var(--muted); font-weight: 600; font-size: .8rem; text-tra
   .grid-2 { grid-template-columns: 1fr; }
   .hero h1 { font-size: 2.2rem; }
 }
+
+/* ---------- maths beats: the symbol decoder ----------
+   Notation after the intuition. Deliberately does not look like a maths textbook: no serif
+   italics, no dense stacking. It reads as a labelled diagram of a sentence. */
+.decoder {
+  border: 1px solid var(--line, #243044);
+  border-left: 3px solid #a78bfa;
+  border-radius: 10px;
+  background: rgba(167, 139, 250, .05);
+  padding: 16px 18px;
+  margin: 1.4em 0;
+}
+.decoder-title {
+  font-weight: 600;
+  font-size: .95rem;
+  color: #c4b5fd;
+  margin-bottom: 12px;
+}
+.decoder-formula {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 1.25rem;
+  line-height: 2;
+  margin-bottom: 6px;
+}
+.decoder-glue { color: var(--muted, #94a3b8); padding: 0 2px; }
+.decoder-sym {
+  font: inherit;
+  color: #e6ebf5;
+  background: rgba(167, 139, 250, .13);
+  border: 1px solid rgba(167, 139, 250, .35);
+  border-radius: 7px;
+  padding: 2px 9px;
+  cursor: pointer;
+  transition: background .12s, border-color .12s, transform .12s;
+}
+.decoder-sym:hover { background: rgba(167, 139, 250, .26); transform: translateY(-1px); }
+.decoder-sym.active { background: #a78bfa; border-color: #a78bfa; color: #0a0e16; font-weight: 600; }
+.decoder-panel {
+  min-height: 74px;
+  border-top: 1px dashed var(--line, #243044);
+  padding-top: 12px;
+  font-size: .92rem;
+}
+.decoder-hint { color: var(--muted, #94a3b8); font-style: italic; }
+.decoder-name { color: #c4b5fd; margin-bottom: 5px; }
+.decoder-says { color: var(--text, #e6ebf5); margin-bottom: 5px; }
+.decoder-points { color: #38d9a9; font-size: .88rem; }
+.decoder-plain {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line, #243044);
+  color: var(--muted, #94a3b8);
+  font-size: .9rem;
+}
+@media (max-width: 560px) {
+  .decoder-formula { font-size: 1.05rem; }
+}
+
+/* ---------- maths beats: the guided walkthrough ----------
+   One step on screen at a time. For a reader who needs the path laid out rather than
+   a reference to browse. */
+.walk {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent-2);
+  border-radius: 10px;
+  background: rgba(56, 217, 169, .045);
+  padding: 16px 18px 14px;
+  margin: 1.4em 0;
+}
+.walk-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.walk-title { font-weight: 600; font-size: .95rem; color: var(--accent-2); }
+.walk-count { font-family: var(--mono); font-size: .78rem; color: var(--muted); }
+.walk-dots { display: flex; gap: 5px; margin: 10px 0 14px; flex-wrap: wrap; }
+.walk-dot { width: 22px; height: 3px; border-radius: 2px; background: var(--line); }
+.walk-dot.seen { background: rgba(56, 217, 169, .45); }
+.walk-dot.on { background: var(--accent-2); }
+.walk-stage { min-height: 132px; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+.walk-math {
+  font-family: var(--mono); font-size: 1.15rem; color: var(--text);
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 14px; text-align: center; overflow-x: auto;
+}
+.walk-say { font-size: 1.02rem; line-height: 1.6; color: var(--text); }
+.walk-note { font-size: .88rem; color: var(--muted); }
+.walk-ask { font-size: 1.02rem; color: var(--text); font-weight: 500; }
+.walk-opts { display: flex; flex-direction: column; gap: 7px; }
+.walk-opt {
+  text-align: left; font: inherit; font-size: .93rem; cursor: pointer;
+  color: var(--text); background: var(--bg-2);
+  border: 1px solid var(--line); border-radius: 8px; padding: 9px 13px;
+}
+.walk-opt:hover { background: var(--bg-3); }
+.walk-opt.right { border-color: var(--accent-2); background: rgba(56, 217, 169, .16); }
+.walk-opt.wrong { border-color: var(--danger); background: rgba(251, 113, 133, .14); }
+.walk-fb { display: none; font-size: .9rem; color: var(--muted); padding-top: 2px; }
+.walk-fb.shown { display: block; }
+.walk-nav { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+.walk-btn {
+  font: inherit; font-size: .88rem; cursor: pointer;
+  color: var(--text); background: var(--bg-3);
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 15px;
+}
+.walk-btn:hover:not(:disabled) { background: #1e2a44; }
+.walk-btn:disabled { opacity: .35; cursor: default; }
+.walk-btn.primary { background: var(--accent-2); border-color: var(--accent-2); color: #06231b; font-weight: 600; }
+.walk-btn.primary:hover { filter: brightness(1.08); }
+.walk-recap {
+  margin-top: 14px; padding-top: 11px; border-top: 1px dashed var(--line);
+  font-size: .9rem; color: var(--muted);
+}

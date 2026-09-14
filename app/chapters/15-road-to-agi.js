@@ -1,10 +1,9 @@
-/* Zero → AGI · Chapter 15 · What separates us from AGI, and how you could help build it
-   What "AGI" has meant (Turing, Legg & Hutter, OpenAI charter, Anthropic, DeepMind's Levels of AGI);
-   what 2026 frontier models can and can't do; candidate paths and hard constraints; what one person
-   can realistically do, tiered, with a reading list.
-   Interactives: capability radar (2020 vs 2026 vs human expert, click/hover an axis for the gap and
-   what would close it); cost-of-compute explorer (Chinchilla-optimal N, D from a budget); a personal
-   12-month roadmap builder; a task-horizon chart extrapolating METR's doubling trend. */
+/* Zero → AGI · Chapter 15 · The road to AGI
+   DESIGN RULE: the reader draws their own definition of AGI in the first thirty seconds and
+   watches the verdict swing without a single fact about any model changing.
+   Interactives, in order: the AGI definer; capability radar (what is done, partial, not close);
+   the task-horizon doubling chart; the training-budget cost explorer; and a personal roadmap
+   builder. */
 (function () {
   ZTA.registerChapter({
     id: '15-road-to-agi',
@@ -26,7 +25,9 @@
       function capabilityRadar() {
         const W = 720, H = 470;
         const [cv, g] = ctx.canvas(W, H);
-        const cx = 230, cy = 235, maxR = 168;
+        /* the axis labels are right-aligned on the left side, so the centre has to
+           sit far enough right for the longest of them to fit inside the canvas */
+        const cx = 262, cy = 235, maxR = 168;
         const AXES = [
           'Knowledge recall', 'Maths & logic', 'Coding', 'Long-horizon agency',
           'Continual learning', 'Sample efficiency', 'Physical world', 'Calibration', 'Memory', 'Energy efficiency',
@@ -39,7 +40,7 @@
           { name: 'Knowledge recall', gap: 'On raw facts, the gap has flipped: a 2026 frontier model has read far more than any single human ever will, and it shows on PhD-qualifying-exam questions (GPQA) across fields no one person masters all of. The residual problem isn\'t how much it knows — it\'s that it states wrong facts just as fluently as right ones.', close: 'Retrieval that grounds answers in checkable sources, and training that rewards "I don\'t know" as much as a correct answer, so confidence tracks truth.' },
           { name: 'Maths & logic', gap: 'Frontier reasoning models now solve International Mathematical Olympiad and Putnam-level problems that stump most humans, using long chains of search-like reasoning before answering. The gap that remains is genuinely novel proof: work far outside anything like the patterns seen in training.', close: 'More reinforcement learning on <em>verifiable</em> problems — ones with a checkable right answer — plus formal proof assistants like Lean that can confirm a step is actually valid, not just plausible-sounding.' },
           { name: 'Coding', gap: 'Models now write, run, debug and ship real pull requests across a multi-hour agentic session, holding a whole task in mind. Reliability still falls as the task lengthens: small mistakes compound over a long chain of edits, and there is often no ground truth to self-correct against beyond "does it compile".', close: 'Environments with fast, automatic feedback (tests that pass or fail, sandboxes that run the code), and training that specifically rewards recovering from an error rather than just avoiding one.' },
-          { name: 'Long-horizon agency', gap: 'This is the sharpest gap on the chart. METR\'s 2025 measurements found that the length of task a frontier model can complete at 50% reliability was around 110 minutes for the best models of early 2025 — up enormously from seconds a few years earlier, but still far short of a week of autonomous work a competent employee could be trusted with.', close: 'Better internal state-tracking and planning, the ability to notice its own mistakes mid-task, and — per the chart below — a doubling trend that has to keep compounding for years, not just one clever trick.' },
+          { name: 'Long-horizon agency', gap: 'Not the widest gap on the chart — continual learning, sample efficiency, the physical world and energy use all sit further inside — but the one that most directly limits what an agent can be trusted to finish. METR measures the length of task a frontier model finishes at 50% reliability: about an hour for the best models of early 2025, and roughly five hours by late 2025 — up enormously from seconds a few years earlier, but still far short of a week of autonomous work a competent employee could be trusted with.', close: 'Better internal state-tracking and planning, the ability to notice its own mistakes mid-task, and — per the chart below — a doubling trend that has to keep compounding for years, not just one clever trick.' },
           { name: 'Continual learning', gap: 'A model\'s weights are frozen the moment training ends. Whatever it "learns" during a conversation lives only in that conversation\'s context window; close the tab and it is gone. A junior employee who is corrected on Monday does not need to be corrected again on Friday. A deployed model does.', close: 'Safe ways to keep updating weights after deployment (without the model forgetting old skills or being poisoned by bad data), or architectures with an explicit, persistent, editable memory that is not just "more context".' },
           { name: 'Sample efficiency', gap: 'A frontier model sees trillions of words before it can reliably use a comma. A child learns a new word, often for life, from one or two encounters, because a young brain arrives with strong built-in priors about objects, causes and agents that a model has to discover the hard way from data.', close: 'Better inductive biases baked into the architecture, meta-learning (learning <i>how</i> to learn from few examples), and world models rich enough that a new fact needs less repetition to stick.' },
           { name: 'Physical world', gap: 'Ask a model trained mostly on text and images to predict what happens when you stack seven blocks unevenly, or how a rope will fall, and it is guessing from pictures of similar scenes, not from ever having pushed a block. Video-generation models are visibly better than they were in 2020, but they still routinely produce impossible physics.', close: 'Real interaction with the physical world — robotics, simulation with real physics engines, video pretraining at far larger scale — so the model\'s notion of "what happens next" is grounded in consequence, not just correlation between pixels.' },
@@ -79,8 +80,8 @@
             const edge = toXY(i, 10);
             g.strokeStyle = i === S.hover ? C.warn : C.line; g.lineWidth = i === S.hover ? 2 : 1;
             g.beginPath(); g.moveTo(cx, cy); g.lineTo(edge.x, edge.y); g.stroke();
-            const lx = cx + (maxR + 34) * Math.cos(-Math.PI / 2 + i * (2 * Math.PI / AXES.length));
-            const ly = cy + (maxR + 34) * Math.sin(-Math.PI / 2 + i * (2 * Math.PI / AXES.length));
+            const lx = cx + (maxR + 24) * Math.cos(-Math.PI / 2 + i * (2 * Math.PI / AXES.length));
+            const ly = cy + (maxR + 24) * Math.sin(-Math.PI / 2 + i * (2 * Math.PI / AXES.length));
             g.fillStyle = i === S.hover ? C.warn : C.text;
             g.textAlign = Math.cos(-Math.PI / 2 + i * (2 * Math.PI / AXES.length)) > 0.2 ? 'left' : Math.cos(-Math.PI / 2 + i * (2 * Math.PI / AXES.length)) < -0.2 ? 'right' : 'center';
             const words = AXES[i].split(' ');
@@ -144,14 +145,16 @@
         const W = 720, H = 230;
         const [cv, g] = ctx.canvas(W, H);
         const REF = [
-          { n: 1.5e8, label: 'GPT-2 (small)' },
+          { n: 1.24e8, label: 'GPT-2 (small)' },
           { n: 1.5e9, label: 'GPT-2 (XL)' },
           { n: 8e9, label: 'Llama-3-8B' },
           { n: 7e10, label: 'Llama-3-70B' },
           { n: 1.75e11, label: 'GPT-3 (175B)' },
           { n: 4.05e11, label: 'Llama-3-405B' },
         ];
-        const S = { budget: -3, price: 2.5, mfu: 35 }; // budget slider is log10($)
+        /* must match the budget slider's value below: ctx.slider does not fire
+           onChange at construction, so a mismatch shows on the first paint */
+        const S = { budget: 3, price: 2.5, mfu: 35 }; // budget slider is log10($)
         const plot = { x: 26, y: 24, w: 668, h: 140 };
         const logMin = 6.5, logMax = 12.3; // param count log10 range shown on axis
         const xAt = (n) => plot.x + (Math.log10(n) - logMin) / (logMax - logMin) * plot.w;
@@ -165,7 +168,8 @@
           return { budget, gpuHours, totalFlops, N, D };
         }
         function classOf(N) {
-          if (N < 3e8) return 'well below GPT-2 (small) — a toy, useful for learning the pipeline';
+          if (N < 1e8) return 'well below GPT-2 (small) — a toy, useful for learning the pipeline';
+          if (N < 5e8) return 'roughly GPT-2 (small) class';
           if (N < 3e9) return 'roughly GPT-2 (XL) class';
           if (N < 3e10) return 'roughly Llama-3-8B class';
           if (N < 1.2e11) return 'roughly Llama-3-70B class';
@@ -179,17 +183,23 @@
           g.fillStyle = '#0f1520'; g.fillRect(plot.x, plot.y, plot.w, plot.h); g.strokeStyle = C.line; g.strokeRect(plot.x, plot.y, plot.w, plot.h);
           // reference model ticks
           g.font = MONO; g.textAlign = 'center';
-          REF.forEach((m) => {
+          REF.forEach((m, i) => {
             const x = xAt(m.n);
             g.strokeStyle = C.line; g.lineWidth = 1; g.beginPath(); g.moveTo(x, plot.y); g.lineTo(x, plot.y + plot.h); g.stroke();
-            g.fillStyle = C.muted; g.save(); g.translate(x, plot.y + plot.h + 14); g.rotate(0); g.fillText(m.label, 0, 0); g.restore();
+            /* the reference models crowd together at the top of the scale, so the
+               labels alternate onto two baselines instead of printing over each other */
+            g.fillStyle = C.muted; g.fillText(m.label, ctx.clamp(x, plot.x + 36, plot.x + plot.w - 36), plot.y + plot.h + (i % 2 ? 28 : 14));
           });
           // your marker
           const nx = ctx.clamp(xAt(r.N), plot.x, plot.x + plot.w);
           g.strokeStyle = C.warn; g.lineWidth = 2.5; g.beginPath(); g.moveTo(nx, plot.y - 6); g.lineTo(nx, plot.y + plot.h); g.stroke();
           g.beginPath(); g.moveTo(nx - 7, plot.y - 6); g.lineTo(nx + 7, plot.y - 6); g.lineTo(nx, plot.y + 8); g.closePath(); g.fillStyle = C.warn; g.fill();
-          g.fillStyle = C.warn; g.textAlign = 'left'; g.font = 'bold 12px "JetBrains Mono", monospace';
-          g.fillText('your compute-optimal N', Math.min(nx + 10, plot.x + plot.w - 175), plot.y + 16);
+          /* near the right edge the caption flips to the inside of the marker, so the
+             marker's own 2.5px line is never drawn across it */
+          g.fillStyle = C.warn; g.font = 'bold 12px "JetBrains Mono", monospace';
+          const flipN = nx > plot.x + plot.w - 185;
+          g.textAlign = flipN ? 'right' : 'left';
+          g.fillText('your compute-optimal N', flipN ? nx - 10 : nx + 10, plot.y + 16);
           g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'left';
           g.fillText('parameters, log scale →', plot.x, plot.y - 10);
           ro.set({
@@ -270,22 +280,36 @@
           { year: 2020.5, min: 0.2, label: 'GPT-3' },
           { year: 2022.7, min: 1.5, label: 'GPT-3.5' },
           { year: 2023.3, min: 6, label: 'GPT-4' },
-          { year: 2024.5, min: 25, label: 'Claude 3.5 / GPT-4o class' },
-          { year: 2025.1, min: 110, label: 'o3 / frontier reasoners' },
+          { year: 2024.8, min: 28, label: 'Claude 3.5' },
+          { year: 2025.15, min: 59, label: 'Claude 3.7' },
+          { year: 2025.9, min: 290, label: 'Opus 4.5' },
         ];
-        const Y0 = 2019, DOUBLE_MONTHS = 7;
-        const T0 = DATA[0].min / Math.pow(2, (DATA[0].year - Y0) * 12 / DOUBLE_MONTHS);
-        function fit(year) { return T0 * Math.pow(2, (year - Y0) * 12 / DOUBLE_MONTHS); }
-        const plot = { x: 46, y: 16, w: 640, h: 240 };
+        /* Least squares on log2(minutes) against year. The line used to be pinned to
+           the single oldest point with a hard-coded 7-month doubling, which left the
+           most important point — o3 at 110 minutes — a factor of 2.8 above its own
+           "fit". These six points give a 6.4-month doubling. */
+        const Y0 = 2019;
+        const FIT = (() => {
+          const n = DATA.length;
+          let sx = 0, sy = 0, sxx = 0, sxy = 0;
+          for (const d of DATA) { const x = d.year - Y0, y = Math.log2(d.min); sx += x; sy += y; sxx += x * x; sxy += x * y; }
+          const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx);
+          return { slope, t0: Math.pow(2, (sy - slope * sx) / n) };
+        })();
+        const DOUBLE_MONTHS = 12 / FIT.slope;
+        function fit(year) { return FIT.t0 * Math.pow(2, FIT.slope * (year - Y0)); }
+        /* wide enough for the longest y-axis label ('23.1 months'), right-aligned */
+        const plot = { x: 92, y: 16, w: 594, h: 240 };
         const X0 = 2019, X1 = 2033;
-        const YMIN = 0.02, YMAX = 4e5; // minutes: ~1 sec .. ~9 months
+        const YMIN = 0.02, YMAX = 4e6; // minutes: ~1 sec .. ~7.6 years
         const xAt = (yr) => plot.x + (yr - X0) / (X1 - X0) * plot.w;
         const yAt = (min) => plot.y + plot.h - (Math.log10(ctx.clamp(min, YMIN, YMAX)) - Math.log10(YMIN)) / (Math.log10(YMAX) - Math.log10(YMIN)) * plot.h;
         function humanLabel(min) {
           if (min < 1) return Math.round(min * 60) + ' sec';
           if (min < 90) return f1(min) + ' min';
           if (min < 60 * 24 * 2) return f1(min / 60) + ' hr';
-          if (min < 60 * 24 * 60) return f1(min / (60 * 24)) + ' days';
+          if (min < 60 * 24 * 14) return f1(min / (60 * 24)) + ' days';
+          if (min < 60 * 24 * 60) return f1(min / (60 * 24 * 7)) + ' weeks';
           return f1(min / (60 * 24 * 30)) + ' months';
         }
         const S = { extrap: 2026 };
@@ -303,6 +327,11 @@
           // year ticks
           g.textAlign = 'center';
           for (let yr = 2019; yr <= X1; yr += 2) { const x = xAt(yr); g.fillStyle = C.muted; g.fillText(String(yr), x, plot.y + plot.h + 16); }
+          /* the year rule is drawn under the curve, the dots and their labels: it used
+             to be painted straight through whichever label it happened to cross */
+          const ex = ctx.clamp(S.extrap, X0, X1), exY = fit(ex);
+          const mx = xAt(ex), my = yAt(exY);
+          g.strokeStyle = C.danger; g.lineWidth = 1.5; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(mx, plot.y); g.lineTo(mx, plot.y + plot.h); g.stroke(); g.setLineDash([]);
           // fitted curve: solid through observed range, dashed into extrapolation
           g.lineWidth = 2.5;
           g.beginPath();
@@ -312,28 +341,149 @@
           for (let yr = 2025.1; yr <= X1; yr += 0.1) { const x = xAt(yr), y = yAt(fit(yr)); yr === 2025.1 ? g.moveTo(x, y) : g.lineTo(x, y); }
           g.strokeStyle = C.accent; g.globalAlpha = 0.6; g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
           // observed points
-          DATA.forEach((d) => {
+          DATA.forEach((d, i) => {
             const x = xAt(d.year), y = yAt(d.min);
             g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fillStyle = C.warn; g.fill(); g.strokeStyle = '#0a0e16'; g.lineWidth = 1; g.stroke();
+            /* every dot names itself; the dots march up and to the right, so labels
+               alternate above-left and below-right of the line rather than colliding */
+            g.font = MONO; g.fillStyle = C.warn;
+            /* alternate above-left / below-right along the line; the first point would
+               otherwise land on the y-axis labels, and the last on the year marker */
+            const last = i === DATA.length - 1;
+            const below = !last && i % 2 === 0;
+            g.textAlign = below || last ? 'left' : 'right';
+            g.fillText(d.label, below || last ? x + 9 : x - 7, below ? y + 14 : y - 9);
           });
-          // extrapolation marker
-          const ex = ctx.clamp(S.extrap, X0, X1), exY = fit(ex);
-          const mx = xAt(ex), my = yAt(exY);
-          g.strokeStyle = C.danger; g.lineWidth = 1.5; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(mx, plot.y); g.lineTo(mx, plot.y + plot.h); g.stroke(); g.setLineDash([]);
           g.beginPath(); g.arc(mx, my, 6, 0, Math.PI * 2); g.fillStyle = C.danger; g.fill();
           g.fillStyle = C.text; g.font = FONT; g.textAlign = 'left';
-          g.fillText('solid = fit to observed points · dashed = extrapolation · red = your year', plot.x + 4, plot.y + 14);
-          ro.set({ year: f1(ex), 'projected 50%-task horizon': humanLabel(exY), 'doubling assumption': DOUBLE_MONTHS + ' months' });
+          g.fillText('solid = least-squares fit through the seven points · dashed = extrapolation · red = your year', plot.x + 4, plot.y + 14);
+          ro.set({ year: f1(ex), 'projected 50%-task horizon': humanLabel(exY), 'fitted doubling time': f1(DOUBLE_MONTHS) + ' months' });
         }
         const sl = ctx.slider({ label: 'extrapolate to year', min: 2019, max: 2033, step: 0.1, value: 2026, fmt: (v) => f1(v), onChange: (v) => { S.extrap = v; draw(); } });
         draw();
-        return ctx.figure(cv, 'The length of task (measured in how long a skilled human takes) that a model completes with 50% reliability, on a log scale. Orange dots are approximate reconstructions of published results; METR (Kwa et al., 2025) reports frontier models\' 50%-horizon growing roughly 2× every 7 months since 2019, reaching about 110 minutes for early-2025 reasoning models — and notes the trend may have <em>accelerated</em> since 2024, so a straight exponential likely understates it. The blue line is that fit, not a guarantee: extrapolating any exponential this far is a bet, not a fact.', [sl], ro);
+        return ctx.figure(cv, 'The length of task (measured in how long a skilled human takes) that a model completes with 50% reliability, on a log scale. Orange dots are approximate reconstructions of published results; the 2025 paper (Kwa et al.) put the doubling at roughly 7 months, and METR\'s Time Horizon 1.1 re-measurement in January 2026 revised that on a larger task suite to 6.3 months all-time, 4.3 months from 2023 on, and about 3 months from 2024 on. The blue line is a least-squares fit to these seven points and lands at 6.5 months — close to the all-time figure, and slower than what the last two years alone are doing. A single straight line on a log scale cannot show an acceleration, which is the main way this chart understates things. It is not a guarantee either: extrapolating any exponential this far is a bet, not a fact.', [sl], ro);
       }
 
       /* ================================================================== */
       /* Prose                                                              */
       /* ================================================================== */
+
+      function wrapLines2(gc, text, maxW) {
+        const words = String(text).split(' '); const out = []; let line = '';
+        for (const w of words) {
+          const t = line ? line + ' ' + w : w;
+          if (line && gc.measureText(t).width > maxW) { out.push(line); line = w; } else line = t;
+        }
+        if (line) out.push(line);
+        return out;
+      }
+      function wrapText2(gc, text, x, y, maxW, lh) {
+        wrapLines2(gc, text, maxW).forEach((ln, i) => gc.fillText(ln, x, y + i * lh));
+      }
+
+      /* ================================================================== */
+      /*  INTERACTIVE — draw your own finish line                            */
+      /* ================================================================== */
+      function agiDefiner() {
+        const [cv, g] = ctx.canvas(720, 400);
+        const FONT = '13px Inter, system-ui, sans-serif';
+        const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
+        /* met: 1 = clearly true of 2026 frontier models, 0.5 = partly/contested, 0 = not close */
+        const CRITERIA = [
+          { n: 'Hold a conversation indistinguishable from a person', met: 1, note: 'Turing, 1950. Considered passed.' },
+          { n: 'Score at expert level on hard exams across many fields', met: 1, note: 'Graduate science, law, medicine, maths.' },
+          { n: 'Write working code for a non-trivial task', met: 1, note: 'Routine in 2026; much of real usage.' },
+          { n: 'Work usefully across many unrelated domains', met: 1, note: 'Legg & Hutter, 2007: a wide range.' },
+          { n: 'Stay coherent on a task lasting several hours', met: 0.5, note: 'Better, but errors still compound.' },
+          { n: 'Learn from experience without being retrained', met: 0, note: 'Weights freeze when training ends.' },
+          { n: 'Know reliably what it does and does not know', met: 0.5, note: 'Calibrated better, not dependably.' },
+          { n: 'Make an original scientific discovery unaided', met: 0, note: 'Assistance yes; unaided no.' },
+          { n: 'Do most economically valuable work', met: 0, note: 'OpenAI charter bar. Not close.' },
+          { n: 'Act in the physical world as competently as a person', met: 0, note: 'Robotics lags language badly.' },
+        ];
+        /* start with everything ticked: the first preset press must visibly move the bar */
+        const picked = CRITERIA.map(() => true);
+        const PRESETS = {
+          turing: [0],
+          legg: [0, 1, 2, 3],
+          openai: [8],
+          strict: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+        };
+        const setPreset = (k) => { picked.forEach((_, i) => { picked[i] = PRESETS[k].indexOf(i) >= 0; }); };
+        const btns = CRITERIA.map((c, i) => ctx.button(String(i + 1), () => { picked[i] = !picked[i]; }));
+        const pTuring = ctx.button('Turing (1950)', () => setPreset('turing'));
+        const pLegg = ctx.button('Legg & Hutter (2007)', () => setPreset('legg'));
+        const pOpenAI = ctx.button('"most economically valuable work"', () => setPreset('openai'), 'primary');
+        const pStrict = ctx.button('everything on the list', () => setPreset('strict'));
+        const ro = ctx.readout();
+
+        ctx.loop(() => {
+          g.clearRect(0, 0, cv.W, cv.H);
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('tick what you think "AGI" has to mean — numbered buttons below toggle each row', 30, 24);
+
+          let need = 0, have = 0;
+          CRITERIA.forEach((c, i) => {
+            const y = 40 + i * 30;
+            const on = picked[i];
+            if (on) { need++; have += c.met; }
+            g.fillStyle = on ? 'rgba(124,156,255,0.10)' : 'transparent';
+            g.fillRect(30, y, 655, 27);
+            /* the tick box */
+            g.strokeStyle = on ? C.accent : C.line; g.lineWidth = 1.5;
+            g.strokeRect(34, y + 6, 15, 15);
+            if (on) { g.fillStyle = C.accent; g.fillRect(37, y + 9, 9, 9); }
+            g.font = MONO; g.fillStyle = C.line; g.fillText(String(i + 1), 56, y + 18);
+            g.font = FONT; g.fillStyle = on ? C.text : '#55627a';
+            g.fillText(c.n, 74, y + 18);
+            /* status */
+            const col = c.met === 1 ? C.green : c.met === 0.5 ? C.warn : C.danger;
+            const lab = c.met === 1 ? 'done' : c.met === 0.5 ? 'partly' : 'not close';
+            g.font = 'bold ' + MONO; g.fillStyle = on ? col : '#3a4558';
+            g.fillText(lab, 470, y + 18);
+            g.font = MONO; g.fillStyle = on ? C.muted : '#2f3949';
+            /* two lines, and a visible ellipsis rather than a silently cut clause */
+            g.font = '10px "JetBrains Mono", ui-monospace, monospace';
+            const nls = wrapLines2(g, c.note, 142);
+            if (nls.length > 2) { nls.length = 2; nls[1] = nls[1].replace(/\s*\S*$/, '') + ' …'; }
+            nls.forEach((ln, j) => g.fillText(ln, 545, y + 11 + j * 11));
+          });
+
+          const frac = need ? have / need : 0;
+          const Y = 352;
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('by your definition, 2026 models are', 30, Y);
+          g.fillStyle = C.line; g.fillRect(30, Y + 8, 360, 20);
+          g.fillStyle = frac > 0.85 ? C.green : frac >= 0.35 ? C.warn : C.danger;
+          g.fillRect(30, Y + 8, frac * 360, 20);
+          g.font = 'bold 20px Inter, system-ui, sans-serif';
+          g.fillStyle = frac > 0.85 ? C.green : frac >= 0.35 ? C.warn : C.danger;
+          g.fillText((frac * 100).toFixed(0) + '%', 402, Y + 25);
+          g.font = FONT; g.fillStyle = C.muted;
+          wrapText2(g, need === 0
+            ? 'Tick at least one thing. That is harder than it sounds, and it is the whole problem.'
+            : frac > 0.95 ? 'By this definition it already arrived, and nobody held a ceremony.'
+              : frac < 0.35 ? 'By this definition it is clearly not here, and the missing pieces are not small.'
+                : 'By this definition it is genuinely arguable — which is why the public argument never resolves.',
+            470, Y + 12, 215, 16);
+          ro.set({ 'criteria you chose': need, 'already met': have.toFixed(1), 'your verdict': need === 0 ? '—' : (frac * 100).toFixed(0) + '%' });
+        });
+
+        return ctx.figure(cv,
+          'Every row is a real definition someone has seriously proposed, and the status column is an honest reading of 2026 frontier models rather than a measurement. Move between the presets and watch the verdict swing from "already arrived" to "not close" without a single fact about any model changing. That is the actual state of the AGI debate: not a disagreement about capabilities, but about where to draw a line that was never a unit like a kilogram in the first place.',
+          [...btns, pTuring, pLegg, pOpenAI, pStrict], ro);
+      }
+
       root.append(
+        callout('tryit', '🖐 Do this first — draw your own finish line',
+          `Ten things people have seriously proposed as the definition of AGI. Tick whichever ones <b>you</b> think it has to mean.<br>
+           <b>1.</b> Press <b>Turing (1950)</b>. By that definition it arrived some time ago and nobody held a ceremony.<br>
+           <b>2.</b> Press <b>"most economically valuable work"</b> — OpenAI's own charter bar. Now it is clearly not here.<br>
+           <b>3.</b> Press <b>everything on the list</b>. Exactly half — genuinely arguable, and the unmet half is the interesting half.<br>
+           <b>4.</b> <b>No fact about any model changed between those three clicks.</b> Only where you drew the line.`),
+        agiDefiner(),
+        p(`That is the actual state of the AGI debate. Not a disagreement about what models can do — those are measurable — but about where a finish line goes that was never a unit like a kilogram.`),
+
         p(`You have just spent fourteen chapters learning how a machine turns a pile of numbers into something that can hold a conversation, write code, and pass a bar exam. So here is the question you have actually been building toward: are we close to a machine that can do <i>anything</i> a smart human can do? And if we are not there yet, is there anything one person, reading this in 2026, could actually do about it?`),
         p(`Both deserve honest answers, not hype and not doom. The first: closer than most people in 2015 would have believed, and further than most 2026 headlines admit. The second: yes, more than at almost any point in this field's eighty-year history, because the tools, the papers, and the open models are, for the first time, sitting on your own laptop.`),
         p(`This chapter earns both answers. It starts with what people actually mean by "AGI" — a term older and slipperier than it sounds. Then it takes today's frontier models apart, axis by axis, to find exactly where the gaps still are. Then the roads people are betting on to close them, the walls that could stop any of those bets, and — since this is the last chapter — what you, specifically, can do next.`),
@@ -341,14 +491,16 @@
         section('What people have meant by "AGI"',
           p(`Alan Turing never used the phrase "artificial general intelligence." In 1950 he proposed something cleverer: instead of arguing about the word "think," ask whether a machine's typed answers could be told apart from a human's. That sidestep — judge behaviour, not some unmeasurable inner spark — is still the field's best trick, and it still bites us, because a system can imitate the behaviour of understanding without necessarily having the thing itself.`),
           p(`In 2007 Shane Legg and Marcus Hutter tried to pin the word down properly: intelligence is an agent's ability to achieve goals in a <em>wide</em> range of environments. That one word is doing all the work. A chess engine is extraordinary in one environment and useless in every other; generality, not raw skill, is the bar.`),
-          p(`Organisations building toward that bar wrote their own versions of it. <a href="https://openai.com/charter/" target="_blank" rel="noopener">OpenAI's charter</a> defines AGI as "highly autonomous systems that outperform humans at most economically valuable work" — an economic bar, deliberately concrete. Anthropic tends to avoid the term itself and instead writes about <em>transformative AI</em>: systems whose impact could rival the agricultural or industrial revolutions — a framing about consequences, not a skills checklist. And in 2023 Google DeepMind (Morris et al.) proposed <a href="https://arxiv.org/abs/2311.02462" target="_blank" rel="noopener">"Levels of AGI"</a>, grading systems on <i>depth</i> (how good, "emerging" to "superhuman") and <i>breadth</i> (how general), the way self-driving cars get graded 0 through 5 — so "is it AGI yet?" stops being one yes/no argument.`),
+          p(`Organisations building toward that bar wrote their own versions of it. <a href="https://openai.com/charter/" target="_blank" rel="noopener">OpenAI's charter</a> defines AGI as "highly autonomous systems that outperform humans at most economically valuable work" — an economic bar, deliberately concrete. `),
+          p(`Anthropic tends to avoid the term itself and instead writes about <em>transformative AI</em>: systems whose impact could rival the agricultural or industrial revolutions — a framing about consequences, not a skills checklist. And in 2023 Google DeepMind (Morris et al.) proposed <a href="https://arxiv.org/abs/2311.02462" target="_blank" rel="noopener">"Levels of AGI"</a>, grading systems on <i>depth</i> (how good, "emerging" to "superhuman") and <i>breadth</i> (how general), the way self-driving cars get graded 0 through 5 — so "is it AGI yet?" stops being one yes/no argument.`),
           p(`None of these agree on a finish line, and that is the honest point: "AGI" is not a unit like a kilogram, it is a moving target several serious people define differently, and you should be suspicious of anyone — in either direction — who claims certainty about when we cross it.`),
         ),
 
         callout('history', 'A test that keeps getting redefined', `Turing's 1950 paper predicted machines would pass his test by 2000. A version of it plausibly happened, quietly, sometime in the 2020s — and by then almost nobody treated it as the finish line, because a system could imitate conversation convincingly while still failing at planning, memory and reliability in ways a five-year-old would not. Each decade's definition of "real" intelligence has moved to whatever the current best machines still can't do. That isn't a failure of the field; it's a sign the goalposts were badly placed the first time, and every reframing since — Legg &amp; Hutter, the OpenAI charter, DeepMind's Levels of AGI — has been an attempt to place them better.`),
 
         section('What 2026 frontier models can already do',
-          p(`Whatever you think "AGI" should mean, it's worth being precise about the checkable capabilities of 2026 frontier models — both the hype and the dismissal usually skip this part. Today's best models answer PhD-qualifying-exam science questions (the GPQA benchmark) at a level beating most non-specialist PhDs outside their own field. They solve International Mathematical Olympiad and Putnam-competition problems most strong maths graduates cannot. Handed an open-ended coding task, they work autonomously for hours across dozens of files, run their own tests, and open a real pull request. They look at a screen, decide what to click, and operate real software (<em>computer use</em>). And they do all of this across text, images, audio and video in one system, not four bolted together.`),
+          p(`Whatever you think "AGI" should mean, it's worth being precise about the checkable capabilities of 2026 frontier models — both the hype and the dismissal usually skip this part. `),
+          p(`Today's best models answer PhD-qualifying-exam science questions (the GPQA benchmark) at a level beating most non-specialist PhDs outside their own field. They solve International Mathematical Olympiad and Putnam-competition problems most strong maths graduates cannot. Handed an open-ended coding task, they work autonomously for hours across dozens of files, run their own tests, and open a real pull request. They look at a screen, decide what to click, and operate real software (<em>computer use</em>). And they do all of this across text, images, audio and video in one system, not four bolted together.`),
           p(`That list would have sounded like science fiction to this field's own researchers in 2015. It is real, measured, and why the conversation about AGI stopped being purely academic around 2023.`),
         ),
 
@@ -357,19 +509,20 @@
         section('What they still cannot do',
           p(`Set those achievements next to what has barely moved, and the shape of the remaining problem comes into focus. Four gaps show up in nearly every serious researcher's list, worth naming precisely — "not AGI yet" isn't a feeling, it's these specific, checkable deficits.`),
           ul([
-            `<b>Continual learning.</b> A model's weights are frozen the instant training ends. Anything it appears to "learn" mid-conversation lives only in that conversation's context and disappears the moment it ends. A human employee who is corrected once usually does not repeat the mistake; a deployed model, by default, will.`,
+            `<b>Continual learning.</b> A model's weights are frozen the instant training ends. Anything it appears to "learn" mid-conversation lives in that conversation's context, and unless a product writes it to an external store and reads it back, it goes when the conversation does. Even then the weights have not changed: the model is being handed notes, not taught. A human employee who is corrected once usually does not repeat the mistake; a deployed model, by default, will.`,
             `<b>Sample efficiency.</b> Training uses trillions of words. A toddler learns a new word for life from a couple of exposures, because a young brain arrives with strong priors about objects, causes, and other minds that a model currently has to reconstruct, laboriously, from raw text statistics.`,
             `<b>Long-horizon reliability.</b> A model that is right 98% of the time per step is wrong more often than not by step fifty, because errors compound. This single fact — not raw intelligence — is most of why an agent that nails a five-minute task can still fail a five-day one.`,
             `<b>Robust world models and physical common sense.</b> Ask what happens when an unevenly stacked tower of blocks tips over, and a system trained mostly on text and images is pattern-matching against similar-looking scenes, not simulating physics the way a body that has actually knocked things over learns to.`,
           ]),
           p(`Add to that list two problems that are shrinking but stubbornly not solved: <em>calibration</em> — a model still states a wrong fact exactly as fluently as a right one, so hallucination is reduced, not gone — and <em>energy</em>. Your brain runs on about 20 watts, a dim bulb, and does everything a human does with it. Training one frontier model burns tens of megawatts for months, and every one of the billions of daily replies from deployed models adds to that bill. Different substrate, wildly different economics.`),
-          callout('tryit', 'Try it: read the shape of the gap, not just the size', `Hover or click each axis of the radar below. Notice that 2026 models (blue) already push <i>past</i> the human-expert line (green) on knowledge, maths and coding — the argument "models don't really understand anything" gets harder to make on those three axes specifically. Then look at the four axes on the left where blue collapses inward: that collapse, not the outward bulge, is where the honest uncertainty about AGI actually lives. Toggle "what would close it" for each axis and notice how different the fixes are — no single breakthrough closes all four.`),
+          callout('tryit', 'Try it: read the shape of the gap, not just the size', `Hover or click each axis of the radar below. Notice that 2026 models (blue) already push <i>past</i> the human-expert line (green) on knowledge, maths and coding — the argument "models don't really understand anything" gets harder to make on those three axes specifically. Then find the four axes where blue collapses furthest inward — continual learning, sample efficiency, the physical world and energy efficiency: that collapse, not the outward bulge, is where the honest uncertainty about AGI actually lives. Toggle "what would close it" for each axis and notice how different the fixes are — no single breakthrough closes all four.`),
           capabilityRadar(),
         ),
 
         section('The clock nobody agrees on: how fast is "long-horizon" moving?',
           p(`Of the four gaps above, long-horizon reliability is the one with the best public data behind it. In 2025 the AI safety research group METR asked a direct question: for a task of a given length (measured by how long a skilled human takes to do it), what is the longest task a given model can complete with 50% success? They call this the model's <em>time horizon</em>, and they have been tracking it since the GPT-2 era.`),
-          p(`Their finding: the 50%-success time horizon of frontier models has been doubling roughly every seven months since 2019 — and the trend may have sped up since 2024. Early-2025 reasoning models reached about 110 minutes. That single number is easy to misread in either direction. Read pessimistically, "110 minutes" sounds unimpressive next to a human workweek. Read as a trend, seven straight years of doubling every seven months is one of the fastest sustained capability curves in the history of any technology — and METR's own extrapolation is that, if the trend holds, tasks that take a skilled human a full month could be within reach within about five years of their 2025 measurement.`),
+          p(`Their 2025 finding: the 50%-success time horizon of frontier models had been doubling roughly every seven months since 2019, and Claude 3.7 Sonnet reached about an hour. Their January 2026 re-measurement, on a task suite a third larger, revised the doubling to 6.3 months all-time — and to about 3 months if you count only from 2024. The trend did not just continue; it got faster. `),
+          p(`That single number is easy to misread in either direction. Read pessimistically, "about an hour" sounds unimpressive next to a human workweek. Read as a trend, six years of doubling every six months or better is one of the fastest sustained capability curves in the history of any technology — and extrapolating it says tasks that take a skilled human a full month come within reach around 2030, which is what the chart below draws.`),
           p(`Notice the word <i>if</i>. Every exponential trend in this field's history — Moore's law, model scale, benchmark scores — has eventually bent, sometimes up and sometimes down, when it hit a wall nobody had priced in yet. Treat the extrapolation below as the trend's honest continuation, not a prophecy.`),
           callout('tryit', 'Try it: drag the horizon forward', `Start at 2026 and read the projected task length. Now drag to 2030: notice it jumps from hours to weeks, because a fixed <i>doubling time</i> compounds into an enormous absolute number surprisingly fast — that is what exponentials do, and it is the same math as chapter 14's compute curve. Then drag back to 2020 and compare the model's projected horizon there against what GPT-3 could actually do; a mismatch is the fit being a smooth idealisation of noisy, lumpy real progress.`),
           taskHorizonChart(),
@@ -382,7 +535,7 @@
             { title: 'Test-time compute and search', body: `Instead of only making the model bigger, let it think longer per question: generate multiple reasoning paths, search over them, verify and select. This is most of what turned 2023's models into 2025's IMO-medal-level reasoners — trading inference cost for capability in a way pretraining scale alone can't.` },
             { title: 'Continual and online learning, plus memory', body: `Give a deployed model a safe way to keep updating — its weights, or an external memory it reads and writes across sessions — so it stops forgetting the moment the context window closes. This targets the continual-learning and memory gaps directly, and is one of the least solved items here.` },
             { title: 'World models and embodiment', body: `Train on video, simulation and eventually robotics, not just text, so physics and cause-and-effect are learned from consequences rather than described in words. The most expensive, slowest-moving path, because the physical world doesn't compress into a token stream the way text does.` },
-            { title: 'New architectures: SSMs, hybrids, sparsity', body: `The transformer (chapter 7) isn't sacred. State-space models (Mamba and relatives, chapter 5) process long sequences more cheaply; mixture-of-experts sparsity (DeepSeek-V3 and others) lets a model activate far fewer parameters per token than it holds in total. Hybrids of all three are now standard in frontier models.` },
+            { title: 'New architectures: SSMs, hybrids, sparsity', body: `The transformer (chapter 7) isn't sacred. State-space models (Mamba and relatives, chapter 5) process long sequences more cheaply; mixture-of-experts sparsity (DeepSeek-V3 and others) lets a model activate far fewer parameters per token than it holds in total. Sparsity is already standard at the frontier. Transformer–state-space hybrids are shipping in open-weight models and are not yet the default in the largest ones — which is roughly where mixture-of-experts sat three years ago.` },
             { title: 'AI doing AI research', body: `The most speculative, most consequential bet: use current models to help design, debug and evaluate the next generation, automating part of the research loop itself. If it works, progress could compound faster than human researchers alone could sustain — which is exactly why the next section's safety questions aren't hypothetical.` },
           ]),
         ),
@@ -391,7 +544,7 @@
           p(`Every path above runs into the same set of walls, regardless of which lab or which architecture is betting on it.`),
           sub('Compute and energy',
             p(`Frontier training runs are bottlenecked by how many advanced chips exist, which is bottlenecked by a handful of semiconductor fabs on Earth, which is bottlenecked by machines (extreme ultraviolet lithography) only one company currently makes. Every chip also needs power: frontier data centres now run in the hundreds of megawatts, competing for grid capacity with cities. "Just add more GPUs" is a real strategy and also a genuinely physical, multi-year bottleneck, not a software problem.`),
-            callout('tryit', 'Try it: feel what a training budget actually buys', `Set the budget slider to $1,000 and note the "class" readout. Now move it to $100,000,000 and watch how many orders of magnitude of parameters that unlocks — and notice the caption's honest caveat that this ignores salaries, failed runs, and data costs, which for a frontier lab often cost as much again as the compute itself.`),
+            callout('tryit', 'Try it: feel what a training budget actually buys', `Set the budget slider to $1,000 and note the "class" readout. Now move it to $100,000,000 and watch how many orders of magnitude of parameters that unlocks — and read the caption's caveat: these are round editorial assumptions about throughput and price, not quotes. The compute is also only part of the bill — a frontier lab spends about as much again on staff, data and failed runs, as the cost table further down sets out.`),
             costExplorer(),
           ),
           sub('Data walls',
@@ -402,7 +555,7 @@
           ),
           sub('Alignment and safety: the failure mode that matters most',
             p(`This constraint is unlike the others: it's not a resource that runs out, it's a risk that grows <i>with</i> capability. The scenario researchers at every major lab actually worry about isn't "the model turns evil." It's more mundane and more serious: <b>capability outpacing our ability to verify what a system is actually doing and why.</b> A highly capable, somewhat unreliable model whose internal reasoning we can't fully inspect is a bad combination regardless of intent, because "we can't tell if this went wrong" scales badly with autonomy.`),
-            p(`Three research responses exist today. <em>Interpretability</em> looks inside a model's weights and activations for what it's actually computing, rather than trusting its stated reasoning. <em>Scalable oversight</em> builds ways for humans (or weaker, trusted AI) to check the work of a system smarter or faster than they are. And labs now publish explicit commitments about what capability level triggers what precaution before deployment — Anthropic's <a href="https://www.anthropic.com/news/core-views-on-ai-safety" target="_blank" rel="noopener">Responsible Scaling Policy</a> is one lab's framework for this, not an industry standard.`),
+            p(`Three research responses exist today. <em>Interpretability</em> looks inside a model's weights and activations for what it's actually computing, rather than trusting its stated reasoning. <em>Scalable oversight</em> builds ways for humans (or weaker, trusted AI) to check the work of a system smarter or faster than they are. And labs now publish explicit commitments about what capability level triggers what precaution before deployment — Anthropic's <a href="https://www.anthropic.com/responsible-scaling-policy" target="_blank" rel="noopener">Responsible Scaling Policy</a> is one lab's framework for this, not an industry standard.`),
           ),
           sub('Governance',
             p(`Export controls on advanced chips, reporting requirements for the largest runs, and international coordination attempts are all, in 2026, early, contested and unevenly enforced. The underlying problem is real regardless of any specific policy: the compute build-out is happening faster than most governments' ability to understand, let alone regulate, it.`),
@@ -417,7 +570,7 @@
             `<b>After that:</b> join an existing lab or team, or found one, with a public, checkable track record instead of a resume line. Decide between <em>research engineer</em> (build the training infrastructure, data pipelines and eval harnesses research runs on) and <em>research scientist</em> (design the experiments) — both need everything above; they diverge from here, not before.`,
           ]),
           p(`The skills that matter most, roughly in the order they pay off: PyTorch fluency; actually reproducing a paper, not just reading its abstract; data engineering (cleaning and deduplicating a dataset is more of the job than people expect); building evals (can you tell, cheaply and repeatably, whether a change helped?); clear writing; and, once you outgrow one GPU, distributed training and CUDA/Triton.`),
-          callout('tryit', 'Try it: build your own plan', `Pick the background that matches you honestly and the hours per week you can actually sustain — not the hours you wish you had. Read the plan it generates. Then change one input and see what shifts: notice that the milestones change, but the underlying skill order (foundations, then a real training run, then a narrow public artefact, then a contribution) does not.`),
+          callout('tryit', 'Try it: build your own plan', `Pick the background that matches you honestly and the hours per week you can actually sustain — not the hours you wish you had. Read the plan it generates. Then change your background and see which milestone shifts — and notice that changing the hours only changes the pace, never the order. That order (foundations, then a real training run, then a narrow public artefact, then a contribution) is the part that does not move.`),
           roadmapBuilder(),
         ),
 
@@ -436,7 +589,8 @@
         ),
 
         section('Why this matters for modern AI',
-          p(`Every capability in this chapter — the PhD-level answers, the hours-long coding sessions, the 110-minute task horizon — was built from exactly the mechanisms in chapters 1 through 13: a loss function, gradient descent, backpropagation, a transformer's attention, scaled up, then shaped by RLHF and RL on verifiable tasks (chapters 9–11). AGI, if it arrives, won't be a different kind of machine. It will be this same recipe, plus whichever candidate path above actually closes the remaining gaps — gaps that are specific, named, and in several cases already measured year over year, not vague hand-waving. That's the most useful thing this course can leave you with: not a prediction of when, but a precise enough map of <i>what is still missing</i> that you can watch it close, or fail to, with your own eyes.`),
+          p(`Every capability in this chapter — the PhD-level answers, the hours-long coding sessions, the task horizon that doubles every six months — was built from exactly the mechanisms in chapters 1 through 13: a loss function, gradient descent, backpropagation, a transformer's attention, scaled up, then shaped by RLHF and RL on verifiable tasks (chapters 9–11).`),
+          p(` AGI, if it arrives, won't be a different kind of machine. It will be this same recipe, plus whichever candidate path above actually closes the remaining gaps — gaps that are specific, named, and in several cases already measured year over year, not vague hand-waving. That's the most useful thing this course can leave you with: not a prediction of when, but a precise enough map of <i>what is still missing</i> that you can watch it close, or fail to, with your own eyes.`),
           p(`And unlike almost any other transformative technology in history, the tools to work on that map — papers, open model weights, training code — sit on your computer right now, not locked in one company's basement. That's genuinely new, and it's why the roadmap above isn't wishful thinking.`),
         ),
 
@@ -452,7 +606,7 @@
           ol([
             `<a href="https://www.csee.umbc.edu/courses/471/papers/turing.pdf" target="_blank" rel="noopener">Turing, "Computing Machinery and Intelligence"</a> (1950) — the imitation game, and the first serious attempt to define the question at all.`,
             `<a href="https://arxiv.org/abs/0712.3329" target="_blank" rel="noopener">Legg &amp; Hutter, "Universal Intelligence: A Definition of Machine Intelligence"</a> (2007) — the formal definition behind "wide range of environments."`,
-            `<a href="https://arxiv.org/abs/2311.02462" target="_blank" rel="noopener">Morris et al. (Google DeepMind), "Levels of AGI for Operationalizing Progress on the Path to AGI"</a> (2023) — a graded framework instead of a single yes/no line.`,
+            `<a href="https://arxiv.org/abs/2311.02462" target="_blank" rel="noopener">Morris et al. (Google DeepMind), "Levels of AGI: Operationalizing Progress on the Path to AGI"</a> (2023) — a graded framework instead of a single yes/no line.`,
             `<a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener">Vaswani et al., "Attention Is All You Need"</a> (2017) — the architecture nearly everything since is built on.`,
             `<a href="https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf" target="_blank" rel="noopener">Radford et al., GPT-2, "Language Models are Unsupervised Multitask Learners"</a> (2019).`,
             `<a href="https://arxiv.org/abs/2005.14165" target="_blank" rel="noopener">Brown et al., GPT-3, "Language Models are Few-Shot Learners"</a> (2020).`,
@@ -460,14 +614,14 @@
             `<a href="https://arxiv.org/abs/2203.15556" target="_blank" rel="noopener">Hoffmann et al., "Training Compute-Optimal Large Language Models"</a> (Chinchilla, 2022) — the C = 6ND relationship used in the cost explorer above.`,
             `<a href="https://arxiv.org/abs/2203.02155" target="_blank" rel="noopener">Ouyang et al., "Training Language Models to Follow Instructions with Human Feedback"</a> (InstructGPT, 2022).`,
             `<a href="https://arxiv.org/abs/2212.08073" target="_blank" rel="noopener">Bai et al., "Constitutional AI: Harmlessness from AI Feedback"</a> (2022).`,
-            `<a href="https://arxiv.org/abs/2305.18290" target="_blank" rel="noopener">Rafailov et al., "Direct Preference Optimization"</a> (2023).`,
+            `<a href="https://arxiv.org/abs/2305.18290" target="_blank" rel="noopener">Rafailov et al., "Direct Preference Optimization: Your Language Model is Secretly a Reward Model"</a> (2023).`,
             `<a href="https://arxiv.org/abs/2303.12712" target="_blank" rel="noopener">Bubeck et al., "Sparks of Artificial General Intelligence: Early Experiments with GPT-4"</a> (2023).`,
             `<a href="http://www.incompleteideas.net/IncIdeas/BitterLesson.html" target="_blank" rel="noopener">Sutton, "The Bitter Lesson"</a> (2019) — one page, and worth reading twice.`,
             `<a href="https://arxiv.org/abs/2407.21783" target="_blank" rel="noopener">Meta AI, "The Llama 3 Herd of Models"</a> (2024) — the most detailed public account of a frontier-scale training run.`,
             `<a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">DeepSeek-AI, "DeepSeek-V3 Technical Report"</a> and <a href="https://arxiv.org/abs/2501.12948" target="_blank" rel="noopener">"DeepSeek-R1"</a> (2024–2025) — open-weight frontier training and RL-driven reasoning, at reported cost far below Western labs' equivalents.`,
             `<a href="https://www.anthropic.com/news/core-views-on-ai-safety" target="_blank" rel="noopener">Anthropic, "Core Views on AI Safety"</a> (2023) — one lab's public reasoning for why safety work is urgent, including the Responsible Scaling Policy framing.`,
             `<a href="https://situational-awareness.ai" target="_blank" rel="noopener">Aschenbrenner, "Situational Awareness"</a> (2024) — a widely-read, deliberately aggressive extrapolation; read it and the more cautious pieces on this list against each other.`,
-            `<a href="https://arxiv.org/abs/2503.14499" target="_blank" rel="noopener">Kwa et al. (METR), "Measuring AI Ability to Complete Long Tasks"</a> (2025) — the task-horizon study behind the chart above.`,
+            `<a href="https://arxiv.org/abs/2503.14499" target="_blank" rel="noopener">Kwa et al. (METR), "Measuring AI Ability to Complete Long Software Tasks"</a> (2025) — the task-horizon study behind the chart above.`,
             `<a href="https://www.youtube.com/@AndrejKarpathy" target="_blank" rel="noopener">Karpathy, "Neural Networks: Zero to Hero" and onward</a> — the videos this course's labs are built to follow, start to finish.`,
           ]),
         ),

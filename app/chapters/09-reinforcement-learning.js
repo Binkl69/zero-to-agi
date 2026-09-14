@@ -1,175 +1,181 @@
-/* Chapter 09 — Learning by doing: reinforcement learning */
+/* Zero → AGI · Chapter 09 · Learning by doing: reinforcement learning
+   DESIGN RULE: the reader IS the agent for the first thirty seconds — no map, no labels, one
+   number per move — so credit assignment is felt before it is named.
+   Interactives, in order: blind-agent grid (be the agent); discount factor deciding whether an
+   agent walks past a prize; tabular Q-learning gridworld with the value ripple; multi-armed
+   bandit with regret curves; PPO clipping vs policy collapse; CoastRunners reward hacking. */
 (function () {
   ZTA.registerChapter({
     id: '09-reinforcement-learning',
     num: 9,
     part: 'II',
     title: 'Learning by doing: reinforcement learning',
-    tagline: 'No answer key, only consequences: how a program learns to win games, walk, and (later) be a helpful assistant.',
+    tagline: 'Find the goal with no map and one number per move, then meet the algorithms that solve the problem you just felt — and the reward that lies to you.',
     render(root, ctx) {
       const { h, p, section, sub, callout, ul } = ctx;
       const C = ctx.colors;
+      const FONT = '13px Inter, system-ui, sans-serif';
+      const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
+      function wrapLines(gc, text, maxW) {
+        const words = String(text).split(' '); const out = []; let line = '';
+        for (const w of words) {
+          const t = line ? line + ' ' + w : w;
+          if (line && gc.measureText(t).width > maxW) { out.push(line); line = w; } else line = t;
+        }
+        if (line) out.push(line);
+        return out;
+      }
+      function wrapText(gc, text, x, y, maxW, lh) {
+        wrapLines(gc, text, maxW).forEach((ln, i) => gc.fillText(ln, x, y + i * lh));
+      }
 
-      /* ------------------------------------------------------------------ hook */
+      /* ---------- open by making the reader the agent ---------- */
       root.append(
-        p('In March 2016, in a hotel in Seoul, a program called AlphaGo played move 37 of its second game against Lee Sedol, one of the strongest Go players alive. Commentators thought it was a mistake. Professional players estimated a human would play it about one time in ten thousand. It won the game. Nobody had shown AlphaGo that move. There was no labelled dataset of "brilliant moves", no teacher marking its homework. It had discovered the move by <b>playing millions of games against itself and noticing what led to winning</b>.'),
-        p('Everything in this course so far was <em>supervised</em>: you show the model an input and the correct output, it measures its error, it nudges its weights. But most of life has no correct output. When you learn to ride a bike, nobody hands you the right handlebar angle for each millisecond. You wobble, you fall, you adjust. The only signal is <b>how it went</b>.'),
-        p('This chapter is about learning from consequences: <em>reinforcement learning</em>, or RL. It matters for its own sake (games, robots, data-centre cooling), and it matters because it is the final ingredient that turns a text predictor into an assistant. Keep that in mind: everything here will come back in chapter 11.'),
+        callout('tryit', '🖐 Do this first — find the goal with no map and no instructions',
+          `You are somewhere on a grid. You cannot see it. There is a good square somewhere and at least one very bad one.<br>
+           <b>1.</b> Press the arrows and move. After each move you get <b>one number</b>. That is the only thing you will ever be told.<br>
+           <b>2.</b> Keep going until something decisive happens.<br>
+           <b>3.</b> When it does, ask yourself the question that defines this whole chapter: <b>which move was the mistake?</b><br>
+           <b>4.</b> Then press <b>Reveal the map</b> and see what you were up against.`),
+        blindAgent(),
+        p(`Nobody told you the right move. Nobody told you the wrong one either — only how it went, once, at the end. Every algorithm in this chapter exists to close that gap.`),
       );
 
-      /* ------------------------------------------------------------------ mechanism */
-      root.append(section('The vocabulary: five words and a loop',
-        p('RL is a loop between two things. The <em>agent</em> is the learner: the program choosing what to do. The <em>environment</em> is everything else: the game, the robot\'s physics, the maze. At each tick, the environment shows the agent a <em>state</em> (where am I? what does the board look like?). The agent picks an <em>action</em>. The environment responds with a new state and a number: the <em>reward</em>. Then it repeats.'),
-        p('The reward is the whole training signal. It is often zero for a long time and then suddenly not: +1 for winning a game after 200 moves, −1 for losing, 0 for every move in between. The agent\'s job is to choose actions that make the <b>total future reward</b> as large as possible. Not the next reward: the total, including the delayed ones.'),
-        p('Two more words. A <em>policy</em> is the agent\'s strategy: a rule (in practice a neural network, or a table) that maps a state to an action, or to probabilities over actions. A <em>value</em> is a prediction: "starting from this state, how much reward am I going to collect from here on, if I follow my policy?" A chess player who looks at a position and says "white is winning" is stating a value. Learning good values is most of what RL does, because once you know the value of every state you can just step toward the most valuable one.'),
+      root.append(section('Why this is a different kind of problem',
+        p(`In March 2016, in a hotel in Seoul, a program called AlphaGo played move 37 of its second game against Lee Sedol. Commentators thought it was a mistake. AlphaGo's own model of human play put the chance a human would choose it at about one in ten thousand. It won.`),
+        p(`AlphaGo did start from human games: its first network was trained to predict 30 million moves from expert play. But nobody had shown it <em>that</em> move, and no teacher marked its homework. It found it by <b>playing millions of games against itself and noticing what led to winning</b> — and the following year AlphaGo Zero dropped the human games entirely and came out stronger.`),
+        p(`Almost everything in this course so far was <em>supervised</em>: show the model an input and the correct output, measure the error, nudge the weights. (Chapter 8's GAN generator was the exception — it never saw a correct output, only another network's opinion, which is much closer to a reward than to a label.) But most of life has no correct output. When you learn to ride a bike, nobody hands you the right handlebar angle for each millisecond. You wobble, you fall, you adjust.`),
         h('div', { class: 'grid-2' },
-          h('div', { class: 'card' }, h('h4', {}, 'Supervised learning'), h('p', { html: 'Input → correct output. The loss tells you <b>how wrong</b> and <b>in which direction</b> for every example. Feedback is instant and precise.' })),
+          h('div', { class: 'card' }, h('h4', {}, 'Supervised learning'), h('p', { html: 'Input → correct output. The loss tells you <b>how wrong</b> and <b>in which direction</b>, for every example. Feedback is instant and precise.' })),
           h('div', { class: 'card' }, h('h4', {}, 'Reinforcement learning'), h('p', { html: 'State → action → reward, repeat. The reward tells you <b>how it went</b>, often much later, and never tells you what you should have done instead.' })),
         ),
+        p(`This chapter is about learning from consequences. It matters for its own sake — games, robots, data-centre cooling — and it matters because it is the final ingredient that turns a text predictor into an assistant. Everything here comes back in chapter 11.`),
       ));
 
-      root.append(section('Three problems that make RL hard',
-        sub('1. Credit assignment: which of the 40 moves lost the game?',
-          p('You play a game of chess, you lose at move 40. The reward is −1. Which move was the mistake? Maybe move 12. Maybe the loss was already baked in at move 3, and the next 37 moves were fine. The reward arrives at the end, a single number, and it has to be spread back over every decision that led to it. This is the <em>credit-assignment problem</em>, and it is the reason RL needs more than gradient descent on a loss: there is no per-step loss to descend.'),
-        ),
-        sub('2. Exploration versus exploitation: the restaurant problem',
-          p('You have a favourite restaurant. It is good. There are twenty others on the street you have never tried. Every night you face the choice: <em>exploit</em> what you know (go to the favourite, get a reliable 8/10) or <em>explore</em> (try somewhere new, get a 4 or a 10). If you never explore, you never find the best restaurant. If you always explore, you eat a lot of bad dinners. An RL agent faces this every step, and the simplest fix is embarrassingly crude: with some small probability <em>ε</em> (epsilon, say 10%), ignore what you know and act at random. This is called <em>ε-greedy</em>. Smarter schemes give a bonus to actions you are <b>uncertain</b> about; you will meet one below.'),
-        ),
-        sub('3. Delayed reward and discounting',
-          p('A reward of 10 now is worth more than a reward of 10 in fifty steps. Partly because the world is uncertain, partly because we want the agent to prefer quick wins. So RL multiplies future rewards by a <em>discount factor</em> γ (gamma) per step, typically 0.9 to 0.99. With γ = 0.9, a reward of 10 five steps away is worth 10 × 0.9<sup>5</sup> ≈ 5.9 today. With γ = 0.99 the agent effectively plans about a hundred steps ahead; with γ = 0.5 it is impatient and barely sees past the next few moves.'),
-        ),
+      root.append(section('Five words and a loop',
+        p(`You just played all five parts. The <em>agent</em> is the learner — that was you. The <em>environment</em> is everything else: the grid, the game, the robot's physics.`),
+        p(`At each tick the environment shows the agent a <em>state</em> (where am I?). The agent picks an <em>action</em>. The environment responds with a new state and a number: the <em>reward</em>. Then it repeats.`),
+        p(`The reward is the entire training signal. It is often zero for a long time and then suddenly not — +1 for winning after 200 moves, −1 for losing, nothing in between. The agent's job is to maximise <b>total future reward</b>, not the next one.`),
+        p(`Two more words. A <em>policy</em> is the strategy: a rule mapping a state to an action. A <em>value</em> is a prediction — "starting here, how much reward will I collect from now on?" A chess player who says "white is winning" is stating a value.`),
+        p(`Learning good values is most of what RL does, because once you know the value of every state you can simply step toward the most valuable one.`),
+        callout('key', '🔑 The credit-assignment problem',
+          `You lose a chess game at move 40. The reward is −1. <b>Which move was the mistake?</b> Maybe move 12. Maybe the loss was baked in at move 3 and the next 37 moves were fine.<br>
+           A single number arrives at the end and has to be spread back over every decision that led to it. You felt this directly in the demo above.<br>
+           This is why RL needs more than gradient descent on a loss: <b>there is no per-step loss to descend.</b>`),
       ));
 
-      root.append(section('Q-learning: a table of "how good is this action here?"',
-        p('Here is the simplest RL algorithm that really works, from 1989. Keep a table, <em>Q</em>, with one row per state and one column per action. Q(s, a) is your current estimate of the total discounted reward you will get if you take action a in state s and behave sensibly afterwards. Start with all zeros. Then, every time you take a step and observe (state s, action a, reward r, new state s\'), update one cell:'),
-        ctx.code('Q(s, a)  ←  Q(s, a)  +  α · [ r  +  γ · max_a\' Q(s\', a\')  −  Q(s, a) ]\n\n   α (alpha)   learning rate: how far to move toward the new estimate\n   γ (gamma)   discount factor\n   r + γ·max Q(s\',·)   the "target": reward now, plus the best you think you can do next'),
-        p('Read the bracket as an <b>error</b>: what you just learned the value should be (reward now plus the best next value), minus what you previously believed. You move your belief part of the way toward the evidence. That is it. Because the target uses the <i>next</i> state\'s value, information flows backwards one step per update: the cell next to the goal learns first, then the cell next to that, and so on. This is how credit assignment gets solved: not all at once, but by a chain of one-step corrections repeated thousands of times.'),
-        callout('example', 'A worked update',
-          'Say the agent is one step from a goal it has already discovered. α = 0.5, γ = 0.9. Currently Q(s, right) = 0. It steps right, pays the step cost r = −0.1, and lands in a state whose best action has value 5.<br>' +
-          'Target = −0.1 + 0.9 × 5 = <b>4.4</b>. Error = 4.4 − 0 = 4.4. New Q(s, right) = 0 + 0.5 × 4.4 = <b>2.2</b>.<br>' +
-          'Do it again from the same place: target is still 4.4, error is 4.4 − 2.2 = 2.2, new value 3.3. Then 3.85, 4.12, … converging on 4.4. Every cell in the grid below is doing exactly this.'),
-        p('Written out as code it is about ten lines, and the interactive below runs exactly this — no shortcuts, no pre-computed answers:'),
-        ctx.code('# tabular Q-learning: the entire algorithm\nQ = zeros(n_states, n_actions)          # start believing nothing\n\nfor episode in range(10_000):\n    s, done = env.reset(), False\n    while not done:\n        # ε-greedy: roll a die, sometimes ignore what you know\n        a = randint(n_actions) if random() < eps else argmax(Q[s])\n\n        s2, r, done = env.step(a)\n\n        # the target: reward now + the best you believe you can do next\n        target = r if done else r + gamma * max(Q[s2])\n\n        Q[s][a] += alpha * (target - Q[s][a])   # move a fraction α toward it\n        s = s2'),
-        p('Two details in that code earn their place. <code class="inline">target = r if done</code>: when the episode ends there is no "next state", so the target is just the reward — this is the only place real reward enters the table, and every other value in the grid is ultimately a rumour about it. And <code class="inline">argmax(Q[s])</code> inside the loop while the target uses <code class="inline">max(Q[s2])</code> regardless of what was actually done next: Q-learning learns the value of the <b>best</b> policy even while behaving randomly. That property has a name, <em>off-policy</em> learning, and it is why you can crank exploration to 100% below and the table still converges on a good policy.'),
-        callout('key', 'Where you start the table is itself an exploration strategy',
-          'The demo below starts every Q value at <b>0</b>, and every step costs −0.1. Put those two facts together: the moment the agent tries an action, that action\'s value is pushed <i>below</i> zero, while every action it has not tried is still sitting at zero. So "take the highest-valued action" quietly means "take the one you know least about". A purely greedy agent — ε = 0 — sweeps the whole grid on its own.<br><br>' +
-          'This is <em>optimistic initialisation</em>, and there is an exact line where it stops working. Bumping into a wall returns you to the same cell, so that action\'s value converges on q = −0.1 + γq, which for γ = 0.9 is <b>−1</b>. Start the table above −1 and tried actions fall below untried ones: the agent explores. Start it below −1 and tried actions <i>rise</i> toward −1, above their untried neighbours, and a greedy agent locks onto the first thing it did and repeats it forever.<br><br>' +
-          'The demo has a <b>Q₀</b> slider so you can cross that line yourself. It is the same idea you will meet again in the bandit section as UCB\'s optimism bonus: <b>make the unknown look attractive, and exploration takes care of itself.</b>'),
-        p('Q-learning is <em>tabular</em> when the table is literal, which only works for small worlds. For Atari or Go the "table" becomes a neural network that takes the state and outputs a Q value per action; the update rule becomes the loss it is trained on. That is <em>deep Q-learning</em>, and we will get there. First, watch the table version learn.'),
+      root.append(section('How far ahead should it look?',
+        p(`A reward of 10 now is worth more than a reward of 10 in fifty steps — partly because the world is uncertain, partly because we want quick wins. So RL multiplies future rewards by a <em>discount factor</em> γ per step.`),
+        callout('tryit', '🖐 Try this — make an agent walk past a prize',
+          `Two rewards down one corridor: a <b>+3</b> two steps away and a <b>+20</b> ten steps beyond it. The question is not which to take — the walk to the far one passes over the near one — but whether the far one is worth walking for.<br>
+           <b>1.</b> Press <b>impatient (0.50)</b>. The distant +20 is now worth about 0.005 — the agent grabs the +3 and stops.<br>
+           <b>2.</b> Press <b>far-sighted (0.99)</b>. The +20 is worth around 17.7 and easily wins.<br>
+           <b>3.</b> Drag γ slowly and find the exact value where the agent changes its mind. <b>Nothing about the world changed. Only its patience did.</b>`),
+        discountLab(),
+        p(`With γ = 0.99 an agent effectively plans about a hundred steps ahead; with γ = 0.5 it barely sees past the next few moves. It is one number, and it silently determines whether your agent is capable of a long-term plan at all.`),
+        callout('key', '🔑 Explore or exploit?',
+          `You have a favourite restaurant. It is good. There are twenty others you have never tried.<br>
+           Every night: <em>exploit</em> what you know (a reliable 8/10) or <em>explore</em> (a 4, or a 10)? Never explore and you never find the best. Always explore and you eat a lot of bad dinners.<br>
+           An RL agent faces this every single step. The crudest fix works surprisingly well: with probability <em>ε</em> — say 10% — ignore what you know and act at random. That is <em>ε-greedy</em>.`),
       ));
 
-      /* ------------------------------------------------------------------ interactive A: gridworld */
-      root.append(callout('tryit', 'Try it: a Q-learning agent learns a maze in front of you',
-        'Press <b>Play</b>. The dot is the agent. Every cell has four triangles, one per action (up/right/down/left), coloured by its Q value: green is good, red is bad, grey is "never tried from here". The small number is that cell\'s best value, max<sub>a</sub> Q(s, a). Watch the green spread <b>backwards from the goal</b>, one cell per episode at first, and watch the return chart climb from −30 to about +8.9 — which is the best return this maze allows: the shortest path is twelve moves, so eleven of them cost −0.1 and the twelfth lands on the +10.<br>' +
-        'Then, in order:<br>' +
-        '<b>(1) Set ε to 0.</b> The agent still solves the maze — faster, in fact. That is not a bug, and the reason is the next control.<br>' +
-        '<b>(2) Now drag Q₀ down to −2</b> (this wipes the table) and leave ε at 0. The agent picks one action and repeats it forever: the return line flatlines at −30 and the grid stays grey. <b>Wind ε back up to 0.3</b> and watch it break out. This is the exploration failure, and you can only see it once the starting values are pessimistic — see the callout above for why.<br>' +
-        '<b>(3) Put Q₀ back to 0 and set γ to 0.5.</b> The values collapse towards zero the further you get from the goal — the start cell is worth roughly 0.5<sup>11</sup> × 10 ≈ 0.005 — yet the arrows still point the right way. Discounting changes what the numbers <i>mean</i>, not necessarily what the policy <i>does</i>.<br>' +
-        '<b>(4) Switch on Edit map</b> and drag the goal somewhere else <i>without resetting</i>. The old values die and new ones grow: you are watching the agent unlearn.<br>' +
-        '<b>(5) Crank α to 1.</b> Each update throws away the old estimate entirely, so the values thrash with every unlucky episode.'));
-      root.append(gridworld());
-
-      /* ------------------------------------------------------------------ interactive B: bandit */
-      root.append(section('Exploration, measured: the multi-armed bandit',
-        p('Strip RL down to its smallest possible problem: no states, no delayed reward, just five slot machines with different, hidden payout rates. Each pull pays £1 with some probability. You get 1000 pulls. How do you find the best machine without wasting too many pulls on the bad ones? This is the <em>multi-armed bandit</em>, and it is the exploration–exploitation dilemma with everything else removed. Casinos are the origin of the name; websites choosing which headline to show you are the modern use.'),
-        p('The score that matters is <em>regret</em>: how much you earned, compared with what you would have earned by pulling the best machine every time. A perfect agent has zero regret. A random agent\'s regret grows in a straight line. A good agent\'s regret curve <b>bends flat</b>: it explores early, identifies the winner, and stops paying for information it no longer needs. Watch the <i>shape</i> of the curve, not just where it ends — the shape is what tells you whether an agent is still paying for exploration it no longer needs.'),
-        p('Two classic strategies. <em>ε-greedy</em> you already know. <em>UCB</em> (upper confidence bound) is cleverer: it scores each machine by its average payout <b>plus a bonus that grows with how rarely you have tried it</b>. Machines you have barely touched look optimistic, so you try them; as evidence piles up the bonus shrinks and the winner takes over. "Optimism in the face of uncertainty" is the slogan, and it is a good one for life too.'),
-        ctx.code('score(k)  =  mean payout of k   +   sqrt( 2 · ln(t) / n(k) )\n              └─────┬─────┘       └────────┬────────┘\n                    │                      │\n         what you have actually      optimism bonus: large when you have\n         seen from machine k         pulled k rarely, shrinking like 1/√n\n                                     as evidence arrives\n\n   t     = total pulls so far        pull the machine with the highest score'),
-        p('Notice the asymmetry that makes UCB work. The bonus falls as 1/√n(k), so a machine you have pulled ten times still carries a visible bonus, while one pulled a thousand times carries almost none. Meanwhile ln(t) creeps upward forever, so a machine you have ignored for a long time slowly becomes tempting again. The result is an agent that explores hard early, tapers off on its own schedule, and never needs an ε knob at all — one fewer number for a human to guess.'),
-        callout('key', 'The honest comparison (and why the shape matters more than the score)',
-          'Run the demo below at its default 1,000 pulls and <b>ε-greedy usually wins</b>: with ε = 0.1 it averages about 47 regret against UCB\'s 69. That is not a bug in UCB, and the demo is not rigged. It is the real result, and the reason is worth more than the scoreboard.<br><br>' +
-          'ε-greedy spends a fixed <b>fraction</b> of every pull on exploration, forever. Once it has found the best machine, that spending is pure waste — but it is cheap waste, and over a short run the simplicity pays. Its regret therefore grows in a <b>straight line</b> with slope ε × (average gap), no matter how certain it becomes.<br><br>' +
-          'UCB pays more up front to measure every machine properly, then tapers: its regret grows like <b>log t</b>. So the curves cross. Around 4,000 pulls in this setup they meet; by 20,000 ε-greedy has spent about 546 and UCB about 239, and the gap keeps widening. <b>Raise the horizon in the demo to 20k and watch it happen.</b><br><br>' +
-          'And the knob is the real point: ε = 0.1 was <i>tuned</i>, by us, knowing the answer. Slide ε to 0.5 or 0.02 and ε-greedy falls apart. UCB has nothing to tune. In RL you almost never get to tune the exploration rate against the true answer, which is why "optimism in the face of uncertainty" beats "roll a die" everywhere that matters.'),
-      ));
-      root.append(callout('tryit', 'Try it: beat the algorithms',
-        'Click machines to pull them yourself. Try to identify the best one in as few pulls as you can — then press <b>Reveal</b> and see how close you were.<br>' +
-        'Then press <b>Run agents</b> and watch ε-greedy and UCB play the same machines. Things to do, in order:<br>' +
-        '<b>(1)</b> At the default 1,000 pulls, note who ends lower — usually ε-greedy — then look at the <i>curves</i>: UCB\'s is already bending, ε-greedy\'s is a straight line.<br>' +
-        '<b>(2)</b> Set the horizon to <b>20,000 pulls</b> and run again. The straight line keeps climbing at the same rate and UCB\'s flattening curve passes underneath it. That crossover is the whole argument.<br>' +
-        '<b>(3)</b> Slide ε to <b>0.5</b> and run: ε-greedy now wastes half of every pull forever and its line steepens to nearly the random baseline. Slide ε to <b>0</b>: it often locks onto a mediocre machine on the strength of one lucky payout and never looks again. UCB\'s curve does not move in either case — it has no ε.<br>' +
-        '<b>(4)</b> Press <b>New machines</b> a few times. Notice that when two machines are close in true rate, everyone\'s regret is small (it barely matters which you pick) and when one machine is far ahead, the bad strategies are punished hardest.'));
-      root.append(bandit());
-
-      /* ------------------------------------------------------------------ policy gradients */
-      root.append(section('The other family: policy gradients',
-        p('Q-learning learns values and derives a policy from them. The other big family skips the middleman and learns the <em>policy</em> directly: a network that outputs a probability for each action. The training rule, called <em>REINFORCE</em> or the <em>policy gradient</em>, is one sentence long: <b>run the policy, and for every action you took, nudge its probability up in proportion to the reward that followed it (and down if the reward was bad)</b>. Actions in winning games become more likely; actions in losing games less likely. Over millions of games the noise averages out and only the genuinely good habits survive.'),
-        callout('example', 'A worked policy-gradient step',
-          'Two actions, left and right. The network outputs two scores (<i>logits</i>), and a softmax turns them into probabilities. Both logits start at 0, so the policy is a coin flip: 50/50. The agent samples <b>right</b> and collects reward +1.<br>' +
-          'The gradient of log π(right) with respect to the logits is <code class="inline">onehot(right) − π</code> = (0, 1) − (0.5, 0.5) = <b>(−0.5, +0.5)</b>. Multiply by the reward (+1) and a learning rate of 0.5, add it on, and the logits become (−0.25, +0.25).<br>' +
-          'The new probability of going right is 1 / (1 + e<sup>−0.5</sup>) = <b>0.62</b>. One good outcome moved it from 50% to 62%. A reward of −1 would have moved it to 38% by exactly the same arithmetic. That is the whole algorithm: <b>the reward is a multiplier on the gradient of your own log-probability.</b>'),
-        p('Run that over a full episode instead of one action and you get REINFORCE:'),
-        ctx.code('# REINFORCE with a baseline\nfor episode in range(N):\n    states, actions, rewards = rollout(policy)     # play the game once\n\n    G, returns = 0, []                             # discounted return from each step onward\n    for r in reversed(rewards):\n        G = r + gamma * G\n        returns.insert(0, G)\n\n    # "was this better than I expected?" — value() is a second network\n    advantages = [G - value(s) for s, G in zip(states, returns)]\n\n    loss = -sum(log_prob(policy, s, a) * A\n                for s, a, A in zip(states, actions, advantages))\n    loss.backward(); optimizer.step()'),
-        p('Two refinements turn that into something you can train at scale. The first is the <code class="inline">- value(s)</code> in the advantage line: a second network predicts how well the agent expected to do, and the policy is nudged by the <b>surprise</b> rather than the raw return. If every game scores between 90 and 100, raw returns say "everything you did was great"; the surprise says which games were the 97s. This is the <em>baseline</em>, the difference is the <em>advantage</em>, and an algorithm with both a policy and a value network is called <em>actor–critic</em>.'),
-        p('The second is a limit on how far one update may move the policy. Take too big a step and the policy that generated your data no longer resembles the policy you now have, the data becomes worthless, and performance collapses in a way it never does in supervised learning — because in RL the model chooses its own next training set. <em>TRPO</em> (2015) enforced this with a hard constraint on the KL divergence between the old and new policy. <em>PPO</em> (2017) got almost the same effect far more cheaply by clipping the update whenever the action probabilities move more than about 20%. PPO is the algorithm that was later used to train ChatGPT, so remember the name — and remember the reason for the clip, because it comes back in chapter 11.'),
+      root.append(section('Q-learning: the simplest thing that actually works',
+        p(`From 1989. Keep a table, <em>Q</em>, with one row per state and one column per action. Q(s, a) is your current estimate of the total discounted reward from taking action a in state s and behaving sensibly afterwards. Start with all zeros.`),
+        p(`Then every time you observe (state s, action a, reward r, new state s'), update one cell. Read the update as an <b>error</b>: what you just learned the value should be, minus what you previously believed. You move your belief part of the way toward the evidence.`),
+        p(`That is the whole algorithm. Because the target uses the <i>next</i> state's value, information flows backwards one step per update: the cell next to the goal learns first, then the cell next to that. Credit assignment gets solved not all at once, but by a chain of one-step corrections repeated thousands of times.`),
+        callout('tryit', '🖐 Try this — watch an agent learn the maze you just failed at',
+          `<b>1.</b> Press <b>▶ Play</b> and watch the colours. The squares nearest the goal go green first, then the ripple spreads backwards. <b>That is credit assignment happening in front of you.</b><br>
+           <b>2.</b> Drag <b>γ discount</b> down to 0.5 and press <b>Reset Q</b>. The green ripple stops spreading: distant squares still learn, but a reward ten steps away is now worth 0.5<sup>10</sup> — about a thousandth — so their values are too faint to see or to act on.<br>
+           <b>3.</b> Push <b>ε exploration</b> to 1.0, so the agent moves <i>entirely at random</i>. The table still converges on a good policy. That is not a bug; it is the property called off-policy learning.<br>
+           <b>4.</b> Turn <b>Edit map</b> on and move the goal. Watch it unlearn the old one.`),
+        gridworld(),
+        p(`Two details earn their place. When an episode ends there is no "next state", so the target is the reward alone — the <b>only</b> update with no guess in it at all. Every other update is part real reward and part the table's current opinion about what comes next, which is why the whole grid is ultimately a rumour anchored on the goal.`),
+        p(`And the update uses the <i>best</i> next value regardless of what the agent actually did next. So Q-learning learns the value of the best policy even while behaving randomly, which is exactly why step 3 above works. That property is called <em>off-policy</em> learning.`),
+        p(`Q-learning is <em>tabular</em> when the table is literal, which only works for small worlds. For Atari or Go the table becomes a neural network taking the state and outputting a Q value per action, and the update rule becomes the loss it is trained on. That is <em>deep Q-learning</em>.`),
       ));
 
-      /* ------------------------------------------------------------------ deep RL history */
-      root.append(section('Deep RL: from Atari to Go',
-        callout('history', 'The decade RL went from toy mazes to superhuman',
-          '<b>2013–2015, DQN.</b> DeepMind trains a convolutional network to play 49 Atari games from raw pixels, using Q-learning with two tricks that made deep RL stable: <i>experience replay</i> (store past steps, train on random batches of them) and a slowly-updated <i>target network</i>. The arXiv paper appeared in December 2013; the <i>Nature</i> paper in February 2015. Same network, same hyperparameters, every game.<br><br>' +
-          '<b>March 2016, AlphaGo</b> beats Lee Sedol 4–1. Go has ~10<sup>170</sup> positions; brute force is hopeless. AlphaGo combined a policy network (first trained on human games, then improved by <i>self-play</i> with policy gradients), a value network, and <i>Monte Carlo tree search</i> (MCTS): look ahead by playing out promising lines, guided by the networks.<br><br>' +
-          '<b>December 2017, AlphaZero</b> drops the human games entirely. Starting from random play, it learns Go, chess and shogi from self-play alone, beating the strongest existing programs in each. The same recipe, three games. This was the moment "learn from scratch by playing yourself" stopped sounding like science fiction.<br><br>' +
-          '<b>2018–2019, OpenAI Five and AlphaStar.</b> Real-time strategy games with hidden information, long horizons and enormous action spaces: Dota 2 (OpenAI Five, beat the world champions in April 2019, trained with PPO at colossal scale) and StarCraft II (AlphaStar, Grandmaster level, late 2019).<br><br>' +
-          '<b>Robotics.</b> The same algorithms learned to make a robot hand solve a Rubik\'s cube (2019) and, more usefully, taught quadrupeds to walk over rough ground. The catch is that real robots are slow and break, so almost all training happens in simulation, which brings its own problem: see <i>sim-to-real</i> below.'),
-        callout('example', 'Where RL is quietly running today',
-          '<b>The thumbnail you just clicked.</b> Streaming services and news sites pick artwork and headlines with contextual bandits — the exact machinery of the demo above, one bandit per viewer, learning in hours instead of the weeks an A/B test would take. Netflix has published on choosing artwork this way.<br><br>' +
-          '<b>Cooling bills.</b> DeepMind trained a controller on Google\'s data-centre sensor logs and reported cutting the energy used for cooling by up to 40% (2016); from 2018 the system was given direct control of the cooling plant, under human veto.<br><br>' +
-          '<b>Chip layout.</b> Google published an RL method for chip floorplanning in <i>Nature</i> (2021) — the agent places memory blocks on the die as if playing a board game — and used its layouts in shipped TPU accelerators.<br><br>' +
-          '<b>Fusion plasma.</b> DeepMind and EPFL trained a policy in simulation to hold a plasma in the shape they wanted inside a real tokamak, controlling nineteen magnetic coils at kilohertz rates (<i>Nature</i>, 2022). Sim-to-real, on a reactor.<br><br>' +
-          '<b>The assistant you use.</b> Every major chat model has been through an RL stage. That is the last section of this chapter, and all of chapter 11.'),
+      root.append(section('The smallest possible version of the dilemma',
+        p(`Strip RL down: no states, no delayed reward, just five slot machines with different hidden payout rates. Each pull pays £1 with some probability. You get 1,000 pulls. How do you find the best machine without wasting too many on the bad ones?`),
+        p(`This is the <em>multi-armed bandit</em> — the exploration–exploitation dilemma with everything else removed. Casinos gave it the name; websites choosing which headline to show you are the modern use.`),
+        callout('tryit', '🖐 Try this: beat the algorithms',
+          `<b>1.</b> Pull the machines yourself for a while. Try to work out which is best — and notice how hard it is to tell a 0.5 machine from a 0.6 machine in twenty pulls.<br>
+           <b>2.</b> Press <b>Run agents</b> and watch the regret curves. <b>Watch the shape, not the final number.</b> A good agent's curve <b>bends flat</b>; a bad one keeps climbing in a straight line.<br>
+           <b>3.</b> Press <b>Reveal true rates</b> and see how close you got.<br>
+           <b>4.</b> Raise the horizon to 20,000 and run again — on most draws the two strategies change places. If they do not, press <b>Reset</b> for a fresh set of hidden rates and run again: which one wins depends on the arms you happened to get, and that is worth knowing too.`),
+        bandit(),
+        p(`The score that matters is <em>regret</em>: what you earned compared with pulling the best machine every time. A perfect agent has zero regret. A random agent's regret grows in a straight line. A good agent's curve bends flat — it explores early, identifies the winner, and stops paying for information it no longer needs.`),
+        p(`<em>UCB</em> (upper confidence bound) scores each machine by its average payout <b>plus a bonus that grows the less you have tried it</b>. Barely-touched machines look optimistic, so you try them; as evidence accumulates the bonus shrinks and the winner takes over. "Optimism in the face of uncertainty" — a good slogan for life, too.`),
+        p(`Notice the asymmetry that makes it work. The bonus falls as 1/√n, so a machine pulled ten times still carries a visible bonus while one pulled a thousand times carries almost none. Meanwhile ln(t) creeps upward forever, so a long-ignored machine slowly becomes tempting again — an agent that tapers its own exploration, with no ε knob for a human to guess.`),
       ));
 
-      /* ------------------------------------------------------------------ reward hacking */
-      root.append(section('Reward hacking: you get exactly what you asked for',
-        p('In 2016 OpenAI trained an agent on a boat-racing game called CoastRunners. The obvious reward, "finish the race", was hard to learn from, so they used the game\'s own score, which mostly comes from hitting targets along the course. The agent found a lagoon where three targets respawned quickly, and drove in circles there forever: crashing, catching fire, going backwards, never finishing, while scoring 20% more than human players. It was not broken. It was <b>perfectly optimising the reward it was given</b>. The reward simply was not what its designers meant.'),
-        p('This has a name from economics, <em>Goodhart\'s law</em>: when a measure becomes a target, it stops being a good measure. Every proxy has gaps between what it counts and what you want, and a strong optimiser will find those gaps and pour itself into them. Agents have learned to pause Tetris forever to avoid losing, to exploit physics-engine bugs to "run" by vibrating, and to knock a lego brick over so that its "height" sensor reads high. Hold onto this idea. In chapter 11 the reward will be "a human preferred this answer", and the model will discover that humans have gaps too: they tend to prefer confident, long, flattering answers. That is <b>reward hacking with people as the environment</b>.'),
+      root.append(section('The other family: learn the policy directly',
+        p(`Q-learning learns values and derives a policy from them. The other big family skips the middleman and learns the <em>policy</em> itself: a network that outputs a probability for each action.`),
+        p(`The training rule, <em>REINFORCE</em> or the <em>policy gradient</em>, is one sentence: <b>run the policy, and for every action you took, nudge its probability up in proportion to the reward that followed (and down if the reward was bad)</b>. Over millions of games the noise averages out and only genuinely good habits survive.`),
+        p(`Two refinements make it trainable at scale. First, a <em>baseline</em>: a second network predicts how well the agent expected to do, and the policy is nudged by the <b>surprise</b> rather than the raw return. If every game scores between 90 and 100, raw returns say "everything you did was great"; the surprise says which games were the 97s.`),
+        p(`That difference is the <em>advantage</em>, and an algorithm with both a policy and a value network is called <em>actor–critic</em>.`),
+        p(`Second, a limit on how far one update may move the policy — and this one is worth feeling rather than reading.`),
+        callout('tryit', '🖐 Try this — break a training run on purpose',
+          `<b>1.</b> With <b>clipping: on</b>, drag the step size right up to 2.5. The curve wobbles but keeps climbing.<br>
+           <b>2.</b> Now turn <b>clipping: off</b> and do it again. Past about 1.5 the run does not degrade gracefully — it <b>falls off a cliff</b>, repeatedly. Each red dot is a collapse.<br>
+           <b>3.</b> Press <b>New run</b> a few times to confirm it is not one unlucky seed.`),
+        ppoClip(),
+        p(`Here is why RL breaks in a way supervised learning never does: <b>the model chooses its own next training set</b>. Take too big a step and the policy that generated your data no longer resembles the policy you now have, so the data becomes worthless and performance collapses.`),
+        p(`<em>TRPO</em> (2015) enforced a hard constraint on how far the policy could move. <em>PPO</em> (2017) got almost the same effect far more cheaply. It does not clip the update itself; it clips the <i>objective</i>. For each sampled action it forms the ratio between the new policy's probability and the old one, and once that ratio leaves a band of roughly ±20% in the direction that would keep improving the score, the sample stops contributing any gradient at all — so there is no longer anything pushing the policy further away.`),
+        p(`PPO is the algorithm later used to train ChatGPT, so remember the name — and remember the reason for the clip, because it comes back in chapter 11.`),
       ));
-      root.append(callout('tryit', 'Try it: what the reward says versus what you meant',
-        'A tiny boat race. Leave it on <b>laps finished</b> for about ten seconds and watch the score rate settle in the top right. Then switch the reward to <b>points from coins</b> — the boat abandons the course, parks in the lagoon where three coins respawn every 0.8 seconds, and spins. Give it ten seconds and compare the two rates: the behaviour that never finishes a single lap scores roughly 60% more. <b>Notice</b> that nothing about the boat got worse. Only the number we chose to reward changed.<br>' +
-        '<b>Honesty note:</b> this demo is a scripted re-enactment of the CoastRunners result, not a trained agent; the point is the shape of the failure, which is the same one you get from a real learner.'));
-      root.append(rewardHack());
 
-      root.append(section('Sim-to-real',
-        p('A robot arm in simulation can practise a million grasps overnight; a real one manages a few thousand a day and needs a human nearby to reset the blocks. So you train in sim. But simulated friction, lighting and motor lag are never quite right, and policies that exploit those inaccuracies fall apart on real hardware. The fix that works surprisingly well is <em>domain randomisation</em>: randomise everything in the simulator (colours, masses, friction, camera position, delays) so wildly that the real world looks like just one more variation. A policy that copes with a thousand fake worlds tends to cope with the real one. It is the same trick as data augmentation in chapter 4, applied to physics.'),
+      root.append(section('When the reward is not what you meant',
+        p(`In 2016 OpenAI trained an agent on a boat-racing game called CoastRunners. "Finish the race" was hard to learn from, so they used the game's own score, which mostly comes from hitting targets along the course.`),
+        p(`The agent found a lagoon where three targets respawned quickly and drove in circles there forever: crashing, catching fire, going backwards, never finishing — while scoring 20% higher than human players.`),
+        callout('tryit', '🖐 Try this: what the reward says versus what you meant',
+          `<b>1.</b> Leave it on <b>laps finished</b> — what we actually wanted — and let it run for ten seconds. Read the score rate.<br>
+           <b>2.</b> Switch the <b>reward function</b> and compare. The behaviour that <i>never finishes a lap</i> wins on the proxy.<br>
+           <b>3.</b> Sit with that for a moment: <b>the agent is not confused. The reward is.</b>`),
+        rewardHack(),
+        p(`This has a name from economics — <em>Goodhart's law</em>: when a measure becomes a target, it stops being a good measure. Every proxy has gaps between what it counts and what you want, and a strong optimiser will find those gaps and pour itself into them.`),
+        p(`Agents have learned to pause Tetris forever to avoid losing, to exploit physics-engine bugs to "run" by vibrating, and to knock a lego brick over so a height sensor reads high.`),
+        callout('warning', '⚠️ Hold onto this one',
+          `In chapter 11 the reward becomes "a human preferred this answer", and the model discovers that humans have gaps too: we tend to prefer answers that are <b>confident, long and flattering</b>.<br>
+           That is reward hacking with people as the environment, and it is the single hardest unsolved problem in making assistants useful rather than merely pleasant.`),
       ));
 
-      /* ------------------------------------------------------------------ why it matters */
       root.append(section('Why this matters for modern AI',
-        p('A language model fresh out of pretraining (chapter 10) is a supervised product: it predicts the next word of the internet. Turning it into an assistant is an RL problem. The <b>agent</b> is the model. The <b>environment</b> is a conversation. The <b>action</b> is the next token (or the whole reply, depending on how you draw the boxes). And the <b>reward</b> is a score from a model trained to imitate human preferences. That is <em>RLHF</em>, reinforcement learning from human feedback, and it is trained with PPO or one of its descendants. RLHF then adds a second rail of its own, on top of PPO\'s clip: a penalty on the KL divergence between the model being trained and the frozen model it started from. Without it the policy quickly discovers that a few weird, repetitive token sequences score very highly with the reward model, and it collapses into fluent-looking gibberish. The penalty is a leash back to English.'),
-        p('The 2024–2025 generation of <em>reasoning models</em> (OpenAI\'s o1, DeepSeek-R1, Claude with extended thinking) pushed RL further. Instead of a preference score, they use rewards you can <b>verify</b>: did the maths answer match? did the code pass the unit tests? The environment is a coding task; the episode is a long chain of thought; the reward is 1 or 0 at the end. Credit assignment over thousands of tokens, exploration to find non-obvious solution strategies, reward hacking when the tests are weak: every problem in this chapter, at scale. Chapter 11 goes through it in detail.'),
-        callout('key', 'Key idea',
-          'Supervised learning needs someone to write down the right answer. RL only needs someone to <b>recognise a good outcome</b>, which is far easier and far more dangerous: the agent will optimise your definition of "good", not your intention.'),
+        p(`A language model fresh out of pretraining is a supervised product: it predicts the next word of the internet. Turning it into an assistant is an RL problem.`),
+        p(`The <b>agent</b> is the model. The <b>environment</b> is a conversation. The <b>action</b> is the next token. And the <b>reward</b> is a score from a model trained to imitate human preferences. That is <em>RLHF</em>, and it is trained with PPO or one of its descendants.`),
+        p(`RLHF adds a second rail on top of PPO's clip: a penalty on how far the model being trained drifts from the frozen model it started from. Without it the policy quickly discovers that a few weird, repetitive token sequences score very highly with the reward model, and it collapses into fluent-looking gibberish. The penalty is a leash back to English.`),
+        p(`The 2024–2025 generation of <em>reasoning models</em> pushed RL further. Instead of a preference score they use rewards you can <b>verify</b>: did the maths answer match? did the code pass the tests? The environment is a coding task, the episode is a long chain of thought, the reward is 1 or 0 at the end.`),
+        p(`Credit assignment over thousands of tokens, exploration to find non-obvious strategies, reward hacking when the tests are weak: every problem in this chapter, at scale.`),
+        callout('history', '📜 The decade RL went from toy mazes to superhuman',
+          `<b>1989:</b> Chris Watkins introduces Q-learning in his Cambridge thesis, with a sketch of a convergence proof; he and Peter Dayan publish the full proof in 1992.<br>
+           <b>2013–2015:</b> DeepMind's DQN learns to play Atari from raw pixels using the same architecture and hyperparameters for every game — a separately trained network each time — and matches or beats a professional human tester on about half of the 49 games it was tested on.<br>
+           <b>2016:</b> AlphaGo beats Lee Sedol 4–1. <b>2017:</b> AlphaGo Zero drops human games entirely and learns from self-play alone, beating the previous version 100–0.<br>
+           <b>2017:</b> PPO is published, and quietly becomes the default policy-gradient algorithm everywhere.<br>
+           <b>2022:</b> PPO is used to turn a language model into ChatGPT — and RL stops being a games technique.`),
+        callout('example', '🌍 Where RL is quietly running today',
+          `<b>Data-centre cooling:</b> DeepMind's controller cut Google's cooling energy substantially by learning setpoints no human schedule had tried.<br>
+           <b>Robotics:</b> policies trained in simulation and transferred to real hardware — the trick being <em>domain randomisation</em>, randomising friction, lighting, masses and delays so wildly that the real world looks like one more variation. It is chapter 4's data augmentation, applied to physics.<br>
+           <b>Recommendations and ad auctions:</b> bandit algorithms deciding which headline or price to show you, right now.<br>
+           <b>Every assistant you use:</b> via RLHF, which is chapter 11.`),
+        p(`One picture to keep: <b>reinforcement learning is what you do when nobody can tell you the right answer — only whether it went well.</b>`),
       ));
 
-      /* ------------------------------------------------------------------ quiz */
       root.append(ctx.quiz([
-        { q: 'In the Q-learning update, what does the "target" r + γ·max Q(s′,·) represent?',
-          options: ['The reward the agent received on this step only', 'The agent\'s new evidence for how valuable the action was: reward now plus the best it believes it can do from the next state', 'The probability of choosing the action again', 'The number of steps remaining in the episode'],
-          answer: 1, explain: 'The target is a one-step-better estimate. The update moves the stored Q value a fraction α of the way toward it, which is how value information flows backwards from the goal.' },
-        { q: 'In the gridworld the table starts at Q₀ = 0 and every step costs −0.1. Why does even a greedy agent (ε = 0) explore the whole maze?',
-          options: ['Because ε = 0 still leaves a small chance of a random move', 'Because trying an action pushes its value below 0, while untried actions are still sitting at 0 — so "greedy" means "try something new"', 'Because the discount factor injects noise into the choice', 'Because the +10 goal reward is visible from every cell'],
-          answer: 1, explain: 'This is <b>optimistic initialisation</b>: a starting value the world cannot live up to makes ignorance look attractive, and exploration falls out for free. Drag the demo\'s Q₀ slider below −1 and the effect reverses — tried actions then rise <i>above</i> untried ones, the ε = 0 agent locks onto its first move and repeats it forever, and only turning ε up rescues it.' },
-        { q: 'With γ = 0.9, a reward of +10 that is 10 steps away is worth about how much today?',
-          options: ['10', '9', '3.5', '0.1'],
-          answer: 2, explain: '10 × 0.9^10 ≈ 10 × 0.349 ≈ 3.5. Discounting makes distant rewards count for less, which is why cells far from the goal have smaller values.' },
-        { q: 'The CoastRunners boat drove in circles collecting respawning targets instead of finishing the race. What went wrong?',
-          options: ['The neural network was too small', 'The agent was optimising the reward it was given (score), which did not match what its designers wanted (finishing)', 'The learning rate was too high', 'The game had a bug in its physics'],
-          answer: 1, explain: 'Classic reward hacking / Goodhart\'s law. The optimiser was working perfectly; the proxy reward had a gap in it, and the agent found the gap.' },
-        { q: 'When RL is used to train a chatbot (RLHF), what plays the role of the environment?',
-          options: ['The GPU cluster', 'The conversation, with a reward model scoring the replies', 'The tokenizer', 'The training dataset from the internet'],
-          answer: 1, explain: 'The model is the agent, its replies are actions, the conversation is the environment, and a reward model trained on human preferences provides the reward. Chapter 11 builds this.' },
+        { q: 'You found the goal in the opening demo but could not say which move was best. What is that problem called?', options: ['The exploration problem', 'The credit-assignment problem: a single delayed reward must be spread back over every decision that led to it', 'Overfitting', 'The discount problem'], answer: 1, explain: 'It is why RL needs more than gradient descent on a loss — there is no per-step loss to descend. Q-learning solves it by letting value information flow backwards one step per update, which is the ripple you watched spread out from the goal.' },
+        { q: 'With γ = 0.5, why does an agent walk past a +20 reward twelve steps away in favour of a +3 two steps away?', options: ['The +20 is harder to reach', '20 × 0.5¹² ≈ 0.005, which is far less than 3 × 0.5² = 0.75 — the distant reward is discounted almost to nothing', 'Because ε-greedy makes it act randomly', 'Because Q-learning cannot handle large rewards'], answer: 1, explain: 'γ is the single number deciding how far ahead an agent bothers to look. Nothing about the world changed when you dragged that slider — only the agent\'s patience, and with it whether a long-term plan is possible at all.' },
+        { q: 'You set exploration to 100%, so the agent moves entirely at random, and the Q table still converges on a good policy. Why?', options: ['The demo is pre-computed', 'Q-learning is off-policy: its update uses the value of the best next action regardless of what was actually done, so it learns the best policy while behaving randomly', 'Random movement is optimal in a maze', 'Because ε decays automatically'], answer: 1, explain: 'The update target uses max(Q[s2]), not the action actually taken next. That decoupling of "how I behave" from "what I learn" is precisely what off-policy means, and it is why exploration can be cranked up without destroying the result.' },
+        { q: 'Why does a too-large policy update in RL cause collapse rather than mere overshoot?', options: ['RL uses a larger learning rate', 'The model chooses its own next training set — a policy that moves too far no longer resembles the one that gathered the data, so the data becomes worthless', 'Rewards become negative', 'The value network stops training'], answer: 1, explain: 'This is the failure you produced by turning clipping off and pushing the step size past 1.5. PPO bounds each update to roughly ±20% so the data stays approximately valid, and that clip is almost all PPO is.' },
+        { q: 'A boat-racing agent drove in circles forever, never finishing, and scored 20% above human players. What went wrong?', options: ['The agent was buggy', 'Nothing went wrong with the agent — it perfectly optimised the reward it was given, which was not what the designers meant', 'The reward was too small', 'It needed more training'], answer: 1, explain: 'Goodhart\'s law: when a measure becomes a target it stops being a good measure. Hold onto it — in chapter 11 the reward becomes "a human preferred this answer", and humans reliably prefer confident, long, flattering answers.' },
       ]));
 
-      /* ------------------------------------------------------------------ go deeper */
-      root.append(section('Go deeper', ul([
-        '<a href="http://incompleteideas.net/book/the-book-2nd.html" target="_blank" rel="noopener">Sutton &amp; Barto, <i>Reinforcement Learning: An Introduction</i> (2nd ed., free PDF)</a> — the textbook; chapters 1–6 cover everything in this chapter.',
-        '<a href="https://www.davidsilver.uk/teaching/" target="_blank" rel="noopener">David Silver\'s UCL RL lecture series</a> — ten lectures by AlphaGo\'s lead researcher. Lecture 1 is the best hour-long introduction that exists.',
-        '<a href="https://arxiv.org/abs/1312.5602" target="_blank" rel="noopener">Mnih et al., "Playing Atari with Deep Reinforcement Learning" (2013)</a> and the <a href="https://www.nature.com/articles/nature14236" target="_blank" rel="noopener">2015 Nature paper</a> — DQN.',
-        '<a href="https://openai.com/index/faulty-reward-functions/" target="_blank" rel="noopener">OpenAI, "Faulty reward functions in the wild" (2016)</a> — the CoastRunners boat, with video.',
-        '<a href="https://lilianweng.github.io/posts/2018-02-19-rl-overview/" target="_blank" rel="noopener">Lilian Weng, "A (Long) Peek into Reinforcement Learning"</a> — a dense, accurate survey from tabular methods to PPO.',
-        '<a href="https://spinningup.openai.com/en/latest/" target="_blank" rel="noopener">OpenAI Spinning Up in Deep RL</a> — the best hands-on introduction to policy gradients, with clean code.',
-      ])));
+      root.append(section('Go deeper',
+        ul([
+          '<a href="http://incompleteideas.net/book/the-book-2nd.html" target="_blank" rel="noopener">Sutton &amp; Barto, <i>Reinforcement Learning: An Introduction</i></a> — the field\'s standard text, free online, and unusually readable. Chapters 2, 3, 5–6 and 13 are this chapter in proper depth.',
+          '<a href="https://spinningup.openai.com/en/latest/" target="_blank" rel="noopener">OpenAI Spinning Up in Deep RL</a> — the best hands-on introduction to policy gradients, with clean, readable code.',
+          '<a href="https://www.davidsilver.uk/teaching/" target="_blank" rel="noopener">David Silver\'s RL lecture course</a> — from the lead researcher on AlphaGo.',
+          '<a href="https://www.nature.com/articles/nature14236" target="_blank" rel="noopener">Mnih et al. (2015), "Human-level control through deep reinforcement learning"</a> — DQN, and Atari from raw pixels. The <a href="https://arxiv.org/abs/1312.5602" target="_blank" rel="noopener">2013 workshop version</a> is shorter.',
+          '<a href="https://openai.com/index/faulty-reward-functions/" target="_blank" rel="noopener">OpenAI, "Faulty Reward Functions in the Wild"</a> — the CoastRunners boat, with video. Worth watching once.',
+          '<a href="https://lilianweng.github.io/posts/2018-02-19-rl-overview/" target="_blank" rel="noopener">Lilian Weng, "A (Long) Peek into Reinforcement Learning"</a> — a dense, accurate survey from tabular methods to PPO.',
+        ])));
 
       /* ================================================================== */
       /*  INTERACTIVE A — GRIDWORLD Q-LEARNING                               */
@@ -291,8 +297,8 @@
           }
           // returns chart. Range covers the true worst case: 299 steps of −0.1 then the pit = −39.9.
           const px = 440, py = 20, pw = 260, ph = 250;
-          const RLO = -40, RHI = 10, RSPAN = RHI - RLO;
-          const retY = (v) => py + ph * (1 - (ctx.clamp(v, RLO, RHI) - RLO) / RSPAN);
+          const RLO = -40, RHI = 10, RSPAN = RHI - RLO, RPAD = 2;
+          const retY = (v) => py + RPAD + (ph - 2 * RPAD) * (1 - (ctx.clamp(v, RLO, RHI) - RLO) / RSPAN);
           g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(px, py, pw, ph);
           g.fillStyle = C.muted; g.font = '11px Inter, sans-serif'; g.textAlign = 'left'; g.textBaseline = 'top';
           g.fillText('return per episode (last ' + returns.length + ')', px, py - 14);
@@ -300,15 +306,19 @@
           g.strokeStyle = '#1b2434'; g.beginPath(); g.moveTo(px, y0); g.lineTo(px + pw, y0); g.stroke();
           g.fillStyle = C.muted; g.textAlign = 'right'; g.fillText('+10', px - 4, py); g.fillText('0', px - 4, y0 - 5); g.fillText('−40', px - 4, py + ph - 10);
           if (returns.length > 1) {
+            g.save(); g.beginPath(); g.rect(px, py, pw, ph); g.clip();
             g.strokeStyle = C.green; g.lineWidth = 1.5; g.beginPath();
             returns.forEach((v, i) => {
               const x = px + i / (returns.length - 1) * pw, y = retY(v);
               i ? g.lineTo(x, y) : g.moveTo(x, y);
             });
             g.stroke();
+            g.restore();
           }
+          // legend, split over two lines so it stays inside the 260px-wide right column
           g.fillStyle = C.muted; g.textAlign = 'left'; g.font = '11px Inter, sans-serif';
-          g.fillText('Q(s,a): green = positive, red = negative, arrow = greedy action', px, py + ph + 10);
+          g.fillText('Q(s,a): green = positive, red = negative,', px, py + ph + 10);
+          g.fillText('arrow = greedy action', px, py + ph + 25);
         }
         function argmaxIdx(arr) { let b = 0; for (let i = 1; i < 4; i++) if (arr[i] > arr[b]) b = i; return b; }
 
@@ -448,17 +458,21 @@
           const xmax = Math.max(T, you.t), ymax = Math.max(20, you.regret, agents[0].regret, agents[1].regret) * 1.1;
           g.textAlign = 'right'; g.fillText(ymax.toFixed(0), px - 4, py); g.fillText('0', px - 4, py + ph - 10);
           g.textAlign = 'center'; g.fillText(xmax + ' pulls', px + pw / 2, py + ph + 6);
+          g.save(); g.beginPath(); g.rect(px, py, pw, ph); g.clip();
           [you, ...agents].forEach((ag) => {
             if (ag.hist.length < 2) return;
             g.strokeStyle = ag.color; g.lineWidth = 1.5; g.beginPath();
             const stride = Math.max(1, Math.floor(ag.hist.length / 300));
-            for (let i = 0; i < ag.hist.length; i += stride) { const x = px + i / xmax * pw, y = py + ph - ag.hist[i] / ymax * ph; i ? g.lineTo(x, y) : g.moveTo(x, y); }
+            // inset by half the stroke so a curve sitting on regret 0 is not sliced by the clip
+            for (let i = 0; i < ag.hist.length; i += stride) { const x = px + i / xmax * pw, y = py + ph - 1 - ag.hist[i] / ymax * (ph - 2); i ? g.lineTo(x, y) : g.moveTo(x, y); }
             g.stroke();
           });
-          // random baseline (dashed): regret grows at (best - mean rate) per pull
+          // random baseline (dashed), drawn INSIDE the clip so a steep line leaves
+          // the top of the plot instead of being squashed flat along it
           const avgGap = best - rates.reduce((a, b) => a + b, 0) / K;
           g.strokeStyle = 'rgba(148,163,184,0.5)'; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(px, py + ph);
-          g.lineTo(px + pw, py + ph - Math.min(ph, avgGap * xmax / ymax * ph)); g.stroke(); g.setLineDash([]);
+          g.lineTo(px + pw, py + ph - avgGap * xmax / ymax * ph); g.stroke(); g.setLineDash([]);
+          g.restore();
           g.fillStyle = 'rgba(148,163,184,0.7)'; g.textAlign = 'right'; g.fillText('random', px + pw - 4, py + ph - Math.min(ph, avgGap * xmax / ymax * ph) - 12);
         }
 
@@ -588,6 +602,307 @@
         // switching the reward function restarts the clock, otherwise points/min mixes the two behaviours
         const modeSel = ctx.select({ label: 'reward function', options: [{ value: 'finish', label: 'laps finished (what we meant)' }, { value: 'coins', label: 'points from coins (the proxy)' }], value: mode, onChange: v => { mode = v === 'coins' ? 'coins' : 'finish'; reset(); } });
         return ctx.figure(cv, 'With reward = points, the highest-scoring behaviour never finishes a lap. Let each mode run for ten seconds and compare the score rates in the top right: the behaviour that never finishes wins on the proxy. The agent is not confused; the reward is.', [modeSel, ctx.button('Reset', () => { rate.finish = 0; rate.coins = 0; reset(); })], readout);
+      }
+
+      /* ================================================================== */
+      /*  INTERACTIVE — BE THE AGENT: no map, no labels, only consequences   */
+      /* ================================================================== */
+      function blindAgent() {
+        const [cv, g] = ctx.canvas(720, 340);
+        const COLS = 6, ROWS = 5;
+        const GOAL = { c: 5, r: 0 }, PIT = [{ c: 3, r: 2 }, { c: 1, r: 3 }];
+        const START = { c: 0, r: 4 };
+        let pos = { ...START }, trail = [{ ...START }], rewards = [], total = 0, steps = 0;
+        let done = false, revealed = false, episodes = 0, bestSteps = null;
+        const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
+        const FONT = '13px Inter, system-ui, sans-serif';
+
+        const isPit = (c, r) => PIT.some(q => q.c === c && q.r === r);
+        const isGoal = (c, r) => GOAL.c === c && GOAL.r === r;
+
+        function move(dc, dr) {
+          if (done) return;
+          const c = ctx.clamp(pos.c + dc, 0, COLS - 1), r = ctx.clamp(pos.r + dr, 0, ROWS - 1);
+          pos = { c, r };
+          trail.push({ c, r });
+          steps++;
+          let rew = -0.1;
+          if (isGoal(c, r)) { rew = 10; done = true; }
+          else if (isPit(c, r)) { rew = -10; done = true; }
+          rewards.push(rew);
+          total += rew;
+          if (done) {
+            episodes++;
+            if (isGoal(c, r) && (bestSteps === null || steps < bestSteps)) bestSteps = steps;
+          }
+        }
+        function reset() { pos = { ...START }; trail = [{ ...START }]; rewards = []; total = 0; steps = 0; done = false; }
+
+        const up = ctx.button('↑', () => move(0, -1));
+        const down = ctx.button('↓', () => move(0, 1));
+        const left = ctx.button('←', () => move(-1, 0));
+        const right = ctx.button('→', () => move(1, 0));
+        const again = ctx.button('Try again', reset, 'primary');
+        const revealBtn = ctx.button('Reveal the map', () => { revealed = !revealed; revealBtn.textContent = revealed ? 'Hide the map' : 'Reveal the map'; });
+        const ro = ctx.readout();
+
+        ctx.loop(() => {
+          g.clearRect(0, 0, cv.W, cv.H);
+          const CS = 52, GX = 30, GY = 52;
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText(revealed ? 'the world, revealed' : 'the world (you cannot see it)', GX, 34);
+
+          for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+            const x = GX + c * CS, y = GY + r * CS;
+            const visited = trail.some(t => t.c === c && t.r === r);
+            g.fillStyle = revealed
+              ? (isGoal(c, r) ? 'rgba(56,217,169,0.35)' : isPit(c, r) ? 'rgba(251,113,133,0.35)' : '#131a27')
+              : (visited ? '#1b2536' : '#0f1420');
+            g.fillRect(x, y, CS - 2, CS - 2);
+            g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(x, y, CS - 2, CS - 2);
+            if (revealed && isGoal(c, r)) { g.font = '20px Inter, system-ui, sans-serif'; g.fillStyle = C.green; g.fillText('+10', x + 6, y + 32); }
+            if (revealed && isPit(c, r)) { g.font = '20px Inter, system-ui, sans-serif'; g.fillStyle = C.danger; g.fillText('−10', x + 6, y + 32); }
+          }
+          /* the path you actually took */
+          g.strokeStyle = 'rgba(124,156,255,0.55)'; g.lineWidth = 2;
+          g.beginPath();
+          trail.forEach((t, i) => {
+            const x = GX + t.c * CS + CS / 2 - 1, y = GY + t.r * CS + CS / 2 - 1;
+            i ? g.lineTo(x, y) : g.moveTo(x, y);
+          });
+          g.stroke();
+          g.fillStyle = done ? (isGoal(pos.c, pos.r) ? C.green : C.danger) : C.accent;
+          g.beginPath(); g.arc(GX + pos.c * CS + CS / 2 - 1, GY + pos.r * CS + CS / 2 - 1, 11, 0, 7); g.fill();
+
+          /* the only information you actually receive */
+          const TX = 370;
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('everything you are told', TX, 34);
+          g.font = MONO; g.fillStyle = C.muted;
+          if (!rewards.length) {
+            wrapText(g, 'Nothing yet. Press an arrow. You will get one number back — and that is all you will ever get.', TX, 58, 300, 16);
+          } else {
+            const show = rewards.slice(-9);
+            show.forEach((rw, i) => {
+              g.font = MONO;
+              g.fillStyle = rw > 0 ? C.green : rw < -1 ? C.danger : C.muted;
+              g.fillText('step ' + (steps - show.length + i + 1) + ':  reward ' + (rw > 0 ? '+' : '') + rw.toFixed(1), TX, 58 + i * 18);
+            });
+          }
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('total this attempt', TX, 236);
+          g.font = 'bold 22px Inter, system-ui, sans-serif';
+          g.fillStyle = total > 0 ? C.green : total < -1 ? C.danger : C.muted;
+          g.fillText(total.toFixed(1), TX + 160, 238);
+
+          g.font = FONT;
+          if (done && isGoal(pos.c, pos.r)) {
+            g.fillStyle = C.green;
+            wrapText(g, 'Found it in ' + steps + ' steps. Now: which single move was the best one you made? You genuinely cannot tell — the reward only ever came at the end.', GX, 320, 640, 16);
+          } else if (done) {
+            g.fillStyle = C.danger;
+            wrapText(g, 'That square cost you 10. Nothing warned you, and nothing told you which earlier move set you on course for it.', GX, 320, 640, 16);
+          } else {
+            g.fillStyle = C.muted;
+            wrapText(g, 'No map, no labels, no teacher. Only a number after each move — and mostly the same small negative number.', GX, 320, 640, 16);
+          }
+          ro.set({ steps, total: total.toFixed(1), attempts: episodes, 'best so far': bestSteps === null ? '—' : bestSteps + ' steps' });
+        });
+
+        return ctx.figure(cv,
+          'You are the agent. The grid is the environment, your position is the state, an arrow press is an action, and the number that comes back is the reward. Notice what you are never given: which move was the mistake. That gap between "how it went" and "what you should have done instead" is the defining difficulty of reinforcement learning, and every algorithm in this chapter is an answer to it.',
+          [up, down, left, right, again, revealBtn], ro);
+      }
+
+      /* ================================================================== */
+      /*  INTERACTIVE — HOW FAR AHEAD THE AGENT BOTHERS TO LOOK              */
+      /* ================================================================== */
+      function discountLab() {
+        const [cv, g] = ctx.canvas(720, 320);
+        let gamma = 0.9;
+        /* two options down one corridor: a small reward close by, a big one far away */
+        const NEAR = { steps: 2, reward: 3 };
+        const FAR = { steps: 12, reward: 20 };
+        const value = (o, gm) => o.reward * Math.pow(gm, o.steps);
+
+        const gSl = ctx.slider({ label: 'γ discount factor', min: 0.5, max: 0.995, step: 0.005, value: 0.9, digits: 3, onChange: (v) => { gamma = v; } });
+        const impatient = ctx.button('impatient (0.50)', () => { gamma = 0.5; gSl.value = 0.5; });
+        const typical = ctx.button('typical (0.90)', () => { gamma = 0.9; gSl.value = 0.9; }, 'primary');
+        const patient = ctx.button('far-sighted (0.99)', () => { gamma = 0.99; gSl.value = 0.99; });
+        const ro = ctx.readout();
+
+        ctx.loop(() => {
+          g.clearRect(0, 0, cv.W, cv.H);
+          const vN = value(NEAR, gamma), vF = value(FAR, gamma);
+          const picksFar = vF > vN;
+
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('two rewards down the same corridor', 34, 28);
+          const X0 = 50, CS = 44, Y = 56;
+          for (let i = 0; i <= 13; i++) {
+            const x = X0 + i * CS;
+            const isN = i === NEAR.steps, isF = i === FAR.steps;
+            g.fillStyle = isN ? 'rgba(251,191,36,0.3)' : isF ? 'rgba(56,217,169,0.3)' : '#131a27';
+            g.fillRect(x, Y, CS - 3, 40);
+            g.strokeStyle = C.line; g.strokeRect(x, Y, CS - 3, 40);
+            if (isN) { g.font = 'bold ' + MONO; g.fillStyle = C.warn; g.fillText('+3', x + 10, Y + 25); }
+            if (isF) { g.font = 'bold ' + MONO; g.fillStyle = C.green; g.fillText('+20', x + 6, Y + 25); }
+            if (i === 0) { g.fillStyle = C.accent; g.beginPath(); g.arc(x + CS / 2 - 1, Y + 20, 10, 0, 7); g.fill(); }
+          }
+          g.font = MONO; g.fillStyle = C.muted;
+          // "you are here" goes above the corridor: on the label row below it would run straight
+          // into the "2 steps" marker, which is only two cells along.
+          g.fillText('you are here', X0 - 6, Y - 8);
+          g.fillText('2 steps', X0 + NEAR.steps * CS - 8, Y + 58);
+          g.fillText('12 steps', X0 + FAR.steps * CS - 10, Y + 58);
+
+          /* the discount curve */
+          const P = { x: 50, y: 150, w: 340, h: 120 };
+          g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(P.x, P.y, P.w, P.h);
+          g.save(); g.beginPath(); g.rect(P.x, P.y, P.w, P.h); g.clip();
+          g.strokeStyle = C.accent; g.lineWidth = 2; g.beginPath();
+          for (let i = 0; i <= 20; i++) {
+            // inset by half the stroke so the γ⁰ = 1 end is not sliced by the clip
+            const x = P.x + i / 20 * P.w, y = P.y + P.h - 1 - Math.pow(gamma, i) * (P.h - 2);
+            i ? g.lineTo(x, y) : g.moveTo(x, y);
+          }
+          g.stroke();
+          g.restore();
+          g.font = MONO; g.fillStyle = C.muted;
+          g.fillText('what a reward n steps away is worth today', P.x, P.y - 8);
+          g.fillText('0', P.x - 14, P.y + P.h + 4); g.fillText('1', P.x - 14, P.y + 6);
+          g.fillText('20 steps', P.x + P.w - 44, P.y + P.h + 18);
+
+          /* the comparison */
+          const TX = 430;
+          // at γ = 0.5 the far reward is worth 0.005, so two decimals would print a bare "0.00"
+          // and lose the whole point of the demo — small values get three.
+          const fmtV = (v) => (v >= 0.1 ? v.toFixed(2) : v.toFixed(3));
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('what each is worth right now', TX, 150);
+          const bar = (lab, v, col, y, detail) => {
+            g.font = MONO; g.fillStyle = C.muted; g.fillText(lab, TX, y);
+            g.fillStyle = C.line; g.fillRect(TX, y + 8, 180, 16);
+            g.fillStyle = col; g.fillRect(TX, y + 8, ctx.clamp(v / 20, 0, 1) * 180, 16);
+            g.font = 'bold 15px Inter, system-ui, sans-serif'; g.fillStyle = col;
+            g.fillText(fmtV(v), TX + 190, y + 21);
+            g.font = '11px "JetBrains Mono", ui-monospace, monospace'; g.fillStyle = C.muted;
+            g.fillText(detail, TX, y + 38);
+          };
+          bar('near (+3, 2 steps)', vN, C.warn, 172, '3 × ' + gamma.toFixed(3) + '² = ' + fmtV(vN));
+          bar('far (+20, 12 steps)', vF, C.green, 228, '20 × ' + gamma.toFixed(3) + '¹² = ' + fmtV(vF));
+
+          g.font = 'bold 15px Inter, system-ui, sans-serif';
+          g.fillStyle = picksFar ? C.green : C.warn;
+          g.fillText(picksFar ? 'the agent walks past the +3' : 'the agent grabs the +3 and stops', 34, 300);
+          ro.set({ γ: gamma.toFixed(3), 'near worth': fmtV(vN), 'far worth': fmtV(vF), chooses: picksFar ? 'the far +20' : 'the near +3' });
+        });
+
+        return ctx.figure(cv,
+          'γ is the single number that decides how far ahead an agent bothers to look. A reward n steps away is worth γⁿ times its face value today, so the curve above is how quickly the future stops mattering. Drag γ down to 0.50 and the distant +20 is worth about 0.005 of a point — the agent takes the +3 and never sees the bigger prize. Push it to 0.99 and the +20 dominates easily. Nothing about the world changed; only the agent\'s patience did.',
+          [gSl, impatient, typical, patient], ro);
+      }
+
+      /* ================================================================== */
+      /*  INTERACTIVE — WHY PPO CLIPS THE UPDATE                             */
+      /* ================================================================== */
+      function ppoClip() {
+        const [cv, g] = ctx.canvas(720, 330);
+        let stepSize = 0.6, clipping = true, seed = 3;
+        const CLIP = 0.2;
+        /* A policy has one parameter; performance peaks at theta = 0. Each update is estimated
+           from data the CURRENT policy generated, so the further the policy moves in one step,
+           the more wrong that estimate becomes — which is exactly what the clip bounds. */
+        const perf = (th) => Math.exp(-th * th / 2);
+        function run() {
+          let a = seed;
+          const rnd = () => { a = (a * 1664525 + 1013904223) % 4294967296; return a / 4294967296; };
+          let th = -1.5; const hist = [th];
+          for (let i = 0; i < 40; i++) {
+            const grad = -th * perf(th);                       // toward the peak
+            const noise = (rnd() - 0.5) * 1.4;                 // the data is a small sample
+            let ratio = stepSize * (grad + noise);
+            if (clipping) ratio = ctx.clamp(ratio, -CLIP, CLIP);
+            th += ratio;
+            /* off-policy damage: a huge move invalidates the data that produced it */
+            if (Math.abs(ratio) > 2.0) th += (rnd() - 0.5) * 4.5;
+            th = ctx.clamp(th, -6, 6);
+            hist.push(th);
+          }
+          return hist;
+        }
+        const sSl = ctx.slider({ label: 'update step size', min: 0.1, max: 2.5, step: 0.05, value: 0.6, digits: 2, onChange: (v) => { stepSize = v; } });
+        const cBtn = ctx.button('clipping: on', () => {
+          clipping = !clipping;
+          cBtn.textContent = 'clipping: ' + (clipping ? 'on' : 'off');
+        }, 'primary');
+        const reseed = ctx.button('New run', () => { seed = (seed * 31 + 7) % 99991; });
+        const ro = ctx.readout();
+
+        ctx.loop(() => {
+          g.clearRect(0, 0, cv.W, cv.H);
+          const hist = run();
+          const P = { x: 55, y: 50, w: 400, h: 210 };
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('how well the policy performs, update by update', P.x, 30);
+          g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(P.x, P.y, P.w, P.h);
+          // DOT is the collapse-marker radius: inset the data range by it on every side so a
+          // point sitting exactly on a limit is not sliced in half by the clip below.
+          // HEAD leaves a band above the "best possible" line for its label, which the curve
+          // (performance never exceeds 1) can therefore never reach.
+          const DOT = 4, HEAD = 22;
+          const px = (i) => P.x + DOT + i / (hist.length - 1) * (P.w - 2 * DOT);
+          const py = (v) => P.y + P.h - DOT - ctx.clamp(v, 0, 1) * (P.h - DOT - HEAD);
+          g.setLineDash([3, 3]); g.strokeStyle = 'rgba(148,163,184,0.4)';
+          g.beginPath(); g.moveTo(P.x, py(1)); g.lineTo(P.x + P.w, py(1)); g.stroke();
+          g.setLineDash([]);
+          g.font = MONO; g.fillStyle = C.muted;
+          g.fillText('best possible', P.x + 4, py(1) - 8);
+          const scores = hist.map(perf);
+          g.save(); g.beginPath(); g.rect(P.x, P.y, P.w, P.h); g.clip();
+          g.strokeStyle = clipping ? C.green : C.danger; g.lineWidth = 2.5;
+          g.beginPath();
+          scores.forEach((v, i) => { i ? g.lineTo(px(i), py(v)) : g.moveTo(px(i), py(v)); });
+          g.stroke();
+          scores.forEach((v, i) => {
+            if (i && Math.abs(hist[i] - hist[i - 1]) > 0.55) {
+              g.fillStyle = C.danger;
+              g.beginPath(); g.arc(px(i), py(v), DOT, 0, 7); g.fill();
+            }
+          });
+          g.restore();
+          g.font = MONO; g.fillStyle = C.muted;
+          g.fillText('policy updates →', P.x + 150, P.y + P.h + 20);
+
+          const TX = 490;
+          const final = scores[scores.length - 1];
+          const worst = Math.min(...scores.slice(5));
+          const collapses = scores.slice(1).filter((v, i) => Math.abs(hist[i + 1] - hist[i]) > 2.0).length;
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('the clip band', TX, 50);
+          g.font = MONO; g.fillStyle = C.muted;
+          g.fillText('moves bigger than ±' + CLIP.toFixed(1), TX, 72);
+          g.fillText('are cut back to ±' + CLIP.toFixed(1) + '.', TX, 88);
+          g.font = 'bold ' + FONT; g.fillStyle = C.text;
+          g.fillText('final performance', TX, 128);
+          g.font = 'bold 22px Inter, system-ui, sans-serif';
+          g.fillStyle = final > 0.85 ? C.green : final > 0.4 ? C.warn : C.danger;
+          g.fillText((final * 100).toFixed(0) + '%', TX, 156);
+          g.font = MONO; g.fillStyle = C.muted;
+          g.fillText('worst dip: ' + (worst * 100).toFixed(0) + '%', TX, 178);
+          g.fillStyle = collapses ? C.danger : C.green;
+          g.fillText('collapses: ' + collapses, TX, 196);
+          g.font = FONT; g.fillStyle = C.muted;
+          wrapText(g, collapses
+            ? 'Each red dot is an update so large that the data which produced it no longer describes the policy you now have. Performance does not just stall — it falls off a cliff.'
+            : 'Every update stays inside the band, so the data stays roughly valid and the curve climbs instead of lurching.',
+            TX, 220, 200, 16);
+          ro.set({ 'step size': stepSize.toFixed(2), clipping: clipping ? 'on' : 'off', final: (final * 100).toFixed(0) + '%', collapses });
+        });
+
+        return ctx.figure(cv,
+          'A deliberately simple picture of the problem PPO solves. In supervised learning a too-large step just overshoots; in RL the model <i>chooses its own next training set</i>, so a policy that moves too far no longer resembles the one that gathered the data, and that data becomes worthless. Turn clipping off and push the step size past about 1.5: performance does not degrade gracefully, it collapses. Clipping bounds each update to roughly ±20%, which is almost all of what PPO does — and why it is the algorithm that trained ChatGPT.',
+          [sSl, cBtn, reseed], ro);
       }
     },
   });

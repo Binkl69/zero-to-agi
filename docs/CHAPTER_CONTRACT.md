@@ -92,6 +92,26 @@ paragraph.
 ### Still required, woven through
 
 - **Jargon after the experience.** Let them do the thing, then name it with `<em>` on first use.
+- **Notation after the intuition.** The same rule, applied to maths. A symbol may only appear
+  after the reader has already done the thing it describes, and its job is to *name that
+  experience*, not to introduce it. **There is no standalone maths chapter and never will be** —
+  a wall of maths is where a reader quits. Instead maths arrives in **beats**, 3–5 minutes each,
+  always attached to something the reader's hands already did and placed immediately after it.
+  A beat is at most **one interactive plus one explainer**, where an explainer is:
+  `ctx.walkthrough(...)` (guided — one idea on screen at a time, with Next, and a question every
+  few steps), `ctx.decoder(...)` (reference — a formula whose symbols are clickable), or a short
+  callout. A walkthrough may be followed by a decoder on the *same* formula, because they do
+  different jobs: the walkthrough teaches the path once, the decoder is lookup for afterwards.
+  **Default to the walkthrough for anything a struggling reader meets for the first time.**
+  Numbers before symbols, always: let them compute the thing with arithmetic they already have,
+  and only then show the notation for what they just did.
+  **One beat per distinct idea, not per chapter** — and beats must be spread apart, never
+  stacked. Two small beats in different halves of a chapter is more sprinkled than one big one,
+  which is the point; two beats back to back is a maths block wearing a disguise.
+  Most chapters need one. Chapter 1 needs two, because deciding and learning are different
+  ideas and a chapter about learning must write down the rule that learns.
+  Prefer the statistical framing over the calculus framing wherever both are available.
+  See `docs/ROADMAP.md` for which beat belongs to which chapter.
 - **A worked numeric example**, ideally as a live panel where they change the numbers.
 - **`example` callouts**: where this shows up in products they already use.
 - **A `history` callout**: who, when, why it mattered.
@@ -138,3 +158,30 @@ sed -i -E 's/\?v=[0-9]+/?v=3/g' index.html
 
 There is no build step to do this automatically. If a change does not show up in a
 browser, this is almost always why; a hard reload (Ctrl+Shift+R) confirms it.
+
+## Rendering is part of the contract
+
+`node scripts/smoke.js` proves a chapter's code does not throw. It cannot prove the
+picture is right — its fake canvas swallows every drawing call — and a demo that
+renders nonsense passes it happily. Two more checks close that gap and both must be
+clean before a chapter ships:
+
+- **`node scripts/paint.js [id]`** — replays every chapter against a canvas that records
+  the real geometry of every paint, drives each interactive through slider extremes,
+  every button and every select option, and reports what a reader would notice:
+  labels printed on labels, lines drawn through labels, text running off the canvas,
+  and a chart drawing outside its own plot frame. No browser needed, so this is the
+  one to run while working.
+- **`node scripts/render-check.js [id] [--shots]`** — the same checks in real Chromium
+  against the real page, so text widths are measured rather than modelled. This is the
+  one that decides. `--shots` writes a PNG of every interactive; `node scripts/shot.js
+  <id> <figure-number> --slider=0:1` captures a single interactive in a chosen state.
+
+**Look at the picture.** A checker finds collisions, not nonsense. Before calling an
+interactive done, screenshot it in at least its start and end states and look at it.
+
+**Clip every plot.** Any drawing that depends on data must be wrapped in
+`g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip(); … g.restore()`, so that a
+coordinate the author did not anticipate cannot paint over the panel next door. Inset
+the data range by a dot radius so points sitting on the axis limits are not sliced in
+half by that clip.

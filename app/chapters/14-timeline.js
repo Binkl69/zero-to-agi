@@ -1,6 +1,10 @@
-/* Chapter 14 — 80 years in one scroll: the history of AI.
-   A pan/zoom timeline canvas (mouse, wheel, touch pinch), a log-scale "largest model" curve,
-   a compute-doubling explorer, and an accessible vertical list of every entry. Plain JS. */
+/* Zero → AGI · Chapter 14 · Eighty years, in one scroll
+   DESIGN RULE: the reader scrolls the whole history and finds the two winters themselves before
+   any prose runs.
+   Interactives, in order: the zoomable timeline with the compute curve; a prediction game
+   (experts were decades wrong in both directions); state-of-the-art by year across five fields
+   converging into one architecture; the compute-doubling explorer; and the collapsing price of a
+   fixed capability. */
 (function () {
   const TAGS = [
     { id: 'theory', label: 'theory', color: '#7c9cff' },
@@ -47,8 +51,8 @@
       desc: 'Geoffrey Hinton, Simon Osindero and Yee-Whye Teh showed that a deep network could be trained one layer at a time as a stack of restricted Boltzmann machines, then fine-tuned. The pretraining trick was later abandoned, but the rebrand stuck: "deep learning" replaced the winter-tainted "neural networks", and the Canadian Institute for Advanced Research kept a small group funded through the lean years.' },
     { t: 2007.45, year: '2007', tag: 'hardware', title: 'CUDA lets ordinary programmers use GPUs for maths',
       desc: 'NVIDIA released a C-like language for running general computation on its graphics cards. Scientists began using $500 gaming cards as personal supercomputers. Within five years graduate students in Toronto would train image classifiers on two of them, and the entire economics of the field would tilt toward whoever could buy the most GPUs.' },
-    { t: 2009.45, year: '2009', tag: 'data', title: 'ImageNet: 14 million labelled images',
-      desc: 'Fei-Fei Li\'s team at Princeton and Stanford used Amazon Mechanical Turk to label millions of photographs into thousands of categories, at a time when most vision datasets had a few thousand images. Colleagues told her it was a waste of time. From 2010 the ImageNet challenge gave the field a shared scoreboard, and a scoreboard is what turns a research community into a race.' },
+    { t: 2009.45, year: '2009', tag: 'data', title: 'ImageNet: 3.2 million labelled images, on the way to 14 million',
+      desc: 'Fei-Fei Li\'s team at Princeton and Stanford used Amazon Mechanical Turk to label photographs into thousands of categories, at a time when most vision datasets held a few thousand images. The 2009 paper describes 3.2 million images across 5,247 categories and calls the project about 10% complete; it reached 14 million over the following years. Colleagues told her it was a waste of time. From 2010 the ImageNet challenge gave the field a shared scoreboard, and a scoreboard is what turns a research community into a race.' },
     { t: 2012.75, year: '2012', tag: 'milestone', title: 'AlexNet wins ImageNet and the deep-learning era begins', scale: 6.1e7, flop: 4.7e17,
       desc: 'Alex Krizhevsky, Ilya Sutskever and Geoffrey Hinton trained a 60-million-parameter convolutional network on two GeForce GTX 580 gaming cards for a week and cut the ImageNet error rate from 26% to 15%. Every other entry used hand-designed features. Within two years every entry was a deep network, and every large technology company was hiring Hinton\'s students. This is the moment the five ingredients first arrived together.' },
     { t: 2013.1, year: '2013', tag: 'theory', title: 'word2vec: meaning as geometry',
@@ -115,8 +119,8 @@
       desc: 'Anthropic\'s three-size family, with Opus matching or beating GPT-4 on most benchmarks, made it a three-horse race in practice as well as in principle. Claude 3.5 Sonnet in June became the model of choice for coding; the "Artifacts" interface let it build and run small applications in the chat window.' },
     { t: 2024.22, year: '2024', tag: 'hardware', title: 'NVIDIA Blackwell',
       desc: 'Announced with 208 billion transistors across two dies, 4-bit precision support and rack-scale NVL72 systems that connect 72 GPUs as one, Blackwell was ordered by the hundreds of thousands before it shipped. NVIDIA briefly became the most valuable company in the world; GPUs had become the strategic resource of the decade.' },
-    { t: 2024.3, year: '2024', tag: 'data', title: 'Llama 3: open weights trained on 15 trillion tokens', scale: 4.05e11, flop: 3.8e25,
-      desc: 'Meta\'s Llama 3 (April; 405B in July) was trained on 15 trillion tokens, about 40 times the Chinchilla-optimal amount for the 8B model, because a smaller model trained longer is cheaper to serve. The 405-billion-parameter version, trained on 16,000 H100s, was the first open-weights model at the frontier, and its 92-page report is the most detailed public account of how a frontier model is built.' },
+    { t: 2024.56, year: '2024', tag: 'data', title: 'Llama 3.1 405B: open weights at the frontier, 15 trillion tokens', scale: 4.05e11, flop: 3.8e25,
+      desc: 'Meta\'s Llama 3 arrived on 18 April 2024 at 8B and 70B; the 405-billion-parameter Llama 3.1 followed on 23 July. All of them were trained on 15 trillion tokens, about 40 times the Chinchilla-optimal amount for the 8B model, because a smaller model trained longer is cheaper to serve. The 405-billion-parameter version, trained on 16,000 H100s, was the first open-weights model at the frontier, and its 92-page report is the most detailed public account of how a frontier model is built.' },
     { t: 2024.7, year: '2024', tag: 'milestone', title: 'o1: reasoning models think before they answer',
       desc: 'OpenAI\'s o1 (September preview) was trained with reinforcement learning to produce a long hidden chain of thought before responding, and its accuracy on maths and coding scaled with how long it was allowed to think. Test-time compute became a second scaling axis alongside training compute. Within months every lab had a reasoning model.' },
     { t: 2024.9, year: '2024', tag: 'product', title: 'MCP: a standard way to plug tools into models',
@@ -135,8 +139,8 @@
       desc: 'Positioned as the strongest coding and computer-use model of its generation, able to sustain focus on a single task for many hours, and the model behind the next wave of agent products. Mid-sized models were now doing what only the largest could a year earlier.' },
     { t: 2025.88, year: '2025', tag: 'product', title: 'Claude Opus 4.5 and Gemini 3 (November)',
       desc: 'Two frontier releases within a week of each other closed 2025. Anthropic\'s Opus 4.5 pushed agentic coding and long-horizon task reliability further; Google\'s Gemini 3 led on many reasoning and multimodal benchmarks. The pattern of the year: several labs at roughly the same frontier, leapfrogging every few months.' },
-    { t: 2026.4, year: '2026', tag: 'product', title: 'The Claude 5 family and a "Mythos-class" tier',
-      desc: 'Anthropic\'s fifth generation (Opus 5, Sonnet 5) and Claude Fable 5.1, described as a Mythos-class tier of capability, arrived in 2026. Because this course is written in the middle of the year, this entry is deliberately brief: benchmark numbers date instantly and marketing claims are not history. Chapter 15 discusses what these models can and cannot do at the time of writing.' },
+    { t: 2026.5, year: '2026', tag: 'product', title: 'The Claude 5 family, and a tier above Opus',
+      desc: 'Anthropic\'s fifth generation arrived through 2026: Claude Fable 5 and Claude Mythos 5 in June — the same model at two levels of safeguard, sitting above the Opus class — then Sonnet 5 on 30 June, Opus 5 on 24 July, and Fable 5.1 and Mythos 5.1 on 1 September. Because this course is written in the middle of the year, this entry is deliberately brief: benchmark numbers date instantly and marketing claims are not history. Chapter 15 discusses what these models can and cannot do at the time of writing.' },
   ];
   /* extra points for the scale curve (not entries): today's estimated frontier */
   const EXTRA_POINTS = [
@@ -199,6 +203,7 @@
     const [cv, g] = ctx.canvas(W, HH);
     cv.style.touchAction = 'none'; cv.style.cursor = 'grab';
     const padL = 48, padR = 16, axisY = 350, laneY0 = 326, laneGap = 12, maxLanes = 15;
+    const TITLE_FONT = '10px Inter, sans-serif';
     const curveTop = 22, curveBot = 132, histTop = 376, histBot = 420;
     const MINY = 1938, MAXY = 2030, BUCKET = 5;
     const FIT0 = 1940, FIT1 = 2028;
@@ -226,18 +231,31 @@
       t0 = a; t1 = a + span;
     }
     function visible() { return ENTRIES.filter(e => enabled[e.tag]); }
+    /* Lanes are packed on the full width each entry will occupy — the dot AND the
+       title printed beside it once the view is zoomed in far enough to show one.
+       Packing on the dot alone put four 150px titles in one 12px lane. */
     function layout() {
       placed = [];
       for (const b of buckets) b.n = 0;
-      const R = pxPerYear() > 18 ? 5 : 4, minGap = R * 2 + 2;
+      const R = pxPerYear() > 18 ? 5 : 4;
+      const named = pxPerYear() > 55;
+      if (named) g.font = TITLE_FONT;
       for (const e of visible()) {
         const bi = Math.floor((e.t - FIT0) / BUCKET);
         if (bi >= 0 && bi < buckets.length) buckets[bi].n++;
         const x = xOf(e.t);
         if (x < padL - 20 || x > W - padR + 20) continue;
+        let label = null, x0 = x - R - 1, x1 = x + R + 1;
+        if (named) {
+          const txt = e.title.length > 34 ? e.title.slice(0, 33) + '…' : e.title;
+          const w = g.measureText(txt).width;
+          const right = x + 9 + w < W - padR;
+          label = { txt: txt, right: right };
+          if (right) x1 = x + 9 + w + 5; else x0 = x - 9 - w - 5;
+        }
         let lane = 0;
-        while (lane < maxLanes - 1 && placed.some(p => p.lane === lane && Math.abs(p.x - x) < minGap)) lane++;
-        placed.push({ e, x, y: laneY0 - lane * laneGap, lane, r: R });
+        while (lane < maxLanes - 1 && placed.some(p => p.lane === lane && p.x1 > x0 && p.x0 < x1)) lane++;
+        placed.push({ e, x, y: laneY0 - lane * laneGap, lane, r: R, label: label, x0: x0, x1: x1 });
       }
     }
     /* Rebuilds the card only when the entry actually changes (pointermove fires constantly). */
@@ -278,15 +296,21 @@
         .sort((a, b) => a.t - b.t);
       let run = 0; const env = [];
       for (const p of pts) { run = Math.max(run, p.v); env.push({ t: p.t, v: run, est: p.est, raw: p.v }); }
+      /* the record curve is clipped to the band: when the view is zoomed into a
+         late decade it enters from far off to the left, and unclipped it ran
+         straight across the 10^N labels in the margin */
+      g.save(); g.beginPath(); g.rect(padL, curveTop - 10, W - padL - padR, curveBot - curveTop + 20); g.clip();
       g.strokeStyle = ctx.colors.green; g.lineWidth = 2; g.beginPath();
       env.forEach((p, i) => { const x = xOf(p.t), y = yOfLog(Math.log10(p.v)); if (i === 0) g.moveTo(x, y); else g.lineTo(x, y); });
       if (env.length) g.stroke();
       for (const p of env) {
         const x = xOf(p.t), y = yOfLog(Math.log10(p.raw));
-        if (x < padL || x > W - padR) continue;
+        /* one marker half-width inside the band, so the clip never bisects a square */
+        if (x < padL + 5 || x > W - padR - 5) continue;
         g.fillStyle = p.est ? ctx.colors.bg : ctx.colors.green; g.strokeStyle = ctx.colors.green; g.lineWidth = 1.5;
         g.beginPath(); g.rect(x - 3, y - 3, 6, 6); g.fill(); g.stroke();
       }
+      g.restore();
       g.fillStyle = ctx.colors.green; g.textAlign = 'left'; g.font = '11px Inter, sans-serif';
       g.fillText(isP ? 'largest model in this timeline: parameters (log scale; line = record so far, hollow = estimate)'
         : 'training compute per run, FLOP (log scale; line = record so far, hollow = estimate)', padL + 6, curveTop - 6);
@@ -306,16 +330,13 @@
         g.fillStyle = TAGCOL[p.e.tag]; g.beginPath(); g.arc(p.x, p.y, isHov || isSel ? p.r + 2 : p.r, 0, Math.PI * 2); g.fill();
         if (isSel) { g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.arc(p.x, p.y, p.r + 5, 0, Math.PI * 2); g.stroke(); }
       }
-      // ---- titles beside the dots once there is room
-      if (pxPerYear() > 55) {
-        g.font = '10px Inter, sans-serif';
-        for (const p of placed) {
-          const txt = p.e.title.length > 34 ? p.e.title.slice(0, 33) + '…' : p.e.title;
-          const w = g.measureText(txt).width;
-          const right = p.x + 9 + w < W - padR;
-          g.textAlign = right ? 'left' : 'right';
-          g.fillStyle = TAGCOL[p.e.tag]; g.fillText(txt, p.x + (right ? 9 : -9), p.y + 3);
-        }
+      // ---- titles beside the dots once there is room (the lane packing above
+      //      already reserved the width each one needs)
+      g.font = TITLE_FONT;
+      for (const p of placed) {
+        if (!p.label) continue;
+        g.textAlign = p.label.right ? 'left' : 'right';
+        g.fillStyle = TAGCOL[p.e.tag]; g.fillText(p.label.txt, p.x + (p.label.right ? 9 : -9), p.y + 3);
       }
       // ---- tooltip for the hovered / selected entry
       const focus = hover || (selected ? placed.find(p => p.e === selected) : null);
@@ -336,10 +357,18 @@
         if (x1 - x0 < 1.5) continue;
         const bh = (histBot - histTop) * b.n / maxN;
         g.fillStyle = 'rgba(124,156,255,0.22)'; g.fillRect(x0, histBot - bh, Math.max(1, x1 - x0 - 1), bh);
-        if (x1 - x0 > 24) { g.fillStyle = ctx.colors.accent; g.font = '10px JetBrains Mono, monospace'; g.textAlign = 'center'; g.fillText(String(b.n), (x0 + x1) / 2, histBot - bh - 3); }
+        if (x1 - x0 > 24) {
+          /* the count sits above its bar, but the tallest bar reaches the top of
+             the strip, so that one is labelled inside itself instead of up in the
+             row of year labels */
+          g.fillStyle = ctx.colors.accent; g.font = '10px JetBrains Mono, monospace'; g.textAlign = 'center';
+          g.fillText(String(b.n), (x0 + x1) / 2, bh > 16 ? histBot - bh + 11 : histBot - bh - 3);
+        }
       }
+      /* the strip's own caption goes on the bottom line: at histTop it landed in
+         the middle of the year labels */
       g.fillStyle = ctx.colors.muted; g.font = '10px Inter, sans-serif'; g.textAlign = 'left';
-      g.fillText('entries per 5 years', padL, histTop - 3);
+      g.fillText('entries per 5 years', padL, HH - 6);
       g.textAlign = 'right';
       g.fillText(Math.round(t0) + ' – ' + Math.round(t1) + '  ·  drag to pan · wheel / pinch to zoom', W - padR, HH - 6);
     }
@@ -508,7 +537,7 @@
         'records imply': obs ? obs.toFixed(1) + ' months' : 'n/a',
       });
     }
-    const s1 = ctx.slider({ label: 'doubling time (months)', min: 1, max: 24, step: 0.5, value: months, digits: 1, onChange: v => { months = v; draw(); } });
+    const s1 = ctx.slider({ label: 'doubling time (months)', min: 1, max: 24, step: 0.1, value: months, digits: 1, onChange: v => { months = v; draw(); } });
     const s2 = ctx.slider({ label: 'start year', min: 2012, max: 2024, step: 1, value: start, onChange: v => { start = v; draw(); } });
     const reset = ctx.button('↺ reset', () => { months = 6; start = 2012; s1.value = 6; s2.value = 2012; draw(); });
     draw();
@@ -518,6 +547,313 @@
   /* =====================================================================
      Chapter registration
      ===================================================================== */
+
+  function wrapLines(gc, text, maxW) {
+    const words = String(text).split(' '); const out = []; let line = '';
+    for (const w of words) {
+      const t = line ? line + ' ' + w : w;
+      if (line && gc.measureText(t).width > maxW) { out.push(line); line = w; } else line = t;
+    }
+    if (line) out.push(line);
+    return out;
+  }
+  function wrapText(gc, text, x, y, maxW, lh) {
+    wrapLines(gc, text, maxW).forEach((ln, i) => gc.fillText(ln, x, y + i * lh));
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Interactive: how badly experts have called the timing               */
+  /* ------------------------------------------------------------------ */
+  function buildPredictionGame(ctx) {
+    const [cv, g] = ctx.canvas(720, 340);
+    const C = ctx.colors;
+    const FONT = '13px Inter, system-ui, sans-serif';
+    const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
+    const Q = [
+      {
+        claim: '"Within ten years a digital computer will be the world\'s chess champion."',
+        who: 'Herbert Simon and Allen Newell, 1957',
+        predicted: 1967, actual: 1997,
+        note: 'Deep Blue beat Kasparov forty years after the prediction, and it did it by searching 200 million positions a second, not by thinking like a person.',
+      },
+      {
+        claim: '"Machines will be capable of doing any work a man can do."',
+        who: 'Herbert Simon, 1965, giving it twenty years',
+        predicted: 1985, actual: null,
+        note: 'Still not true in 2026. This prediction helped inflate the expectations whose collapse caused the first AI winter.',
+      },
+      {
+        claim: 'The perceptron "will be able to walk, talk, see, write, reproduce itself and be conscious of its existence."',
+        who: 'The New York Times, reporting the US Navy, July 1958',
+        predicted: 1970, actual: null,
+        note: 'Rosenblatt\'s machine could draw one straight line. Chapter 1 had you fail at XOR with it. The gap between the press release and the device is the oldest story in this field.',
+      },
+      {
+        claim: '"Solving Go is at least ten years away."',
+        who: 'The consensus view among Go and AI researchers, 2014',
+        predicted: 2024, actual: 2016,
+        note: 'This one went the other way. AlphaGo beat Lee Sedol two years later — the field has been badly wrong in both directions.',
+      },
+      {
+        claim: '"A self-driving car will be commercially available by 2020."',
+        who: 'Widely repeated industry guidance, around 2015',
+        predicted: 2020, actual: null,
+        note: 'Limited robotaxi services run in a handful of mapped cities. General self-driving remains unsolved, more than a decade after it was called nearly done.',
+      },
+    ];
+    let idx = 0, guess = 2000, revealed = false;
+    const gSl = ctx.slider({ label: 'your guess: when did it actually happen?', min: 1955, max: 2040, step: 1, value: 2000, fmt: (v) => String(Math.round(v)), onChange: (v) => { guess = v; } });
+    const revBtn = ctx.button('Reveal', () => { revealed = true; }, 'primary');
+    const nextBtn = ctx.button('Next prediction →', () => { idx = (idx + 1) % Q.length; revealed = false; });
+    const ro = ctx.readout();
+
+    ctx.loop(() => {
+      g.clearRect(0, 0, cv.W, cv.H);
+      const q = Q[idx];
+      g.font = 'bold ' + FONT; g.fillStyle = C.text;
+      g.fillText('a confident prediction', 34, 26);
+      g.fillStyle = 'rgba(124,156,255,0.10)'; g.fillRect(34, 38, 650, 74);
+      g.strokeStyle = C.accent; g.lineWidth = 1.5; g.strokeRect(34, 38, 650, 74);
+      g.font = '14px Inter, system-ui, sans-serif'; g.fillStyle = C.text;
+      wrapLines(g, q.claim, 610).slice(0, 3).forEach((ln, i) => g.fillText(ln, 48, 62 + i * 20));
+      g.font = MONO; g.fillStyle = C.muted;
+      g.fillText('— ' + q.who, 48, 104);
+
+      /* the timeline strip */
+      const X = 60, W = 600, Y = 160;
+      const TICKS = [1960, 1980, 2000, 2020, 2040];
+      const tx = (yr) => X + (yr - 1955) / (2040 - 1955) * W;
+      /* an opaque chip cut out of the background, so a label on the strip is
+         read against the page rather than against whatever line runs under it */
+      const chip = (s, cx, base) => {
+        const w = g.measureText(s).width;
+        g.fillStyle = C.bg; g.fillRect(cx - w / 2 - 5, base - 13, w + 10, 18);
+      };
+      g.strokeStyle = C.line; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(X, Y); g.lineTo(X + W, Y); g.stroke();
+      TICKS.forEach(yr => { g.beginPath(); g.moveTo(tx(yr), Y - 5); g.lineTo(tx(yr), Y + 5); g.stroke(); });
+      /* Every rule on the strip is drawn first and every label afterwards, so
+         the full-height guess line passes behind the year labels it crosses
+         instead of striking them out. */
+      g.font = MONO; g.textAlign = 'center';
+      if (!revealed) {
+        g.strokeStyle = C.accent; g.lineWidth = 2.5;
+        /* stops at the top of the year-label chips: a 3px stub poking out below
+           them reads as a broken line, not as a marker */
+        g.beginPath(); g.moveTo(tx(guess), Y - 30); g.lineTo(tx(guess), Y + 9); g.stroke();
+      } else if (q.actual) {
+        g.strokeStyle = 'rgba(251,191,36,0.6)'; g.lineWidth = 2; g.setLineDash([4, 4]);
+        g.beginPath(); g.moveTo(tx(q.predicted), Y - 8); g.lineTo(tx(q.actual), Y - 8); g.stroke(); g.setLineDash([]);
+        g.fillStyle = C.green;
+        g.beginPath(); g.arc(tx(q.actual), Y, 8, 0, 7); g.fill();
+      }
+      /* predicted */
+      g.fillStyle = C.warn;
+      g.beginPath(); g.moveTo(tx(q.predicted), Y - 8); g.lineTo(tx(q.predicted) + 6, Y - 20); g.lineTo(tx(q.predicted) - 6, Y - 20); g.closePath(); g.fill();
+      chip('promised', tx(q.predicted), Y - 26);
+      g.fillStyle = C.warn; g.fillText('promised', tx(q.predicted), Y - 26);
+      /* the year labels, last of all */
+      TICKS.forEach(yr => {
+        chip(String(yr), tx(yr), Y + 22);
+        g.fillStyle = C.muted; g.fillText(String(yr), tx(yr), Y + 22);
+      });
+      /* and the reader's own marker, named on the row below the years */
+      if (!revealed) {
+        g.fillStyle = C.accent; g.fillText('you: ' + Math.round(guess), tx(guess), Y + 46);
+      } else if (q.actual) {
+        g.font = 'bold ' + MONO; g.fillStyle = C.green;
+        g.fillText('actually ' + q.actual, tx(q.actual), Y + 44);
+      } else {
+        g.font = 'bold ' + MONO; g.fillStyle = C.danger;
+        g.fillText('still has not happened', tx(2028), Y + 44);
+      }
+      g.textAlign = 'left';
+
+      if (revealed) {
+        const err = q.actual ? q.actual - q.predicted : null;
+        g.font = 'bold 16px Inter, system-ui, sans-serif';
+        g.fillStyle = err === null ? C.danger : C.warn;
+        g.fillText(err === null
+          ? 'Never. Sixty years of "twenty years away".'
+          : (err > 0 ? 'Late by ' + err + ' years.' : 'Early by ' + (-err) + ' years — the field got this one badly wrong in the other direction.'),
+          34, 244);
+        g.font = FONT; g.fillStyle = C.muted;
+        wrapText(g, q.note, 34, 268, 640, 17);
+      } else {
+        g.font = FONT; g.fillStyle = C.muted;
+        wrapText(g, 'Drag the slider to when you think it actually happened, then press Reveal. The point is not to catch anyone out — it is that the people making these predictions were the leading experts of their day, with full knowledge of the state of the art.', 34, 250, 640, 17);
+      }
+      ro.set({ prediction: idx + 1 + ' / ' + Q.length, promised: q.predicted, actual: revealed ? (q.actual || 'still waiting') : '—' });
+    });
+
+    return ctx.figure(cv,
+      'Every claim here was made by someone with full command of the state of the art. Two were decades late, one was eight years early, and two have not happened at all. This is the single most useful thing history offers about the present: the field has a very long record of being confidently wrong about timing in both directions, which is worth remembering next time you read a forecast — including the ones in chapter 15.',
+      [gSl, revBtn, nextBtn], ro);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Interactive: what was actually possible in a given year             */
+  /* ------------------------------------------------------------------ */
+  function buildStateOfArt(ctx) {
+    const [cv, g] = ctx.canvas(720, 376);
+    const C = ctx.colors;
+    const FONT = '13px Inter, system-ui, sans-serif';
+    const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
+    let year = 2012;
+    const ROWS = [
+      {
+        n: 'recognise objects in a photo',
+        at: [[1998, 'only hand-written digits, on cheques'], [2012, 'AlexNet: 1,000 categories, 15% top-5 error'], [2015, 'ResNet passes human accuracy on ImageNet'], [2021, 'zero-shot: name a category it was never trained on']],
+      },
+      {
+        n: 'translate a sentence',
+        at: [[1998, 'phrase tables and hand-written rules; word salad'], [2014, 'seq2seq LSTMs: fluent but forgetful on long sentences'], [2016, 'Google Translate switches to neural; errors drop ~60%'], [2022, 'near-professional on high-resource language pairs']],
+      },
+      {
+        n: 'hold a conversation',
+        at: [[1998, 'ELIZA-style pattern matching, and everyone knew'], [2014, 'scripted assistants with a fixed intent list'], [2020, 'GPT-3: fluent, but you had to coax it with examples'], [2022, 'ChatGPT: ask a question, get an answer']],
+      },
+      {
+        n: 'write working code',
+        at: [[1998, 'autocomplete of variable names'], [2014, 'snippet search'], [2021, 'Copilot completes a function from its name'], [2025, 'agents that edit a repo, run the tests, and fix what fails']],
+      },
+      {
+        n: 'play Go at professional level',
+        at: [[1998, 'strong amateurs beat the best programs easily'], [2014, 'still considered a decade away'], [2016, 'AlphaGo beats Lee Sedol 4-1'], [2017, 'AlphaGo Zero learns it from self-play alone, 100-0']],
+      },
+    ];
+    const YEARS = [1998, 2012, 2014, 2016, 2020, 2022, 2025];
+    const ySl = ctx.slider({ label: 'year', min: 1998, max: 2026, step: 1, value: 2012, fmt: (v) => String(Math.round(v)), onChange: (v) => { year = v; } });
+    const presets = [1998, 2014, 2020, 2025].map(y => ctx.button(String(y), () => { year = y; ySl.value = y; }));
+    const ro = ctx.readout();
+
+    /* three columns: what you want to do | the best that could do it | since when.
+       The middle column stops at MIDW so it cannot run into the date on the right. */
+    const MIDX = 300, MIDW = 296, SINCEX = 686;
+    ctx.loop(() => {
+      g.clearRect(0, 0, cv.W, cv.H);
+      g.font = 'bold 17px Inter, system-ui, sans-serif'; g.fillStyle = C.text;
+      g.fillText('the best anyone could do in ' + Math.round(year), 34, 30);
+      let solved = 0;
+      ROWS.forEach((r, i) => {
+        const y = 58 + i * 54;
+        let cur = null;
+        r.at.forEach(([yr, txt]) => { if (year >= yr) cur = [yr, txt]; });
+        g.font = 'bold ' + FONT; g.fillStyle = C.text;
+        g.fillText(r.n, 34, y + 12);
+        g.font = MONO;
+        if (!cur) {
+          g.fillStyle = '#2a3444';
+          g.fillText('— nothing worth the name yet —', MIDX, y + 12);
+        } else {
+          const latest = r.at[r.at.length - 1][0];
+          const isLatest = cur[0] === latest;
+          if (isLatest) solved++;
+          g.fillStyle = isLatest ? C.green : C.warn;
+          wrapLines(g, cur[1], MIDW).slice(0, 2).forEach((ln, j) => g.fillText(ln, MIDX, y + 12 + j * 15));
+          g.fillStyle = C.line; g.textAlign = 'right';
+          g.fillText('since ' + cur[0], SINCEX, y + 12);
+          g.textAlign = 'left';
+        }
+        g.strokeStyle = C.line; g.lineWidth = 1;
+        g.beginPath(); g.moveTo(34, y + 34); g.lineTo(686, y + 34); g.stroke();
+      });
+      g.font = FONT; g.fillStyle = C.muted;
+      wrapText(g, year < 2012
+        ? 'Before 2012, every one of these was a separate research field with its own techniques, its own conferences and its own decade-long roadmap.'
+        : year < 2020
+          ? 'Deep learning is eating the specialised techniques one field at a time, and each conquest still needs its own architecture.'
+          : 'One architecture now does all five, and the remaining differences are mostly data and post-training. That convergence is the real story of the last decade.',
+        34, 332, 650, 16);
+      ro.set({ year: Math.round(year), 'at the frontier': solved + ' / ' + ROWS.length });
+    });
+
+    return ctx.figure(cv,
+      'Drag the year and watch five separate research fields collapse into one. In 1998 each row had its own techniques, its own conferences and its own decade-long roadmap; by 2022 a single architecture does all of them, and the differences between them are mostly data and post-training. Anyone who tells you they saw that convergence coming in 2010 is misremembering.',
+      [ySl, ...presets], ro);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Interactive: what a fixed capability costs over time                */
+  /* ------------------------------------------------------------------ */
+  function buildCapabilityPrice(ctx) {
+    const [cv, g] = ctx.canvas(720, 364);
+    const C = ctx.colors;
+    const FONT = '13px Inter, system-ui, sans-serif';
+    const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
+    let year = 2019;
+    /* Cost to reach GPT-2 (1.5B) quality, roughly, on the hardware and software of each year.
+       Order-of-magnitude only — the point is the slope, not any single figure. */
+    const POINTS = [[2019, 50000], [2020, 20000], [2021, 6000], [2022, 2000], [2023, 700], [2024, 200], [2025, 60], [2026, 30]];
+    const costAt = (y) => {
+      for (let i = 0; i < POINTS.length - 1; i++) {
+        const [y0, c0] = POINTS[i], [y1, c1] = POINTS[i + 1];
+        if (y >= y0 && y <= y1) {
+          const t = (y - y0) / (y1 - y0);
+          return Math.exp(Math.log(c0) + t * (Math.log(c1) - Math.log(c0)));
+        }
+      }
+      return POINTS[POINTS.length - 1][1];
+    };
+    const ySl = ctx.slider({ label: 'year', min: 2019, max: 2026, step: 0.25, value: 2019, fmt: (v) => v.toFixed(2).replace(/\.00$/, ''), onChange: (v) => { year = v; } });
+    const ro = ctx.readout();
+
+    ctx.loop(() => {
+      g.clearRect(0, 0, cv.W, cv.H);
+      const P = { x: 70, y: 50, w: 400, h: 190 };
+      const R = 7;                       /* the marker's radius, kept inside the frame */
+      g.font = 'bold ' + FONT; g.fillStyle = C.text;
+      g.fillText('what it costs to train a GPT-2-class model', P.x, 30);
+      g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(P.x, P.y, P.w, P.h);
+      /* the year range is inset by one marker radius so the dot at either end
+         sits whole inside the plot rather than half-eaten by the clip */
+      const px = (y) => P.x + R + (y - 2019) / 7 * (P.w - 2 * R);
+      const py = (c) => P.y + P.h - (Math.log10(c) - 1) / 4 * P.h;
+      g.font = MONO; g.fillStyle = C.muted; g.textAlign = 'right';
+      [10, 100, 1000, 10000, 100000].forEach(c => {
+        g.beginPath(); g.moveTo(P.x, py(c)); g.lineTo(P.x + P.w, py(c)); g.stroke();
+        g.fillText('$' + (c >= 1000 ? (c / 1000) + 'k' : c), P.x - 8, py(c) + 4);
+      });
+      g.textAlign = 'center';
+      [2019, 2021, 2023, 2025].forEach(y => g.fillText(String(y), px(y), P.y + P.h + 18));
+      g.textAlign = 'left';
+      /* everything that follows from the data is clipped to the plot box */
+      g.save(); g.beginPath(); g.rect(P.x, P.y, P.w, P.h); g.clip();
+      g.strokeStyle = C.green; g.lineWidth = 2.5; g.beginPath();
+      for (let i = 0; i <= 70; i++) { const y = 2019 + i / 70 * 7; i ? g.lineTo(px(y), py(costAt(y))) : g.moveTo(px(y), py(costAt(y))); }
+      g.stroke();
+      const c0 = costAt(year);
+      g.fillStyle = C.accent;
+      g.beginPath(); g.arc(px(year), py(c0), 6, 0, 7); g.fill();
+      g.restore();
+      /* the note lives in the empty bottom-left corner, clear of the curve and
+         of the marker's starting position */
+      g.font = MONO; g.fillStyle = C.line;
+      g.fillText('log scale — each line is 10×', P.x + 8, P.y + P.h - 10);
+
+      const TX = 510;
+      g.font = FONT; g.fillStyle = C.muted; g.fillText('in ' + year.toFixed(2).replace(/\.00$/, '') + ' it costs', TX, 70);
+      g.font = 'bold 30px Inter, system-ui, sans-serif'; g.fillStyle = C.green;
+      g.fillText('$' + Math.round(c0).toLocaleString(), TX, 106);
+      g.font = MONO; g.fillStyle = C.muted;
+      g.fillText('down ' + Math.round(50000 / c0) + '× since 2019', TX, 130);
+      g.font = FONT; g.fillStyle = C.muted;
+      wrapText(g, 'Same capability. Better hardware, better kernels, better recipes, and a far better understanding of how much data to use.', TX, 156, 180, 16);
+      /* two columns under the chart, with a gutter wide enough that the bold
+         statement on the left cannot run into the paragraph on the right */
+      g.font = 'bold ' + FONT; g.fillStyle = C.text;
+      wrapLines(g, 'in 2019 this was the most capable language model on Earth.', 200)
+        .forEach((ln, i) => g.fillText(ln, 34, 292 + i * 18));
+      g.font = FONT; g.fillStyle = C.muted;
+      wrapText(g, 'Order-of-magnitude figures only. The slope is the point: a capability that is a research milestone one year is a hobby project a few years later, and that is the clearest reason to be careful about calling anything permanently out of reach.', 262, 292, 420, 16);
+      ro.set({ year: year.toFixed(2).replace(/\.00$/, ''), cost: '$' + Math.round(c0).toLocaleString(), 'cheaper than 2019': Math.round(50000 / c0) + '×' });
+    });
+
+    return ctx.figure(cv,
+      'GPT-2 was the most capable language model in the world in 2019 and its staged release was a public argument about AI risk. Today the same capability is reproducible for the price of a dinner — Karpathy\'s llm.c reproduces GPT-2 on eight A100s for about twenty dollars of rented time. These are order-of-magnitude figures, and the slope is what matters: capability gets dramatically cheaper even when nothing new is invented.',
+      [ySl], ro);
+  }
+
   ZTA.registerChapter({
     id: '14-timeline',
     num: 14,
@@ -535,29 +871,59 @@
         h('div', { class: 'tl-desc', html: e.desc + (e.scale ? ' <span class="stat">' + fmtBig(e.scale) + ' parameters.</span>' : '') }))));
 
       root.append(
-        ctx.p('In July 1958 the New York Times reported that the US Navy had unveiled an electronic brain, the perceptron, that was expected to "walk, talk, see, write, reproduce itself and be conscious of its existence". It could, in fact, learn to tell a card marked on the left from a card marked on the right. Sixty-four years later, in November 2022, a chat window went online that a hundred million people were using within two months. Between those two moments lie two funding collapses, several rebrandings, a handful of stubborn people who kept working when it was unfashionable, and a chip designed to make video games look better.'),
+        ctx.callout('tryit', '🖐 Do this first — scroll eighty years in ten seconds',
+          '<b>1.</b> Start zoomed out and look at the green curve. It is <b>flat for fifty years</b>, then climbs ten orders of magnitude in fourteen.<br>' +
+          '<b>2.</b> Find the two gaps where almost nothing happens. Those are the AI winters, and the field ran out of money and credibility in both.<br>' +
+          '<b>3.</b> Now zoom into 2012-2026 and watch the same curve turn near-vertical.<br>' +
+          '<b>4.</b> Click any entry to read what actually happened.'),
+        buildTimeline(ctx),
+        ctx.p('Almost everything you use was built in the last sliver on the right. Almost every idea it rests on is decades older.'),
+
+        ctx.p('In July 1958 the New York Times reported that the US Navy had unveiled an electronic brain, the perceptron, that was expected to "walk, talk, see, write, reproduce itself and be conscious of its existence". '),
+        ctx.p('It could, in fact, learn to tell a card marked on the left from a card marked on the right. Sixty-four years later, in November 2022, a chat window went online that a hundred million people were using within two months. Between those two moments lie two funding collapses, several rebrandings, a handful of stubborn people who kept working when it was unfashionable, and a chip designed to make video games look better.'),
         ctx.p('History is the part of a technical subject people skip, and for AI that is a mistake, because the story explains the shape of the present. Why does every model use a transformer? Because a 2017 paper made it possible to use GPUs fully. Why do labs count tokens instead of parameters? Because of a 2022 DeepMind paper. Why is everyone nervous about hype? Because the field has been through it twice before and both times the money vanished for a decade.'),
         ctx.p('This chapter is one scroll through eighty years. The question it answers: <b>what actually had to happen, and in what order, for a machine to learn to talk?</b> The timeline below is interactive; every dot is a story. Below it, the same entries as a plain list you can read straight through.'),
 
         ctx.section('The timeline',
           ctx.p('Each entry is tagged by what kind of thing it was. <em>Theory</em> is an idea on paper; <em>architecture</em> is a new shape of network; <em>hardware</em> and <em>data</em> are the raw materials; <em>product</em> is when it reached people; <em>milestone</em> is a result that changed what everyone believed possible; <em>winter</em> is when the money left.'),
           legend,
-          ctx.callout('tryit', 'Try it', 'Start zoomed out and look at the green curve: it is flat for fifty years, then climbs ten orders of magnitude in fourteen. Now untick everything except <b>hardware</b>: notice a GPU appears in 1999, CUDA in 2007, and AlexNet in 2012, three years apart each. Tick <b>winter</b> and see where the gaps are. Then zoom into 2022–2026 (button) and count how many entries there are per year compared with the 1990s. Use prev/next to read every entry in order like a book.'),
-          buildTimeline(ctx),
         ),
 
         ctx.section('The exponential, made visceral',
           ctx.p('The green curve deserves a second look. Rosenblatt\'s perceptron had a few hundred adjustable weights. LeNet-5 had sixty thousand. AlexNet, sixty million. GPT-3, 175 billion. The largest models of 2026 are estimated at around a trillion. That is ten orders of magnitude: not "a lot bigger" but bigger in the way a galaxy is bigger than a grain of sand. And the curve of training <em>compute</em>, the number of arithmetic operations spent on a single training run, is steeper still, because compute grows with both model size and data.'),
-          ctx.p('In 2018 OpenAI measured that the compute used in the largest training runs had doubled every 3.4 months between AlexNet (2012) and AlphaGo Zero (2017), a 300,000-fold increase in six years, far faster than Moore\'s law, because it was driven by spending and parallelism rather than by transistor density. Epoch AI\'s more recent estimates put frontier training compute growth at roughly four to five times per year since 2010, a doubling every six months or so. Both are approximate; neither has clearly stopped. The explorer below lets you feel what those numbers mean.'),
+          ctx.p('In 2018 OpenAI measured that the compute used in the largest training runs had doubled every 3.4 months between AlexNet (2012) and AlphaGo Zero (2017), a 300,000-fold increase in six years, '),
+          ctx.p('That was far faster than Moore\'s law, because it was driven by spending and parallelism rather than by transistor density. Epoch AI\'s more recent estimates put frontier training compute growth at roughly four to five times per year since 2010, a doubling every six months or so. Both are approximate; neither has clearly stopped. The explorer below lets you feel what those numbers mean.'),
           ctx.callout('tryit', 'Try it', 'Leave the start at 2012 and set the doubling time to 3.4 months: read off the multiplier at "today". Now set it to 24 months (Moore\'s law). The gap between the two lines at 2026 is the difference between a computer that is a few hundred times faster and one that is a hundred billion times more compute-hungry. Then move the start to 2020 and ask: how many doublings since GPT-3?'),
           buildDoubling(ctx),
         ),
 
         ctx.section('Winters and springs',
-          ctx.p('Twice, the field has run out of money and reputation at the same time. The first winter (roughly 1974 to 1980) followed a decade of promises: machine translation that would be solved in a few years, programs that would be world chess champions by 1968, "general problem solvers". The programs worked on toy problems and fell apart on real ones, because the number of possibilities to search explodes with problem size and nobody had the data or compute to learn instead of search. Governments in the UK and US read damning reports and cut funding. Researchers renamed their work.'),
+          ctx.callout('tryit', '🖐 Try this — guess when the experts were right',
+            '<b>1.</b> Read each prediction, drag the slider to when you think it actually happened, then press <b>Reveal</b>.<br>' +
+            '<b>2.</b> Two were decades late, one was eight years early, and two have still not happened.<br>' +
+            '<b>3.</b> Every one was made by a leading expert with full knowledge of the state of the art. <b>That is the point.</b>'),
+          buildPredictionGame(ctx),
+
+          ctx.p('Twice, the field has run out of money and reputation at the same time. '),
+          ctx.p('The first winter (roughly 1974 to 1980) followed a decade of promises: machine translation that would be solved in a few years, programs that would be world chess champions by 1968, "general problem solvers". The programs worked on toy problems and fell apart on real ones, because the number of possibilities to search explodes with problem size and nobody had the data or compute to learn instead of search. Governments in the UK and US read damning reports and cut funding. Researchers renamed their work.'),
           ctx.p('The second winter (roughly 1987 to 1993) followed the expert-systems boom. Rule-based systems had genuinely saved companies money, but every rule had to be typed by a human, the systems could not learn, and they broke at the edges of what their authors had anticipated. When cheaper hardware killed the specialised Lisp machines the industry ran on, and Japan\'s Fifth Generation project ended without its goals, "AI" became a word that made investors leave the room. That is when "machine learning" became the polite term.'),
-          ctx.p('What is different this time? The honest answer has three parts. First, the current systems make money: coding assistants, search, customer service, image generation are products with revenue, not demos. Second, the core method, learning from data, does not have the brittleness that killed expert systems; it degrades gracefully instead of falling off a cliff. Third, and least comfortably: the scale of investment is now so large (hundreds of billions of dollars a year in chips and data centres) that a disappointment would be a different kind of event. Whether a third winter is possible is a serious question; chapter 15 takes it seriously. What history says is that winters come from the gap between promise and delivery, so the best insurance is to promise accurately.'),
+          ctx.p('What is different this time? The honest answer has three parts. First, the current systems make money: coding assistants, search, customer service, image generation are products with revenue, not demos. '),
+          ctx.p('Second, the core method, learning from data, does not have the brittleness that killed expert systems; it degrades gracefully instead of falling off a cliff. '),
+          ctx.p('Third, and least comfortably: the scale of investment is now so large (hundreds of billions of dollars a year in chips and data centres) that a disappointment would be a different kind of event. Whether a third winter is possible is a serious question; chapter 15 takes it seriously. What history says is that winters come from the gap between promise and delivery, so the best insurance is to promise accurately.'),
           ctx.callout('history', 'The people who kept going', 'Geoffrey Hinton moved to Canada in 1987 partly because he did not want US military funding, and spent the second winter at the University of Toronto on grants from a small Canadian institute. Yann LeCun kept building convolutional networks at Bell Labs while the field ignored them. Yoshua Bengio worked on neural language models in Montreal when almost nobody else did. Jürgen Schmidhuber\'s group in Switzerland kept LSTMs alive for a decade of indifference. In 2018 Hinton, LeCun and Bengio shared the Turing Award; in 2024 Hinton shared the Nobel Prize in Physics. The lesson is not that persistence always wins. It is that the winners of the spring were the people who had been right during the winter.'),
+        ),
+
+        ctx.section('What was actually possible, year by year',
+          ctx.p('The timeline says what was invented. This says what you could actually do with it.'),
+          ctx.callout('tryit', '🖐 Try this',
+            '<b>1.</b> Press <b>1998</b>. Five separate research fields, five separate sets of techniques, five separate decade-long roadmaps.<br>' +
+            '<b>2.</b> Step through <b>2014</b>, <b>2020</b>, <b>2025</b> and watch them collapse into one architecture.<br>' +
+            '<b>3.</b> Note how recent the last column is. Most of it is inside the last four years.'),
+          buildStateOfArt(ctx),
+          ctx.p('And capability does not only arrive — it gets cheap, fast, often without anything new being invented.'),
+          ctx.callout('tryit', '🖐 Try this',
+            'Drag the year and watch what it costs to train a GPT-2-class model. In 2019 this was the most capable language model on Earth and its release was a public argument about AI risk. Today it is a weekend project.'),
+          buildCapabilityPrice(ctx),
         ),
 
         ctx.section('The five ingredients that had to arrive together',
@@ -575,7 +941,8 @@
         ctx.callout('example', 'Where each era lives in your pocket', 'The keyboard autocorrect on your phone descends from the n-gram and LSTM language models of the 1990s and 2010s. Face unlock is a convolutional network, a direct descendant of LeNet. Voice assistants of the 2010s were LSTMs; the ones of the 2020s are transformers. Your photo app\'s search box is CLIP or a cousin. And the chat assistant is InstructGPT\'s recipe on a transformer trained with GPT-3\'s scaling, tuned with Constitutional AI or RLHF, running on Hopper or Blackwell chips. Every dot on the timeline is still running somewhere.'),
 
         ctx.section('Why it matters for modern AI',
-          ctx.p('Three things to take from eighty years. First, progress in AI has never been smooth: it comes in bursts when ingredients align, followed by plateaus that look permanent from inside. Anyone claiming to know the schedule for the next burst is guessing. Second, the ideas that won were mostly old; what changed was the ability to run them at scale. That argues for taking "impractical" ideas seriously and for taking hardware seriously. Third, the field has repeatedly mistaken a capability for a solved problem (chess, then Go, then conversation) and each time the goalposts moved for good reasons: the capability turned out to be narrower than it looked. Chapter 15 asks what is left, and whether the current burst reaches all the way.'),
+          ctx.p('Three things to take from eighty years. First, progress in AI has never been smooth: it comes in bursts when ingredients align, followed by plateaus that look permanent from inside. Anyone claiming to know the schedule for the next burst is guessing. '),
+          ctx.p('Second, the ideas that won were mostly old; what changed was the ability to run them at scale. That argues for taking "impractical" ideas seriously and for taking hardware seriously. Third, the field has repeatedly mistaken a capability for a solved problem (chess, then Go, then conversation) and each time the goalposts moved for good reasons: the capability turned out to be narrower than it looked. Chapter 15 asks what is left, and whether the current burst reaches all the way.'),
         ),
 
         ctx.quiz([
@@ -588,7 +955,7 @@
 
         ctx.section('Go deeper',
           ctx.ul([
-            '<a href="https://openai.com/research/ai-and-compute" target="_blank">OpenAI — AI and Compute (2018)</a>: the 3.4-month doubling analysis, with the chart that started the conversation.',
+            '<a href="https://openai.com/index/ai-and-compute/" target="_blank">OpenAI — AI and Compute (2018)</a>: the 3.4-month doubling analysis, with the chart that started the conversation.',
             '<a href="https://epoch.ai/trends" target="_blank">Epoch AI — Trends</a>: continually updated data on training compute, model sizes, hardware and data across the whole history of ML.',
             '<a href="https://academic.oup.com/mind/article/LIX/236/433/986238" target="_blank">Turing (1950) — Computing Machinery and Intelligence</a>: still the best essay on the subject; read the objections section.',
             '<a href="https://www.nature.com/articles/nature14539" target="_blank">LeCun, Bengio, Hinton (2015) — Deep Learning (Nature review)</a>: the three pioneers summarise the field at the moment it took off.',
