@@ -1,0 +1,29 @@
+# Runs the four checkers on every push and pull request.
+#
+# They exist because this course has been wrong in ways that still ran: a demo
+# whose "try this" step named a state it could not reach, an axis label 39px off
+# the canvas, a sentence spliced into itself. None of that throws an error, so
+# nothing but a check catches it.
+name: checks
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # no lockfile cache: the only dependency is playwright-core, and the
+      # headless checks below do not launch a browser
+      - run: npm install --no-audit --no-fund
+      # smoke: the chapter contract (interactives, intro length, paragraph length)
+      # paint: what every canvas actually draws, in a fake DOM
+      # prose-check: the wreckage an edit leaves behind
+      # content-inventory --check: quiz structure and control references
+      - run: npm test

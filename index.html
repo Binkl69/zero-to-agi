@@ -3,6 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Keep the course out of search results while it is being built. A robots.txt
+     would not work here: robots.txt is read per origin, so for a project page the
+     crawler reads binkl69.github.io/robots.txt, not this repository's. Remove this
+     line when the course is ready to be found. -->
+<meta name="robots" content="noindex, nofollow">
 <title>Zero to AGI — an interactive course on how AI actually works</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
