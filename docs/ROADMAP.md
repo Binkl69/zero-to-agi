@@ -12,6 +12,9 @@ The 15 chapters as of v16 land a committed reader at roughly **Level 4** on this
 | 6 | Practitioner — owns ML systems in production | reachable, not from a course alone |
 | 7 | Researcher — advances the field | years of original work; no course does this |
 
+> **Looking for the reader's own plan rather than the course's?** [`COMPETENCY_ROADMAP.md`](COMPETENCY_ROADMAP.md) is the 104-week personal roadmap from Level 4
+> to a defensible position at the frontier — dated, costed in hours per day, with metrics that can fail.
+
 **The design goal is not to deliver Level 7.** It is that nothing in the course *caps* the
 reader: no simplification that must later be unlearned, no hand-waving where the real thing is
 within reach, and every chapter honest about where the frontier actually is. A course can end at

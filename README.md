@@ -67,6 +67,10 @@ See [labs/README.md](labs/README.md) for the full guide, expected runtimes and w
 Roughly one chapter per sitting, labs interleaved as chapter 13 and the learning-path page suggest.
 Three to six weeks at a few hours a week gets through the whole thing with real understanding.
 
+If you want to keep going after chapter 15, [`docs/COMPETENCY_ROADMAP.md`](docs/COMPETENCY_ROADMAP.md)
+is a dated 104-week plan — hours per day, three milestones, and success metrics that can fail —
+for getting from "finished the course" to genuinely contributing at the frontier.
+
 ## Repository layout
 
 ```
@@ -79,6 +83,8 @@ app/chapters/NN-*.js    one self-contained file per chapter
 labs/                   Python labs
 scripts/smoke.js        headless test harness for the chapters
 docs/CHAPTER_CONTRACT.md  how chapters are written (useful if you want to add one)
+docs/ROADMAP.md           where the course still has gaps, and how they get closed
+docs/COMPETENCY_ROADMAP.md  the 104-week plan for after chapter 15
 ```
 
 ## Testing
