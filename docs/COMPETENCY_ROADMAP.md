@@ -145,6 +145,11 @@ understanding.
 | 2 | Workstreams D1–D3, E (author them) | m8 |
 | 3 | — | m9, then past it |
 
+**What to read, what to practise, and what gets handed in** is in the companion document,
+[`READING_AND_PRACTICE.md`](READING_AND_PRACTICE.md): the three reading streams and their different
+speeds, the extraction protocol for books and papers, a tiered reading list per phase, five weekly
+drills, the phase assignments and their defences, and the domain reading that is your actual moat.
+
 ---
 
 ## MILESTONE 1 · The Translator
@@ -399,6 +404,103 @@ has been quietly abandoned and needs to be the only thing you do for a quarter.
 
 ---
 
+## 2.5 On positioning: the 10x problem
+
+> *"If I say 'I help organizations 10x their productivity from AI use' then they will be happy
+> enough to consider me a key player. Granted I have real results."*
+
+You are half right, and the right half matters more than the wrong half — so it goes first.
+
+**What you have right.** Real, measured results are the most credible currency available to you,
+and they outrank papers. A government that has been pitched by every consultancy on earth is not
+moved by another framework; it is moved by someone who did the thing and has the number. That
+instinct is correct, and v1 of this plan under-weighted it — it optimised for artifacts and
+publishing when in fact paid, delivered results are both the funding mechanism *and* the evidence.
+Phase 2's projects should therefore be employer or client work with a signed-off number wherever
+that is possible, not portfolio pieces.
+
+**What you have backwards.** The specific sentence "I help organizations 10x their productivity
+from AI" is the one that will cost you the room. Three reasons.
+
+**1 · It is the most common sentence in the region.** Search it. You will find a thousand people
+saying it this month, most of whom have delivered nothing. A claim that cannot be distinguished from
+noise is not positioning, no matter how good the work behind it is. You would be spending real
+results to buy a generic identity — the worst trade in the document.
+
+**2 · "10x" reads as weak, not strong, to the people you actually want.** Large round unfalsifiable
+multiples are the signature of someone who has not measured. Sophisticated buyers discount them
+automatically and on reflex. Compare:
+
+- *"I help organizations 10x their productivity with AI."*
+- *"We took time-to-hire from 41 days to 24 across 3,000 hires, held the adverse-impact ratio above
+  0.9, and here is the eval harness that proves both."*
+
+The second is a **smaller** claim and worth ten times more, because it can be checked. **Specificity
+is the credibility.** This is also the real reason Phase 2 insists on eval numbers for every system:
+they are not homework, they are the raw material of the only pitch that works on a serious audience.
+
+**3 · Governments do not primarily buy productivity.** Productivity is an enterprise pitch and a
+good one — it wins engagements, which fund the work and generate the results. But a national AI
+strategy is buying sovereign capability, risk containment, competitiveness, Emiratisation outcomes,
+and things it can point to. And there is a structural difference underneath:
+
+> **Productivity consulting is a service. Key-player status comes from owning an asset.**
+
+A service scales with your hours and stops when you stop. An asset — a benchmark, a standard, a
+method, a dataset — keeps working, gets cited, and makes you a fixed reference point that others
+have to measure themselves against, including the regulator. That is the entire argument for the
+Phase 3 benchmark, and it is why it is the highest-leverage item in the plan.
+
+### So: keep the results, change the sentence, carry two
+
+**Commercial sentence** — wins engagements, funds the work. Specific, numeric, domain-bound:
+*"I build AI systems for decisions about people, and I prove what they're worth."* Then the number.
+
+**Strategic sentence** — wins the room. Asset-bound, national-interest-framed:
+*"I make AI decisions about people auditable, in Arabic and English. I built the benchmark that
+measures them."*
+
+Both stand on the same artifacts. One body of work, two sentences, two audiences.
+
+### The inversion worth naming
+
+Your technical expectations are **too high** — frontier peer across the field in two years, no.
+Your positioning expectations are **too low** — "10x productivity claims get me considered a key
+player" aims at *consultant* when the same work, presented as an asset, reaches *architect*.
+
+You are underselling the thing you could actually be. That is a much better problem than the
+alternative, but it is still the one to fix.
+
+---
+
+## 2.6 Is the plan sound? Are the expectations high?
+
+Both asked directly, so both answered directly.
+
+**The plan is sound, with three known weaknesses — and you found one of them.**
+
+1. **v1 had no reading architecture and no exercises.** It specified hours and outcomes but not what
+   happens inside the hours, which is not a plan you can execute on a Monday morning. A fair hit.
+   Closed by [`READING_AND_PRACTICE.md`](READING_AND_PRACTICE.md).
+2. **Organizational access is still the biggest risk.** Unchanged, and §5 still treats it as the
+   load-bearing assumption.
+3. **v1 under-weighted the commercial track.** Corrected in §2.5 above.
+
+**The expectations are a mix, and the mix is the interesting part:**
+
+| Expectation | Verdict |
+|---|---|
+| Two years at 12 h/week to serious competence | **Sound**, if the 12 hours hold. That is the only real variable. |
+| "As competent as anyone at the frontiers" | **Too high.** §0. Eight percent of the hours; narrow the claim and it becomes true. |
+| "I feel slow reading *Superintelligence*" | **Miscalibrated, not slow.** You gave pass-3 effort to pass-1 material, in a famously dense book with poor returns for your current milestone. See §1 of the companion. |
+| "10x productivity → key player" | **Too low.** §2.5. |
+
+The honest summary: your timeline is realistic, your technical ambition is one notch beyond
+reachable, your reading self-assessment is a triage problem rather than a capability problem, and
+your positioning ambition is the only thing here that is genuinely underset.
+
+---
+
 ## 3. Operating rules
 
 These matter more than the content. The content is available to anyone; the consistency is not.
@@ -471,3 +573,6 @@ a frontier researcher across the field, and this plan does not pretend otherwise
 of a very small number of people in the world who is genuinely deep at the intersection of frontier
 practice, human capital, and AI assurance — which is a place the UAE's strategy needs filled, and
 which nobody is currently standing in.
+
+And when you get there, do not say you 10x productivity. Say the number, name the method, and point
+at the benchmark with your name on it.

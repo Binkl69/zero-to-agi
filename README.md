@@ -69,7 +69,10 @@ Three to six weeks at a few hours a week gets through the whole thing with real 
 
 If you want to keep going after chapter 15, [`docs/COMPETENCY_ROADMAP.md`](docs/COMPETENCY_ROADMAP.md)
 is a dated 104-week plan — hours per day, three milestones, and success metrics that can fail —
-for getting from "finished the course" to genuinely contributing at the frontier.
+for getting from "finished the course" to genuinely contributing at the frontier. Its companion
+[`docs/READING_AND_PRACTICE.md`](docs/READING_AND_PRACTICE.md) is what goes inside those hours:
+a tiered reading list, how to read a book in three hours and a paper in three passes, five weekly
+drills, and the assignments each phase hands in.
 
 ## Repository layout
 
@@ -85,6 +88,7 @@ scripts/smoke.js        headless test harness for the chapters
 docs/CHAPTER_CONTRACT.md  how chapters are written (useful if you want to add one)
 docs/ROADMAP.md           where the course still has gaps, and how they get closed
 docs/COMPETENCY_ROADMAP.md  the 104-week plan for after chapter 15
+docs/READING_AND_PRACTICE.md  reading list, extraction protocol, drills, assignments
 ```
 
 ## Testing
