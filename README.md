@@ -72,7 +72,9 @@ is a dated 104-week plan — hours per day, three milestones, and success metric
 for getting from "finished the course" to genuinely contributing at the frontier. Its companion
 [`docs/READING_AND_PRACTICE.md`](docs/READING_AND_PRACTICE.md) is what goes inside those hours:
 a tiered reading list, how to read a book in three hours and a paper in three passes, five weekly
-drills, and the assignments each phase hands in.
+drills, and the assignments each phase hands in. [`tracker/`](tracker/) is the
+interactive version of both: gates, logged hours, reading and re-plan triggers, stored server-side
+so two years of progress survives a cleared browser.
 
 ## Repository layout
 
@@ -89,6 +91,7 @@ docs/CHAPTER_CONTRACT.md  how chapters are written (useful if you want to add on
 docs/ROADMAP.md           where the course still has gaps, and how they get closed
 docs/COMPETENCY_ROADMAP.md  the 104-week plan for after chapter 15
 docs/READING_AND_PRACTICE.md  reading list, extraction protocol, drills, assignments
+tracker/index.html        interactive tracker for that plan (published as an Artifact)
 ```
 
 ## Testing

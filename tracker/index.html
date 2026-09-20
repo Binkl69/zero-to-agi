@@ -1,0 +1,1015 @@
+<title>The 104-Week Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --ground: #f5f7f9;
+    --panel: #ffffff;
+    --panel-2: #eef1f5;
+    --ink: #121820;
+    --ink-2: #48546510;
+    --text: #1c2430;
+    --muted: #5d6b7c;
+    --faint: #8a97a6;
+    --line: #dde3ea;
+    --line-2: #c9d2dc;
+
+    --p1: #9a6414;
+    --p1-soft: #f3e6cd;
+    --p2: #0f6470;
+    --p2-soft: #d5e8ea;
+    --p3: #443a86;
+    --p3-soft: #e0ddf1;
+
+    --good: #256b45;
+    --good-soft: #d8ebdf;
+    --warn: #8a5a0c;
+    --warn-soft: #f7e7c6;
+    --bad: #97302c;
+    --bad-soft: #f6dcda;
+
+    --rail-empty: #dbe2ea;
+    --shadow: 0 1px 2px rgba(18, 24, 32, .06), 0 1px 1px rgba(18, 24, 32, .04);
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #101419;
+      --panel: #171d25;
+      --panel-2: #1f2731;
+      --ink: #eaeef3;
+      --ink-2: #ffffff0d;
+      --text: #dce3ea;
+      --muted: #9aa8b8;
+      --faint: #6d7d8e;
+      --line: #28313c;
+      --line-2: #384352;
+
+      --p1: #ddad5c;
+      --p1-soft: #3a2e17;
+      --p2: #5cb8c4;
+      --p2-soft: #14333a;
+      --p3: #a59ce8;
+      --p3-soft: #262254;
+
+      --good: #6cc08d;
+      --good-soft: #17301f;
+      --warn: #d9a441;
+      --warn-soft: #362712;
+      --bad: #e08b85;
+      --bad-soft: #3a1d1b;
+
+      --rail-empty: #263039;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #101419;
+    --panel: #171d25;
+    --panel-2: #1f2731;
+    --ink: #eaeef3;
+    --ink-2: #ffffff0d;
+    --text: #dce3ea;
+    --muted: #9aa8b8;
+    --faint: #6d7d8e;
+    --line: #28313c;
+    --line-2: #384352;
+
+    --p1: #ddad5c;
+    --p1-soft: #3a2e17;
+    --p2: #5cb8c4;
+    --p2-soft: #14333a;
+    --p3: #a59ce8;
+    --p3-soft: #262254;
+
+    --good: #6cc08d;
+    --good-soft: #17301f;
+    --warn: #d9a441;
+    --warn-soft: #362712;
+    --bad: #e08b85;
+    --bad-soft: #3a1d1b;
+
+    --rail-empty: #263039;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--ground);
+    color: var(--text);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding-left: 18px; padding-right: 18px; padding-block: 0 64px; }
+
+  h1, h2, h3 { font-family: Archivo, system-ui, sans-serif; color: var(--ink); text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(26px, 5vw, 38px); font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
+  h2 { font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
+  h3 { font-size: 14px; font-weight: 600; }
+  p { margin: 0; }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  .lbl {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10.5px; font-weight: 500; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--faint);
+  }
+
+  /* ---------- sticky status ---------- */
+  .statusbar {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+    background: color-mix(in srgb, var(--ground) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .statusbar .inner {
+    max-width: 1040px; margin: 0 auto; padding: 10px 18px;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  }
+  .sb-week { font-family: Archivo, sans-serif; font-weight: 700; font-size: 15px; color: var(--ink); }
+  .sb-sep { width: 1px; height: 18px; background: var(--line-2); }
+  .sb-item { font-size: 12.5px; color: var(--muted); }
+  .sb-item b { color: var(--ink); font-weight: 600; }
+  .savechip {
+    margin-left: auto; font-family: "IBM Plex Mono", monospace; font-size: 10.5px;
+    letter-spacing: .06em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 99px; border: 1px solid var(--line-2); color: var(--muted);
+    white-space: nowrap;
+  }
+  .savechip[data-s="saving"] { color: var(--warn); border-color: var(--warn); }
+  .savechip[data-s="saved"] { color: var(--good); border-color: var(--good); }
+  .savechip[data-s="error"] { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); }
+
+  /* ---------- header ---------- */
+  header.top { padding-block: 34px 22px; }
+  .kicker { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 10px; }
+  .dek { color: var(--muted); max-width: 62ch; margin-top: 12px; font-size: 15.5px; }
+
+  /* ---------- metric strip ---------- */
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin-top: 22px; }
+  .met { background: var(--panel); padding: 13px 15px; }
+  .met .v { font-family: Archivo, sans-serif; font-weight: 700; font-size: 25px; color: var(--ink); letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.15; }
+  .met .v small { font-size: 13px; font-weight: 500; color: var(--faint); letter-spacing: 0; }
+  .met .k { margin-top: 2px; }
+  .met .sub { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+  .met .sub.good { color: var(--good); } .met .sub.warn { color: var(--warn); } .met .sub.bad { color: var(--bad); }
+
+  /* ---------- week rail ---------- */
+  .railbox { margin-top: 26px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 15px; box-shadow: var(--shadow); }
+  .railhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 11px; }
+  .rail { display: grid; grid-template-columns: repeat(26, 1fr); gap: 2px; }
+  @media (min-width: 720px) { .rail { grid-template-columns: repeat(52, 1fr); } }
+  .cell { aspect-ratio: 1; border-radius: 2px; background: var(--rail-empty); position: relative; }
+  .cell[data-p="1"] { background: var(--p1-soft); }
+  .cell[data-p="2"] { background: var(--p2-soft); }
+  .cell[data-p="3"] { background: var(--p3-soft); }
+  .cell[data-logged="1"][data-p="1"] { background: var(--p1); }
+  .cell[data-logged="1"][data-p="2"] { background: var(--p2); }
+  .cell[data-logged="1"][data-p="3"] { background: var(--p3); }
+  .cell[data-now="1"] { outline: 2px solid var(--ink); outline-offset: 1px; z-index: 1; }
+  .raillegend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 11px; }
+  .lg { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--muted); }
+  .sw { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+
+  /* ---------- weekly log ---------- */
+  .logbox { margin-top: 26px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
+  .logrow { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-top: 12px; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field.grow { flex: 1 1 260px; min-width: 0; }
+  label.lbl { display: block; }
+  input[type="number"], input[type="text"] {
+    font-family: inherit; font-size: 14px; color: var(--text);
+    background: var(--ground); border: 1px solid var(--line-2); border-radius: 7px;
+    padding: 8px 10px; width: 100%; min-width: 0;
+  }
+  input[type="number"] { width: 92px; font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; }
+  input:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--p2); outline-offset: 2px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .loghist { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 7px; max-height: 220px; overflow-y: auto; }
+  .lh { display: flex; gap: 10px; align-items: baseline; font-size: 13px; }
+  .lh .w { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--faint); flex: none; width: 34px; }
+  .lh .h { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--ink); flex: none; width: 42px; }
+  .lh .s { color: var(--muted); min-width: 0; overflow-wrap: break-word; }
+
+  /* ---------- triggers ---------- */
+  .triggers { margin-top: 26px; border: 1px solid var(--bad); background: var(--bad-soft); border-radius: var(--radius); padding: 15px; }
+  .triggers h2 { color: var(--bad); font-size: 15px; }
+  .triggers ul { margin: 9px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 7px; }
+  .triggers li { font-size: 13.5px; }
+  .triggers b { color: var(--ink); }
+
+  /* ---------- phases ---------- */
+  .phase { margin-top: 20px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); overflow: hidden; box-shadow: var(--shadow); }
+  .phase[data-p="1"] { border-top: 3px solid var(--p1); }
+  .phase[data-p="2"] { border-top: 3px solid var(--p2); }
+  .phase[data-p="3"] { border-top: 3px solid var(--p3); }
+  .phase > summary { padding: 15px 17px; cursor: pointer; list-style: none; display: flex; gap: 13px; align-items: center; flex-wrap: wrap; }
+  .phase > summary::-webkit-details-marker { display: none; }
+  .phase > summary::after { content: "▾"; margin-left: auto; color: var(--faint); font-size: 12px; transition: transform .15s; }
+  .phase[open] > summary::after { transform: rotate(180deg); }
+  .pnum { font-family: Archivo, sans-serif; font-weight: 700; font-size: 12px; letter-spacing: .06em; padding: 3px 8px; border-radius: 4px; flex: none; }
+  .phase[data-p="1"] .pnum { background: var(--p1-soft); color: var(--p1); }
+  .phase[data-p="2"] .pnum { background: var(--p2-soft); color: var(--p2); }
+  .phase[data-p="3"] .pnum { background: var(--p3-soft); color: var(--p3); }
+  .ptitle { font-family: Archivo, sans-serif; font-weight: 600; font-size: 17px; color: var(--ink); }
+  .pmeta { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--muted); }
+  .pbar { flex: none; width: 90px; height: 5px; border-radius: 99px; background: var(--rail-empty); overflow: hidden; }
+  .pbar i { display: block; height: 100%; border-radius: 99px; }
+  .phase[data-p="1"] .pbar i { background: var(--p1); }
+  .phase[data-p="2"] .pbar i { background: var(--p2); }
+  .phase[data-p="3"] .pbar i { background: var(--p3); }
+  .pcount { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--muted); flex: none; }
+  .pbody { padding: 0 17px 17px; border-top: 1px solid var(--line); }
+  .goal { font-size: 14px; color: var(--muted); font-style: italic; border-left: 2px solid var(--line-2); padding-left: 12px; margin: 16px 0 4px; max-width: 70ch; }
+
+  .grp { margin-top: 20px; }
+  .grp > .lbl { margin-bottom: 9px; }
+  .items { display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .item { background: var(--panel); display: flex; gap: 11px; align-items: flex-start; padding: 11px 13px; }
+  .item:hover { background: var(--panel-2); }
+  .item input[type="checkbox"] { margin: 2px 0 0; width: 16px; height: 16px; flex: none; accent-color: var(--p2); cursor: pointer; }
+  .item .body { min-width: 0; flex: 1 1 auto; }
+  .item .t { font-size: 13.5px; color: var(--ink); }
+  .item[data-done="1"] .t { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line-2); }
+  .item .why { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+  .item .wk { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--faint); flex: none; width: 46px; padding-top: 2px; }
+  .chip { font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; flex: none; white-space: nowrap; align-self: flex-start; margin-top: 1px; }
+  .chip.done { background: var(--good-soft); color: var(--good); }
+  .chip.late { background: var(--bad-soft); color: var(--bad); }
+  .chip.due { background: var(--warn-soft); color: var(--warn); }
+  .chip.soon { background: var(--panel-2); color: var(--muted); }
+
+  .anti { margin-top: 18px; background: var(--panel-2); border-radius: 8px; padding: 13px 15px; font-size: 13.5px; color: var(--text); }
+  .anti b { color: var(--ink); }
+
+  /* ---------- reading ---------- */
+  .readgrid { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .bk { background: var(--panel); padding: 11px 13px; display: flex; gap: 11px; align-items: flex-start; flex-wrap: wrap; }
+  .bk .body { flex: 1 1 220px; min-width: 0; }
+  .bk .t { font-size: 13.5px; color: var(--ink); }
+  .bk .a { font-size: 12px; color: var(--muted); }
+  .bk .why { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .tier { font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: .05em; padding: 2px 6px; border-radius: 4px; flex: none; text-transform: uppercase; }
+  .tier.R { background: var(--p2-soft); color: var(--p2); }
+  .tier.S { background: var(--panel-2); color: var(--muted); }
+  .tier.X { background: var(--ink-2); color: var(--faint); border: 1px solid var(--line-2); }
+  .seg { display: flex; gap: 0; flex: none; border: 1px solid var(--line-2); border-radius: 6px; overflow: hidden; }
+  .seg button { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; background: var(--panel); color: var(--muted); border: 0; padding: 5px 8px; cursor: pointer; border-left: 1px solid var(--line-2); }
+  .seg button:first-child { border-left: 0; }
+  .seg button[aria-pressed="true"] { background: var(--p2); color: #ffffff; }
+  :root[data-theme="dark"] .seg button[aria-pressed="true"], :root:not([data-theme="light"]) .seg button[aria-pressed="true"] { color: #0e1317; }
+  /* "not started" is the empty state — it must never be the loudest thing on the row */
+  .seg button[data-v="todo"][aria-pressed="true"] { background: var(--panel-2); color: var(--faint); }
+
+  /* ---------- drills ---------- */
+  .drills { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+  .drill { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 13px; }
+  .drill .n { font-family: Archivo, sans-serif; font-weight: 700; font-size: 13.5px; color: var(--ink); }
+  .drill .when { margin-top: 2px; }
+  .drill .d { font-size: 12.5px; color: var(--muted); margin-top: 7px; }
+  .drill .w { font-size: 12.5px; color: var(--text); margin-top: 7px; border-top: 1px solid var(--line); padding-top: 7px; }
+  .drill .w b { color: var(--ink); }
+
+  section.blk { margin-top: 34px; }
+  section.blk > h2 { margin-bottom: 4px; }
+  section.blk > .intro { color: var(--muted); font-size: 14px; max-width: 68ch; margin-bottom: 15px; }
+
+  /* ---------- footer ---------- */
+  footer { margin-top: 40px; border-top: 1px solid var(--line); padding-top: 20px; display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+  footer .note { font-size: 12.5px; color: var(--muted); flex: 1 1 320px; max-width: 70ch; }
+  .btn { font-family: "IBM Plex Sans", sans-serif; font-size: 13px; font-weight: 500; background: var(--panel); color: var(--ink); border: 1px solid var(--line-2); border-radius: 7px; padding: 8px 13px; cursor: pointer; }
+  .btn:hover { background: var(--panel-2); }
+  .banner { margin-top: 18px; border: 1px solid var(--warn); background: var(--warn-soft); color: var(--text); border-radius: var(--radius); padding: 13px 15px; font-size: 13.5px; }
+  .banner b { color: var(--ink); }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div class="statusbar">
+  <div class="inner">
+    <span class="sb-week" id="sbWeek">Week —</span>
+    <span class="sb-sep"></span>
+    <span class="sb-item" id="sbPhase">—</span>
+    <span class="sb-sep"></span>
+    <span class="sb-item" id="sbHours">—</span>
+    <span class="savechip" id="saveChip" data-s="idle">Local only</span>
+  </div>
+</div>
+
+<div class="wrap">
+  <header class="top">
+    <div class="kicker">
+      <span class="lbl">28 Sep 2026 → 24 Sep 2028</span>
+      <span class="lbl">·</span>
+      <span class="lbl">~1,190 hours</span>
+    </div>
+    <h1>The 104-Week Plan</h1>
+    <p class="dek">From the end of <em>Zero&nbsp;→&nbsp;AGI</em> to a defensible position at the frontier: AI systems that
+      make high-stakes decisions about people, built to survive a regulator. Tick gates as you clear them; log hours each
+      Sunday. Progress is stored server-side, so it follows you across devices.</p>
+
+    <div class="metrics" id="metrics"></div>
+    <div id="bannerSlot"></div>
+  </header>
+
+  <div class="railbox">
+    <div class="railhead">
+      <span class="lbl">104 weeks · one cell each</span>
+      <span class="lbl" id="railSummary"></span>
+    </div>
+    <div class="rail" id="rail"></div>
+    <div class="raillegend">
+      <span class="lg"><span class="sw" style="background:var(--p1)"></span>Phase 1 logged</span>
+      <span class="lg"><span class="sw" style="background:var(--p2)"></span>Phase 2 logged</span>
+      <span class="lg"><span class="sw" style="background:var(--p3)"></span>Phase 3 logged</span>
+      <span class="lg"><span class="sw" style="background:var(--rail-empty)"></span>Not logged</span>
+      <span class="lg"><span class="sw" style="border:2px solid var(--ink);background:transparent"></span>This week</span>
+    </div>
+  </div>
+
+  <div class="logbox">
+    <h2>Log the week</h2>
+    <p class="hint" id="logWhich">The Sunday hour: hours actually done, and the one thing that exists now which didn't on Monday.</p>
+    <div class="logrow">
+      <div class="field">
+        <label class="lbl" for="logWeek">Week</label>
+        <input type="number" id="logWeek" min="1" max="104" step="1">
+      </div>
+      <div class="field">
+        <label class="lbl" for="logHours">Hours</label>
+        <input type="number" id="logHours" min="0" max="80" step="0.5" placeholder="0">
+      </div>
+      <div class="field grow">
+        <label class="lbl" for="logShipped">What shipped</label>
+        <input type="text" id="logShipped" maxlength="200" placeholder="A commit, a page, a number, a conversation…">
+      </div>
+      <button class="btn" id="logSave">Save week</button>
+    </div>
+    <div class="loghist" id="logHist"></div>
+  </div>
+
+  <div id="triggerSlot"></div>
+
+  <section class="blk">
+    <h2>The three milestones</h2>
+    <p class="intro">Each phase ends in an artifact that exists outside your head, and carries an anti-metric naming its
+      own specific self-deception. Gate weeks are targets, not deadlines — the chip tells you where you actually are.</p>
+    <div id="phases"></div>
+  </section>
+
+  <section class="blk">
+    <h2>The shelf</h2>
+    <p class="intro">Tiered on purpose. <b>Read</b> properly with notes; <b>skim</b> under the three-hour rule (intro,
+      conclusion, chapter edges, then only the chapters that earned it); <b>reference</b> means do not read it — go to it
+      with a question. Books front-load into Phase 1 and mostly stop: a technical AI book is two years stale at print,
+      but judgment is the part of the field that moves slowly.</p>
+    <div class="readgrid" id="reading"></div>
+  </section>
+
+  <section class="blk">
+    <h2>The drills</h2>
+    <p class="intro">Reading is an input; these convert it. Each fits inside a block you already have.</p>
+    <div class="drills" id="drills"></div>
+  </section>
+
+  <footer>
+    <p class="note" id="storageNote">Checking storage…</p>
+    <button class="btn" id="exportBtn">Export backup</button>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ================= the plan ================= */
+  var START = Date.UTC(2026, 8, 28);           // Monday 28 September 2026
+  var TOTAL_WEEKS = 104;
+
+  var PHASES = [
+    {
+      n: 1, id: "p1", title: "The Translator", from: 1, to: 13, hpw: 10, hours: 130,
+      dates: "28 Sep – 27 Dec 2026",
+      goal: "Confident with AI tools, able to explain the common concepts, and able to educate leadership on real uses and implementation.",
+      anti: "If every explanation you give is an analogy, you have not reached this milestone. “It’s like autocomplete” is where public understanding already sits — if you cannot get one level below it on demand, you are a fluent consumer, not a translator.",
+      gates: [
+        { id: "p1g1", w: 3, t: "Written personal tool stack, plus your first measured time saving", why: "Weeks 1–3 · chapters 1–3, labs 01–03" },
+        { id: "p1g2", w: 6, t: "“How AI actually works” — a 6-slide leadership explainer", why: "Zero hype, and one diagram you can defend under questioning" },
+        { id: "p1g3", w: 9, t: "HR AI Opportunity Map — 20 real processes scored", why: "Is it a language problem? · error tolerance · reversibility · does the data exist? The same four a regulator will use" },
+        { id: "p1g4", w: 11, t: "Draft AI use policy for the HR function", why: "Organised by risk tier and human-oversight requirement" },
+        { id: "p1g5", w: 13, t: "Live 45-minute leadership session delivered", why: "Plus two use cases killed in writing" }
+      ],
+      metrics: [
+        { id: "p1m1", t: "The whiteboard test", why: "Pretraining → SFT → RLHF → inference from memory, under 10 minutes, confirmed correct by someone technical" },
+        { id: "p1m2", t: "The no-notes test", why: "Ten unscripted leadership questions answered at mechanism level — including “what happens when it’s wrong about a candidate?”" },
+        { id: "p1m3", t: "The delivery test", why: "One session delivered and at least one decision demonstrably changed. Applause is not the metric" },
+        { id: "p1m4", t: "The kill test", why: "Two use cases argued against, in writing, with a technical reason. Calibrated refusal is the scarce thing" },
+        { id: "p1m5", t: "The personal test", why: "A measured ≥4 hours a week of your own work saved. You cannot advise on adoption you have not done" },
+        { id: "p1m6", t: "The reading test", why: "Attention Is All You Need, InstructGPT, and one paper on bias in résumé screening — read, not summarised" }
+      ]
+    },
+    {
+      n: 2, id: "p2", title: "The Builder", from: 14, to: 52, hpw: 12, hours: 432,
+      dates: "28 Dec 2026 – 26 Sep 2027",
+      goal: "Able to articulate AI systems and build complex workflows around them. Shows real signs of competence building AI systems.",
+      anti: "If none of your systems has an eval number, you are a power user with good taste, not a builder. This is the common way to spend a year and arrive nowhere: a portfolio of impressive demos, no measurements, no idea which ones work. <b>Evaluation is the boundary.</b>",
+      projects: [
+        { t: "P2.1 · The Policy Answerer", w: "W14–22", d: "Retrieval over your real HR corpus, Arabic and English. The safe place to learn evaluation — nobody is harmed by a wrong answer that cites its source." },
+        { t: "P2.2 · Structured Extraction", w: "W23–31", d: "Transcripts and CVs → competency scorecards, with a bias audit. The high-risk category, built deliberately while the stakes are internal." },
+        { t: "P2.3 · The Agentic Workflow", w: "W32–42", d: "Multi-step, multi-tool workforce planning. Agents fail in ways single calls do not — compounding errors, silent tool failures, unbounded cost." },
+        { t: "P2.4 · Fine-tune & deploy", w: "W43–52", d: "LoRA on a task the base model is measurably bad at. Done last, so you learn why fine-tuning is usually the wrong answer." }
+      ],
+      gates: [
+        { id: "p2g1", w: 18, t: "Your first eval set catches a regression you introduced on purpose", why: "The test that the eval set is real" },
+        { id: "p2g2", w: 22, t: "P2.1: ≥85% correct with citations, ≥95% correct refusal out of scope", why: "On a 100-question set with gold answers" },
+        { id: "p2g3", w: 26, t: "Bias audit running; score variance across perturbed identical CVs stated and explained", why: "Name, gender and nationality swapped, everything else held" },
+        { id: "p2g4", w: 31, t: "P2.2 agreement with human assessors ≥ agreement between two human assessors", why: "“Is the AI good enough?” is unanswerable. This question is answerable, and most vendors cannot answer it" },
+        { id: "p2g5", w: 36, t: "Agent completes a 6-step task ≥90% of 50 runs, inside a fixed cost per run", why: "Reliability and cost together, or neither counts" },
+        { id: "p2g6", w: 42, t: "Full tracing — “why did it do that” answerable for any historical run, from logs alone", why: "Without this you cannot defend a decision after the fact" },
+        { id: "p2g7", w: 48, t: "Fine-tune beats the prompt-engineered baseline on held-out data", why: "Written up. A negative result here is still a result" },
+        { id: "p2g8", w: 52, t: "One system in real use by ≥10 people who are not you", why: "With usage data" }
+      ],
+      metrics: [
+        { id: "p2m1", t: "Ship test", why: "Three systems in real use; at least one making regulated-adjacent decisions with a documented risk assessment" },
+        { id: "p2m2", t: "Numbers test", why: "Accuracy, failure modes and cost per call for every system, stated without looking anything up" },
+        { id: "p2m3", t: "Review test", why: "A working ML engineer’s findings are about trade-offs, not fundamentals. Ask around week 45 — pay for it if you must" },
+        { id: "p2m4", t: "Architecture test", why: "You can whiteboard your own system including the two alternatives you rejected, and why" },
+        { id: "p2m5", t: "Public test", why: "Two written pieces — one technical, one for an HR audience — and one talk" },
+        { id: "p2m6", t: "Money test", why: "One system with an ROI figure an executive has signed their name to" }
+      ]
+    },
+    {
+      n: 3, id: "p3", title: "The Frontier Contributor", from: 53, to: 104, hpw: 12, hours: 628,
+      dates: "27 Sep 2027 – 24 Sep 2028",
+      goal: "Able to competitively train and develop AI systems with complex real-world applications delivering high value — and to be a key player in the UAE AI frontier and strategy.",
+      anti: "If your position is talks and no artifacts, you have become an AI thought leader — a role this market is oversupplied with and whose shelf life is visibly shortening. Ask it quarterly: what exists, with your name on it, that someone else could run, fork, or measure against? If the answer is “slides”, the depth track has been quietly abandoned.",
+      gates: [
+        { id: "p3g1", w: 56, t: "Specialty area chosen and committed in writing, with the reasoning", why: "Recommended: evaluation and assurance for AI that decides about people. Reopening this at week 80 costs a year" },
+        { id: "p3g2", w: 60, t: "A continued-pretraining or full fine-tune run completed on real domain data", why: "With a loss curve you can read and a held-out eval" },
+        { id: "p3g3", w: 68, t: "A distilled model within 5% of the large model’s score at under 10% of the cost", why: "“Same quality, one tenth the cost” is how AI survives a budget review" },
+        { id: "p3g4", w: 76, t: "Benchmark v0.1 public, with at least three models evaluated on it", why: "The measuring stick. Whoever makes it gets consulted by everyone who must be measured" },
+        { id: "p3g5", w: 84, t: "First external citation, fork, or invited use of your work", why: "Someone you have never met" },
+        { id: "p3g6", w: 90, t: "A talk at a national-level event or a government / policy forum", why: "Escalating from meetup → industry → national → policy" },
+        { id: "p3g7", w: 96, t: "A system in production with a measured organisational value figure", why: "Cost, time, quality, or a compliance exposure retired" },
+        { id: "p3g8", w: 104, t: "You are consulted on an AI decision you did not initiate", why: "Every other metric you can drive by pushing. This one has to come to you — and it is the only honest definition of “key player”" }
+      ],
+      metrics: [
+        { id: "p3m1", t: "Training test", why: "You have trained models on real data, not only called them, and can explain every hyperparameter and what the loss curve told you" },
+        { id: "p3m2", t: "Beat-the-baseline test", why: "One documented, reproducible result in your specialty that beats the obvious approach" },
+        { id: "p3m3", t: "Reference test", why: "Someone you have never met cites, uses, or forks your work" },
+        { id: "p3m4", t: "Inbound test", why: "Unsolicited invitations to speak, advise or collaborate. You have stopped being the one asking" },
+        { id: "p3m5", t: "Value test", why: "A signed-off organisational value figure — ideally seven figures AED, or a compliance exposure formally retired" },
+        { id: "p3m6", t: "Peer test", why: "An MBZUAI or TII researcher treats you as a peer on your specialty, while you both know you are not a peer on theirs. This is what the goal looks like when it is real" }
+      ]
+    }
+  ];
+
+  var READING = [
+    { id: "r-snakeoil", tier: "R", t: "AI Snake Oil", a: "Narayanan & Kapoor, 2024", ph: 1, why: "Read this first. Its subject is predictive AI failing at exactly the tasks HR wants it for — hiring, performance prediction, attrition. It hands you the kill test directly." },
+    { id: "r-cointel", tier: "R", t: "Co-Intelligence", a: "Ethan Mollick, 2024", ph: 1, why: "The best book for “educate leadership”. Read it with your own function in mind and it half-writes the week 4–6 explainer." },
+    { id: "r-wave", tier: "S", t: "The Coming Wave", a: "Mustafa Suleyman, 2023", ph: 1, why: "Skim. You want the vocabulary for national-strategy conversations, not the argument." },
+    { id: "r-alignment", tier: "S", t: "The Alignment Problem", a: "Brian Christian, 2020", ph: 1, why: "Your Superintelligence substitute: same ground, far more readable, and it carries the RLHF history that pairs with chapter 11." },
+    { id: "r-superint", tier: "X", t: "Superintelligence", a: "Nick Bostrom, 2014", ph: 1, why: "Parked — Sunday background thread, twenty minutes, no deadline. Dense analytic philosophy that predates the transformer era; it will not help with any current milestone." },
+    { id: "r-aieng", tier: "R", t: "AI Engineering", a: "Chip Huyen, 2025", ph: 2, why: "The book for Phase 2. One chapter per project across the phase, not in one run — it is 532 pages." },
+    { id: "r-karpathy", tier: "R", t: "Zero to Hero + nanoGPT", a: "Andrej Karpathy", ph: 2, why: "Not a book, and the most important entry here: the bridge from the course’s labs to real code. Do it, don’t watch it." },
+    { id: "r-docs", tier: "R", t: "Anthropic docs & cookbook", a: "tool use, structured output, agents, evals", ph: 2, why: "A craft-stream primary source, not background reading." },
+    { id: "r-dmls", tier: "X", t: "Designing Machine Learning Systems", a: "Chip Huyen, 2022", ph: 2, why: "Reference for pipelines, monitoring and drift. Go to it when P2.4 forces you to." },
+    { id: "r-geron", tier: "X", t: "Hands-On Machine Learning", a: "Aurélien Géron", ph: 2, why: "Reference only. Cover to cover is a three-month detour." },
+    { id: "r-fairml", tier: "R", t: "Fairness and Machine Learning", a: "Barocas, Hardt & Narayanan · free at fairmlbook.org", ph: 3, why: "The textbook of your specialty. If you read one thing in Phase 3, this." },
+    { id: "r-impossible", tier: "R", t: "The fairness impossibility results", a: "Kleinberg et al. 2016 · Chouldechova 2017", ph: 3, why: "Short, and the highest-value reading in the plan: every regulation about fair AI has implicitly picked a fairness definition, and almost nobody who writes one knows they made that choice." },
+    { id: "r-sackett", tier: "R", t: "Selection validity, and its 2022 revision", a: "Schmidt & Hunter 1998 · Sackett et al. 2022", ph: 3, why: "Your moat. The range-restriction correction had been overcorrecting for 24 years — general mental ability fell from r≈.51 to ≈.31. The human baseline an AI screener must beat is weaker and far more contested than AI people know, and most will cite the 1998 numbers and be wrong in public." },
+    { id: "r-ll144", tier: "R", t: "NYC Local Law 144, and two published audits", a: "in force since July 2023", ph: 3, why: "The closest existing template for what a UAE regime would require, and for what your benchmark should measure." }
+  ];
+
+  var DRILLS = [
+    { n: "Explain-it", when: "Weekly · Phase 1–2 · 30 min", d: "200 words on one concept with no analogy at all, then 50 words with exactly one. Post both.", w: "The no-analogy version is the Phase 1 metric. If you cannot write it, you understood the analogy and not the thing." },
+    { n: "Prediction", when: "Before every lab · 10 min", d: "Write what you expect to happen, with numbers, before running anything.", w: "The gap between prediction and result <b>is</b> your model of the system, made visible. Keep them all — the shrinking gap is your most honest progress record." },
+    { n: "Ablation", when: "Weekly · Phase 1–2 · 40 min", d: "Break it on purpose. Learning rate ×10. Remove positional encoding. Temperature 0, then 2. Predict first.", w: "You learn what a component does by removing it, not by reading about it. This is also how research is done." },
+    { n: "Red-team", when: "Weekly from Phase 2 · 40 min", d: "Attack your own system: adversarial CVs, prompt injection hidden in a policy document, identical candidates with swapped names.", w: "A skill in Phase 2 and a research method in Phase 3 — that last example is your benchmark’s core test case." },
+    { n: "Teaching", when: "Monthly · Phase 2–3 · one Saturday", d: "Write a section of the course. Its own ROADMAP lists the gaps: C1–C2 classical ML, D1–D3 production, E labs.", w: "That gap list <b>is</b> your assignment list — you learn those five things in Phase 2 anyway, and teaching is the cheapest proof of understanding." }
+  ];
+
+  /* ================= state ================= */
+  var LS_KEY = "ztaPlan.v1";
+  var state = { gates: {}, metrics: {}, reading: {}, weeks: {} };
+  var DOCS = ["gates", "metrics", "reading", "weeks"];
+  var db = null, dbFailed = false;
+  var queues = {};
+
+  function readLocal() {
+    try {
+      var raw = localStorage.getItem(LS_KEY);
+      if (!raw) return;
+      var o = JSON.parse(raw);
+      DOCS.forEach(function (k) { if (o && o[k] && typeof o[k] === "object") state[k] = o[k]; });
+    } catch (e) { /* private window, blocked storage — render defaults */ }
+  }
+  function writeLocal() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) { /* non-fatal */ }
+  }
+
+  var chip = document.getElementById("saveChip");
+  function setSave(s, msg) {
+    chip.dataset.s = s;
+    chip.textContent = s === "saving" ? "Saving…"
+      : s === "saved" ? "Saved"
+      : s === "error" ? (msg || "Not saved")
+      : "Local only";
+  }
+
+  /* One write in flight per document, coalescing bursts. */
+  function save(name) {
+    writeLocal();
+    if (!db) { setSave(dbFailed ? "error" : "idle", dbFailed ? "Local only" : null); return; }
+    var q = queues[name] || (queues[name] = { running: false, dirty: false });
+    q.dirty = true;
+    if (q.running) return;
+    q.running = true;
+    (function step() {
+      if (!q.dirty) { q.running = false; return; }
+      q.dirty = false;
+      setSave("saving");
+      var body = JSON.parse(JSON.stringify(state[name]));
+      db.doc("progress/" + name).set(body).then(function () {
+        setSave("saved");
+        step();
+      }, function (err) {
+        q.running = false;
+        var code = (err && err.code) || "unavailable";
+        setSave("error", code === "invalid_argument" ? "Read-only" : "Saved locally only");
+        showBanner(code);
+      });
+    })();
+  }
+
+  var bannerShown = false;
+  function showBanner(code) {
+    if (bannerShown) return;
+    bannerShown = true;
+    var slot = document.getElementById("bannerSlot");
+    var d = document.createElement("div");
+    d.className = "banner";
+    d.innerHTML = code === "invalid_argument"
+      ? "<b>This view cannot write.</b> Your ticks are held in this browser only. Open the tracker from your own account to save them for real."
+      : "<b>Server storage is not answering.</b> Everything still works and is held in this browser, but it will not follow you to another device until the connection returns. Use <em>Export backup</em> if you are about to close the tab.";
+    slot.appendChild(d);
+  }
+
+  /* ================= dates ================= */
+  var DAY = 86400000;
+  function todayUTC() {
+    var n = new Date();
+    return Date.UTC(n.getFullYear(), n.getMonth(), n.getDate());
+  }
+  var TODAY = todayUTC();
+  function currentWeek() {
+    var d = Math.floor((TODAY - START) / DAY);
+    if (d < 0) return 0;
+    return Math.min(TOTAL_WEEKS + 1, Math.floor(d / 7) + 1);
+  }
+  var WEEK = currentWeek();
+  var daysToStart = Math.ceil((START - TODAY) / DAY);
+
+  function phaseOfWeek(w) {
+    for (var i = 0; i < PHASES.length; i++) if (w >= PHASES[i].from && w <= PHASES[i].to) return PHASES[i];
+    return null;
+  }
+  function nominalTargetTo(w) {
+    var t = 0;
+    for (var i = 1; i <= Math.min(w, TOTAL_WEEKS); i++) {
+      var p = phaseOfWeek(i);
+      if (p) t += p.hpw;
+    }
+    return t;
+  }
+  function loggedHours(from, to) {
+    var t = 0;
+    Object.keys(state.weeks).forEach(function (k) {
+      var w = parseInt(k, 10);
+      if (w >= (from || 1) && w <= (to || TOTAL_WEEKS)) t += Number(state.weeks[k] && state.weeks[k].h) || 0;
+    });
+    return t;
+  }
+  function fmtH(n) { return (Math.round(n * 10) / 10).toString(); }
+
+  /* ================= render ================= */
+  function el(tag, cls, txt) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (txt != null) e.textContent = txt;
+    return e;
+  }
+
+  function renderStatus() {
+    var p = phaseOfWeek(WEEK);
+    var sbWeek = document.getElementById("sbWeek");
+    var sbPhase = document.getElementById("sbPhase");
+    var sbHours = document.getElementById("sbHours");
+
+    if (WEEK === 0) {
+      sbWeek.textContent = "Not started";
+      sbPhase.innerHTML = "Begins in <b>" + daysToStart + " day" + (daysToStart === 1 ? "" : "s") + "</b>";
+    } else if (WEEK > TOTAL_WEEKS) {
+      sbWeek.textContent = "Week 104+";
+      sbPhase.innerHTML = "<b>Plan complete</b>";
+    } else {
+      sbWeek.textContent = "Week " + WEEK + " of 104";
+      sbPhase.innerHTML = "Phase " + (p ? p.n + " · <b>" + p.title.replace(/^The /, "") + "</b>" : "—");
+    }
+
+    var done = loggedHours();
+    var target = nominalTargetTo(WEEK);
+    sbHours.innerHTML = "<b>" + fmtH(done) + "h</b> of " + target + "h nominal";
+
+    /* metric tiles */
+    var gatesTotal = 0, gatesDone = 0;
+    PHASES.forEach(function (ph) {
+      ph.gates.forEach(function (g) { gatesTotal++; if (state.gates[g.id]) gatesDone++; });
+    });
+    var metTotal = 0, metDone = 0;
+    PHASES.forEach(function (ph) {
+      ph.metrics.forEach(function (m) { metTotal++; if (state.metrics[m.id]) metDone++; });
+    });
+
+    var delta = done - target;
+    var deltaCls = WEEK === 0 ? "" : (delta >= 0 ? "good" : (delta < -24 ? "bad" : "warn"));
+    var deltaTxt = WEEK === 0 ? "Nothing due yet"
+      : delta >= 0 ? "+" + fmtH(delta) + "h ahead of pace"
+      : fmtH(delta) + "h behind pace";
+
+    var weeksLogged = Object.keys(state.weeks).filter(function (k) {
+      return (Number(state.weeks[k] && state.weeks[k].h) || 0) > 0;
+    }).length;
+
+    var m = document.getElementById("metrics");
+    m.textContent = "";
+    [
+      { v: WEEK === 0 ? "0" : String(Math.min(WEEK, TOTAL_WEEKS)), unit: "/ 104", k: "Week", sub: WEEK === 0 ? "Starts 28 Sep 2026" : (TOTAL_WEEKS - Math.min(WEEK, TOTAL_WEEKS)) + " weeks remaining" },
+      { v: fmtH(done), unit: "h", k: "Hours logged", sub: deltaTxt, cls: deltaCls },
+      { v: String(gatesDone), unit: "/ " + gatesTotal, k: "Gates cleared", sub: weeksLogged + " weeks logged" },
+      { v: String(metDone), unit: "/ " + metTotal, k: "Success metrics", sub: "Across all three phases" }
+    ].forEach(function (t) {
+      var box = el("div", "met");
+      var v = el("div", "v");
+      v.textContent = t.v;
+      var s = el("small", null, " " + t.unit);
+      v.appendChild(s);
+      box.appendChild(v);
+      box.appendChild(el("div", "k lbl", t.k));
+      box.appendChild(el("div", "sub" + (t.cls ? " " + t.cls : ""), t.sub));
+      m.appendChild(box);
+    });
+
+    document.getElementById("railSummary").textContent = weeksLogged + " of 104 logged · " + fmtH(done) + "h total";
+  }
+
+  function renderRail() {
+    var r = document.getElementById("rail");
+    r.textContent = "";
+    for (var w = 1; w <= TOTAL_WEEKS; w++) {
+      var p = phaseOfWeek(w);
+      var c = el("div", "cell");
+      c.dataset.p = p ? String(p.n) : "0";
+      var h = Number(state.weeks[w] && state.weeks[w].h) || 0;
+      if (h > 0) c.dataset.logged = "1";
+      if (w === WEEK) c.dataset.now = "1";
+      var shipped = (state.weeks[w] && state.weeks[w].s) || "";
+      c.title = "Week " + w + (p ? " · Phase " + p.n : "") + " · " + fmtH(h) + "h" + (shipped ? " — " + shipped : "");
+      r.appendChild(c);
+    }
+  }
+
+  function chipFor(targetWeek, doneAtWeek) {
+    if (doneAtWeek) {
+      var late = doneAtWeek - targetWeek;
+      if (late > 0) return { cls: "late", t: "W" + doneAtWeek + " · " + late + "w late" };
+      return { cls: "done", t: "W" + doneAtWeek + " · on time" };
+    }
+    if (WEEK === 0) return { cls: "soon", t: "W" + targetWeek };
+    if (WEEK > targetWeek) return { cls: "late", t: (WEEK - targetWeek) + "w overdue" };
+    if (targetWeek - WEEK <= 2) return { cls: "due", t: "due W" + targetWeek };
+    return { cls: "soon", t: "W" + targetWeek };
+  }
+
+  function makeItem(opts) {
+    // opts: {key, store, title, why, targetWeek}
+    var rec = state[opts.store][opts.key];
+    var isDone = !!rec;
+    var row = el("div", "item");
+    row.dataset.done = isDone ? "1" : "0";
+
+    var cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.id = "cb-" + opts.key;
+    cb.checked = isDone;
+    cb.setAttribute("aria-label", opts.title);
+    cb.addEventListener("change", function () {
+      if (cb.checked) state[opts.store][opts.key] = { w: WEEK || 1, at: new Date().toISOString().slice(0, 10) };
+      else delete state[opts.store][opts.key];
+      save(opts.store);
+      renderAll();
+    });
+    row.appendChild(cb);
+
+    var body = el("div", "body");
+    var lab = document.createElement("label");
+    lab.className = "t";
+    lab.setAttribute("for", cb.id);
+    lab.textContent = opts.title;
+    body.appendChild(lab);
+    if (opts.why) body.appendChild(el("div", "why", opts.why));
+    row.appendChild(body);
+
+    if (opts.targetWeek) {
+      var c = chipFor(opts.targetWeek, rec && rec.w);
+      var sp = el("span", "chip " + c.cls, c.t);
+      row.appendChild(sp);
+    }
+    return row;
+  }
+
+  function renderPhases() {
+    var host = document.getElementById("phases");
+    var openPhase = phaseOfWeek(WEEK) || PHASES[0];
+    host.textContent = "";
+
+    PHASES.forEach(function (ph) {
+      var d = document.createElement("details");
+      d.className = "phase";
+      d.dataset.p = String(ph.n);
+      if (ph.id === openPhase.id) d.open = true;
+
+      var doneG = ph.gates.filter(function (g) { return state.gates[g.id]; }).length;
+      var doneM = ph.metrics.filter(function (m) { return state.metrics[m.id]; }).length;
+      var tot = ph.gates.length + ph.metrics.length;
+      var pct = Math.round(((doneG + doneM) / tot) * 100);
+
+      var s = document.createElement("summary");
+      s.appendChild(el("span", "pnum", "PHASE " + ph.n));
+      s.appendChild(el("span", "ptitle", ph.title));
+      s.appendChild(el("span", "pmeta", "W" + ph.from + "–" + ph.to + " · " + ph.dates + " · " + ph.hpw + "h/wk · ~" + ph.hours + "h"));
+      var bar = el("div", "pbar");
+      var fill = el("i");
+      fill.style.width = pct + "%";
+      bar.appendChild(fill);
+      s.appendChild(bar);
+      s.appendChild(el("span", "pcount", (doneG + doneM) + "/" + tot));
+      d.appendChild(s);
+
+      var b = el("div", "pbody");
+      b.appendChild(el("p", "goal", ph.goal));
+
+      if (ph.projects) {
+        var pg = el("div", "grp");
+        pg.appendChild(el("div", "lbl", "The four projects"));
+        var pgrid = el("div", "drills");
+        ph.projects.forEach(function (pr) {
+          var card = el("div", "drill");
+          card.appendChild(el("div", "n", pr.t));
+          card.appendChild(el("div", "when lbl", pr.w));
+          card.appendChild(el("div", "d", pr.d));
+          pgrid.appendChild(card);
+        });
+        pg.appendChild(pgrid);
+        b.appendChild(pg);
+      }
+
+      var g1 = el("div", "grp");
+      g1.appendChild(el("div", "lbl", "Minor milestones · gate weeks"));
+      var items1 = el("div", "items");
+      ph.gates.forEach(function (g) {
+        items1.appendChild(makeItem({ key: g.id, store: "gates", title: g.t, why: g.why, targetWeek: g.w }));
+      });
+      g1.appendChild(items1);
+      b.appendChild(g1);
+
+      var g2 = el("div", "grp");
+      g2.appendChild(el("div", "lbl", "Success metrics · all must hold to pass the phase"));
+      var items2 = el("div", "items");
+      ph.metrics.forEach(function (mm) {
+        items2.appendChild(makeItem({ key: mm.id, store: "metrics", title: mm.t, why: mm.why }));
+      });
+      g2.appendChild(items2);
+      b.appendChild(g2);
+
+      var anti = el("div", "anti");
+      anti.innerHTML = "<b>The anti-metric.</b> " + ph.anti;
+      b.appendChild(anti);
+
+      d.appendChild(b);
+      host.appendChild(d);
+    });
+  }
+
+  var READ_STATES = ["todo", "doing", "done"];
+  var READ_LABEL = { todo: "Not started", doing: "In progress", done: "Done + notes" };
+
+  function renderReading() {
+    var host = document.getElementById("reading");
+    host.textContent = "";
+    READING.forEach(function (bk) {
+      var row = el("div", "bk");
+      row.appendChild(el("span", "tier " + bk.tier, bk.tier === "R" ? "read" : bk.tier === "S" ? "skim" : "ref"));
+      var body = el("div", "body");
+      body.appendChild(el("div", "t", bk.t));
+      body.appendChild(el("div", "a", bk.a + " · Phase " + bk.ph));
+      body.appendChild(el("div", "why", bk.why));
+      row.appendChild(body);
+
+      var seg = el("div", "seg");
+      var cur = state.reading[bk.id] || "todo";
+      READ_STATES.forEach(function (st) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.dataset.v = st;
+        btn.textContent = st === "todo" ? "—" : st === "doing" ? "reading" : "done";
+        btn.setAttribute("aria-pressed", cur === st ? "true" : "false");
+        btn.setAttribute("aria-label", bk.t + ": " + READ_LABEL[st]);
+        btn.addEventListener("click", function () {
+          if (st === "todo") delete state.reading[bk.id];
+          else state.reading[bk.id] = st;
+          save("reading");
+          renderReading();
+        });
+        seg.appendChild(btn);
+      });
+      row.appendChild(seg);
+      host.appendChild(row);
+    });
+  }
+
+  function renderDrills() {
+    var host = document.getElementById("drills");
+    host.textContent = "";
+    DRILLS.forEach(function (dr) {
+      var c = el("div", "drill");
+      c.appendChild(el("div", "n", dr.n));
+      c.appendChild(el("div", "when lbl", dr.when));
+      c.appendChild(el("div", "d", dr.d));
+      var w = el("div", "w");
+      w.innerHTML = dr.w;
+      c.appendChild(w);
+      host.appendChild(c);
+    });
+  }
+
+  function renderTriggers() {
+    var slot = document.getElementById("triggerSlot");
+    slot.textContent = "";
+    if (WEEK === 0) return;
+    var fired = [];
+
+    var p1done = PHASES[0].gates.every(function (g) { return state.gates[g.id]; });
+    if (WEEK > 16 && !p1done) {
+      fired.push("<b>Phase 1 has run past week 16.</b> The hours are wrong, not you. Drop to 8 h/week and extend the calendar — do not quit, and do not compress.");
+    }
+    if (WEEK >= 22 && !state.gates.p2g2) {
+      fired.push("<b>No eval number for P2.1 at week 22.</b> Stop building entirely. Three weeks on evaluation alone — everything downstream depends on it and nothing downstream works without it.");
+    }
+    if (WEEK >= 60 && !state.metrics.p2m5 && !state.gates.p3g4) {
+      fired.push("<b>No external artifact by week 60.</b> The position track has failed. It leads for a full quarter — publish, release, speak — before any new depth work.");
+    }
+    if (WEEK >= 60 && !state.gates.p3g1) {
+      fired.push("<b>Specialty still unchosen at week 60.</b> Take the recommended one and move. Deliberation past this point is avoidance wearing a lab coat.");
+    }
+    var behind = nominalTargetTo(WEEK) - loggedHours();
+    var p = phaseOfWeek(WEEK);
+    if (p && behind > p.hpw * 2) {
+      fired.push("<b>More than two weeks of hours behind.</b> Cut scope from this phase — do not add hours. Adding hours is how this ends in month five.");
+    }
+
+    if (!fired.length) return;
+    var box = el("div", "triggers");
+    box.appendChild(el("h2", null, fired.length === 1 ? "A re-plan trigger has fired" : fired.length + " re-plan triggers have fired"));
+    var ul = document.createElement("ul");
+    fired.forEach(function (f) {
+      var li = document.createElement("li");
+      li.innerHTML = f;
+      ul.appendChild(li);
+    });
+    box.appendChild(ul);
+    slot.appendChild(box);
+  }
+
+  function renderLog() {
+    var hist = document.getElementById("logHist");
+    hist.textContent = "";
+    var keys = Object.keys(state.weeks).map(Number).sort(function (a, b) { return b - a; });
+    if (!keys.length) {
+      hist.appendChild(el("div", "hint", "No weeks logged yet. The first entry is week 1, from 28 September 2026."));
+      return;
+    }
+    keys.forEach(function (w) {
+      var rec = state.weeks[w] || {};
+      var row = el("div", "lh");
+      row.appendChild(el("span", "w", "W" + w));
+      row.appendChild(el("span", "h", fmtH(Number(rec.h) || 0) + "h"));
+      row.appendChild(el("span", "s", rec.s || "—"));
+      hist.appendChild(row);
+    });
+  }
+
+  function renderAll() {
+    renderStatus();
+    renderRail();
+    renderTriggers();
+    renderLog();
+    renderPhases();
+    renderReading();
+    renderDrills();
+  }
+
+  /* ================= log form ================= */
+  var inW = document.getElementById("logWeek");
+  var inH = document.getElementById("logHours");
+  var inS = document.getElementById("logShipped");
+  var defaultWeek = Math.min(Math.max(WEEK, 1), TOTAL_WEEKS);
+  inW.value = String(defaultWeek);
+
+  function loadWeekIntoForm() {
+    var w = parseInt(inW.value, 10);
+    var rec = state.weeks[w];
+    inH.value = rec && rec.h != null ? String(rec.h) : "";
+    inS.value = (rec && rec.s) || "";
+    var p = phaseOfWeek(w);
+    document.getElementById("logWhich").textContent = p
+      ? "Week " + w + " sits in Phase " + p.n + " — " + p.title + ". Nominal target " + p.hpw + " hours."
+      : "Week " + w + " is outside the plan’s 104.";
+  }
+  inW.addEventListener("change", loadWeekIntoForm);
+  inW.addEventListener("input", loadWeekIntoForm);
+
+  document.getElementById("logSave").addEventListener("click", function () {
+    var w = parseInt(inW.value, 10);
+    if (!(w >= 1 && w <= TOTAL_WEEKS)) { inW.focus(); return; }
+    var h = parseFloat(inH.value);
+    var s = inS.value.trim();
+    if (!(h > 0) && !s) { delete state.weeks[w]; }
+    else { state.weeks[w] = { h: isFinite(h) && h > 0 ? h : 0, s: s }; }
+    save("weeks");
+    renderAll();
+  });
+
+  /* ================= export ================= */
+  document.getElementById("exportBtn").addEventListener("click", function () {
+    var payload = {
+      plan: "Zero -> AGI · The 104-Week Plan",
+      exportedOn: new Date().toISOString().slice(0, 10),
+      startDate: "2026-09-28",
+      currentWeek: WEEK,
+      totalHoursLogged: loggedHours(),
+      gates: state.gates, metrics: state.metrics, reading: state.reading, weeks: state.weeks
+    };
+    var text = JSON.stringify(payload, null, 2);
+    claude.use("downloads").then(function (dl) {
+      if (!dl) { fallbackCopy(text); return; }
+      dl.save({ filename: "104-week-plan-backup.json", data: text }).catch(function () { fallbackCopy(text); });
+    }, function () { fallbackCopy(text); });
+  });
+  function fallbackCopy(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        setSave("saved"); chip.textContent = "Copied";
+        setTimeout(function () { setSave(db ? "saved" : "idle"); }, 1800);
+      }, function () {});
+    }
+  }
+
+  /* ================= boot ================= */
+  readLocal();
+  renderAll();
+
+  document.getElementById("storageNote").innerHTML =
+    "Progress is written to this artifact’s own server-side store, so it survives closing the tab, clearing your browser and switching device — and it is readable back by Claude when you ask how you are tracking. This browser also keeps a local copy as a fallback. <em>Export backup</em> hands you the raw JSON.";
+
+  claude.use("db").then(function (handle) {
+    if (!handle) { dbFailed = true; setSave("idle"); showBanner("unavailable"); return; }
+    db = handle;
+    DOCS.forEach(function (name) {
+      var q = queues[name] || (queues[name] = { running: false, dirty: false });
+      db.doc("progress/" + name).onSnapshot(function (snap) {
+        if (q.dirty || q.running) return;           // never clobber an unsaved local edit
+        if (!snap.exists) return;
+        var data = snap.data();
+        if (data && typeof data === "object") {
+          state[name] = JSON.parse(JSON.stringify(data));
+          writeLocal();
+          renderAll();
+          loadWeekIntoForm();
+        }
+      }, function (err) {
+        var code = (err && err.code) || "unavailable";
+        if (code === "revoked" || code === "unavailable") { showBanner(code); setSave("error", "Saved locally only"); }
+      });
+    });
+    setSave("saved");
+    loadWeekIntoForm();
+  }, function () {
+    dbFailed = true; setSave("idle"); showBanner("unavailable");
+  });
+
+  loadWeekIntoForm();
+})();
+</script>
