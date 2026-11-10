@@ -34,30 +34,44 @@ WHAT TO OBSERVE
    couple by hand: e.g. dL/dd should equal the value of (a*b + c).
 2. The finite-difference check: for a random messy expression we compare our
    analytic gradient with the "poke it and see" numerical gradient
-   (f(x+h) - f(x-h)) / 2h. They agree to ~1e-6. That check is how you debug
-   ANY gradient code, including in PyTorch.
+   (f(x+h) - f(x-h)) / 2h. Every line ends in "ok" and the |diff| column is
+   around 1e-10. That check is how you debug ANY gradient code, including
+   in PyTorch.
 3. The graph printout: nodes indented under the node they feed into. A neural
    network is just a very big one of these.
 
-WHAT TO CHANGE (3 experiments)
-------------------------------
-A. In `worked_example()` change the values of a, b, c, d and predict the six
-   gradients on paper BEFORE running. (Rule: dL/dx = (how L depends on the
-   node above x) * (how that node depends on x).)
+WHAT TO CHANGE (4 experiments - predict the outcome BEFORE you run)
+-------------------------------------------------------------------
+A. In `worked_example()` change a from 2.0 to 3.0 and predict the gradients
+   on paper first. (Rule: dL/dx = (how L depends on the node above x) *
+   (how that node depends on x).) Answer: dL/da stays +6, because it is
+   b*d and neither moved; dL/db goes from -4 to -6 (it is a*d); dL/dd goes
+   from +4 to +1 (it is f = a*b + c = -9 + 10); dL/dc stays -2.
 B. Break the chain rule on purpose: in `__mul__` change `other.data * out.grad`
    to just `other.data` (forgetting to multiply by the upstream gradient).
-   Run again - the finite-difference check will FAIL. This is the single most
-   common bug when people implement backprop by hand.
-C. Add a new operation, e.g. `sigmoid` = 1/(1+exp(-x)). You can either compose
-   it from existing ops (it just works, no new backward needed) or write a
-   dedicated `_backward` using the identity s' = s*(1-s). Verify with the
-   finite-difference checker.
+   Run again: the worked example now claims dL/da = -3 instead of +6, the
+   finite-difference check prints MISMATCH line after line, and the lab
+   stops with an AssertionError. This is the single most common bug when people
+   implement backprop by hand, and the check catches it instantly.
+C. Break accumulation: in `__mul__` change both `+=` to `=`. The worked
+   example still looks perfect (no value is used twice there), but the
+   "y = x * x" demo now reports 3 instead of 6 and the finite-difference
+   check fails. A bug that only shows when a value is reused is exactly
+   why you test on a messy expression and not a tidy one.
+D. Add a new operation, sigmoid = 1/(1+exp(-x)). Either compose it from
+   existing ops, `def sigmoid(self): return 1.0 / (1.0 + (-self).exp())`
+   (no backward needed, the pieces already know theirs), or write a
+   dedicated `_backward` using the identity s' = s*(1-s). Then add
+   `+ a.sigmoid()` to the end of the formula in `expression()` inside the
+   checker. Expected: 15 "ok" lines again, with different numbers. Now get
+   the `_backward` wrong on purpose (say s*(1+s)) and watch d/da - and
+   only d/da - turn to MISMATCH.
 
 COMMON BUGS
 -----------
 * Using `=` instead of `+=` when accumulating gradients. If a node is used
   twice (e.g. `x * x`, or a weight shared by two neurons), both paths must
-  ADD their contributions. Try `y = x*x` with `=`: you get x instead of 2x.
+  ADD their contributions. With `=` you get x instead of 2x (experiment C).
 * Forgetting to zero gradients between backward() calls (frameworks make you
   call `optimizer.zero_grad()` for exactly this reason).
 * Walking the graph in the wrong order. A node's gradient is only complete
@@ -287,7 +301,8 @@ def finite_difference_check(n_trials=5, h=1e-6, tol=1e-4, seed=0, verbose=True):
     """Build random expressions, compare backward() against numeric slopes.
 
     Numeric slope of f at x:  (f(x+h) - f(x-h)) / (2h)   ("central difference")
-    If our _backward functions are right, the two agree to ~1e-7 or better.
+    If our _backward functions are right, the two agree to ~1e-9 or better;
+    a wrong one is off in the first or second digit, so `tol` can be loose.
     """
     rng = random.Random(seed)
 
@@ -354,9 +369,10 @@ def worked_example():
     print(f"    dL/da = dL/de * de/da = {e.grad:+g} * b = {e.grad:+g} * {b.data:g} = {a.grad:+g}")
     print(f"    dL/db = dL/de * de/db = {e.grad:+g} * a = {e.grad:+g} * {a.data:g} = {b.grad:+g}")
     print()
-    print("  Meaning: increasing `a` by 0.01 should raise L by about 0.01*6 = 0.06.")
+    print(f"  Meaning: increasing `a` by 0.01 should change L by about "
+          f"0.01 * {a.grad:g} = {0.01 * a.grad:+g}.")
     L2 = ((a.data + 0.01) * b.data + c.data) * d.data
-    print(f"  Check:   L(a=2.01) = {L2:.4f},  difference from L = {L2 - L.data:+.4f}")
+    print(f"  Check:   L(a={a.data + 0.01:g}) = {L2:.4f},  difference from L = {L2 - L.data:+.4f}")
     print()
     print("  The graph (each node's inputs indented beneath it):")
     print_graph(L, indent=2)
@@ -403,6 +419,8 @@ if __name__ == "__main__":
     print("Finite-difference check on a random expression using every op")
     print("=" * 70)
     finite_difference_check()
-    print("  All analytic gradients match numeric ones to within 1e-4. Engine OK.")
+    print("  All analytic gradients match the numeric ones. Engine OK.")
     print()
+    print("Now change something: the top of this file lists four experiments (A-D),")
+    print("each with the result you should get. Predict first, then run.")
     print("Next: Lab 03 stacks these Values into neurons and layers and trains them.")

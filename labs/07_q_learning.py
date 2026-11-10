@@ -8,7 +8,7 @@ Run:   python labs/07_q_learning.py
        python labs/07_q_learning.py --coin             (reward hacking!)
        python labs/07_q_learning.py --slip 0.2         (slippery floor)
 Needs: nothing but Python.
-Time:  ~1-2 s.
+Time:  well under a second.
 
 WHAT YOU WILL BUILD
 -------------------
@@ -41,33 +41,58 @@ sticks with the first thing that worked and never finds better routes.
 
 WHAT TO OBSERVE
 ---------------
-1. The sparkline of episode reward: negative and noisy at first (falling in
-   the pit, wandering), then climbing to ~+9 once the route is found.
-2. The policy map: arrows that all flow toward G and away from P.
-3. The value grid: V(s) = max_a Q[s][a] is highest next to the goal and
-   fades with distance - each step away multiplies by gamma and costs 0.1.
+1. The sparkline of episode reward: the first column is low (early episodes
+   fall in the pit or wander), then it climbs. The best possible episode is
+   +9.0: ten steps at -0.1 each, then +10. The last 50 episodes average
+   about +7 rather than +9 because one move in ten is still random, and
+   some of those random moves land in the pit.
+2. The policy map: follow the arrows from S and you reach G without
+   touching P. The last line of output does exactly that ("Greedy rollout
+   ... reached G" in 10 steps).
+3. The value grid: V(s) = max_a Q[s][a] is highest next to the goal (+9.90)
+   and fades with distance - each step away multiplies by gamma and costs
+   0.1. It is +3.22 at the start.
 
-WHAT TO CHANGE (3 experiments)
-------------------------------
+WHAT TO CHANGE (4 experiments - predict the outcome BEFORE you run)
+-------------------------------------------------------------------
 A. --gamma 0.5 (vs 0.9). The discount says how much tomorrow's reward is
-   worth today. At 0.5, a reward 10 steps away is worth 10 * 0.5^10 = 0.01,
-   less than the step penalties to get there: far-away cells learn ~0 and
-   the arrows there point nowhere useful. At 0.99 the whole grid glows.
-B. --epsilon 0.0 vs 0.3. With no exploration the agent may lock onto the
-   first (possibly long) route it stumbled on. With too much, it keeps
-   falling in the pit "by accident" even after it knows better - look at
-   the reward curve staying noisy.
+   worth today. At 0.5, a +10 that is ten steps away is worth about
+   10 * 0.5^9 = 0.02 now, less than the step penalties on the way. Look at
+   the value grid: the cells around the start read about -0.18, not +3.22.
+   From there the goal is all but invisible. The agent still walks to it,
+   but only because wandering forever would cost -0.20: the entire
+   decision hangs on 0.02. With --gamma 0.99 the start is worth +8.18 and
+   the route glows all the way back.
+B. --epsilon 0.0, then --epsilon 0.3. You might predict that an agent that
+   never explores never finds the goal. It finds the shortest route and
+   its last 50 episodes score a perfect +9.00. Why: every untried action
+   still has Q = 0, while every tried one has gone slightly negative from
+   the step penalty, so "greedy" keeps picking whatever it has not tried.
+   That is called optimistic initialisation, and here it does epsilon's
+   job. At 0.3 the agent knows the same 10-step route (see the rollout)
+   but scores worse while training (about +6.4, goal reached 88% of the
+   time): three moves in ten are random, next to a pit.
 C. --coin : REWARD HACKING. A coin worth +2 appears next to the start and
    respawns every time it is collected. The designer's intent was "go to
    the goal", but the reward function now says "collect coins forever",
-   and that is exactly what the agent learns: bounce between two cells for
-   100 steps, never reaching G. Nothing is broken - the agent optimised the
-   reward it was given. This is the toy version of every RL horror story
-   (the boat racing game that spun in circles collecting power-ups, the
-   chatbot that learned to please the reward model instead of the human).
-   Try --coin --coin-reward 0.5 : the loop is no longer worth it and the
-   agent goes to the goal. The line between "helpful" and "hacked" is one
-   number in the reward function.
+   and that is exactly what the agent learns: step on, step off, step on,
+   for 100 steps, about +80 an episode and never once reaching G. Nothing
+   is broken - the agent optimised the reward it was given. This is the
+   toy version of every RL horror story (the boat racing game that spun in
+   circles collecting power-ups, the chatbot that learned to please the
+   reward model instead of the human).
+D. Now shrink the coin. --coin --coin-reward 0.1 : the coin no longer
+   covers the two step penalties it takes to collect it, the loop loses
+   money, and the agent goes to the goal. The line between "helpful" and
+   "hacked" is one number in the reward function. Then --coin
+   --coin-reward 0.3 and predict: the loop now earns about +4 an episode,
+   less than half the +9 for finishing. Surely it finishes? It does not;
+   it reaches the goal 0% of the time. The agent found the small sure
+   thing first, and with only one random move in ten it never strays far
+   enough to discover that something better exists. Look at the policy
+   map: the right-hand side is all "?". (More randomness does not rescue
+   it: add --epsilon 0.5 and it reaches the goal 2% of the time.) Getting stuck on the first reward you
+   find is the other classic RL failure, and no reward design fixes it.
 
 COMMON BUGS
 -----------
@@ -141,8 +166,10 @@ class GridWorld:
             reward += self.goal_reward; done = True
         elif self.cell(s2) == "P":
             reward += self.pit_reward; done = True
-        elif self.coin is not None and s2 == self.coin:
-            reward += self.coin_reward        # coin respawns instantly: the trap
+        elif self.coin is not None and s2 == self.coin and s2 != s:
+            # You collect the coin by stepping ONTO its cell (standing still or
+            # bumping a wall on it does not count), and it respawns at once.
+            reward += self.coin_reward        # ...which is the trap
         return s2, reward, done
 
 
@@ -305,8 +332,12 @@ if __name__ == "__main__":
     print("    " + " -> ".join(f"({r},{c})" for r, c in path[:16]) + (" -> ..." if len(path) > 16 else ""))
     if coin and not (done and end == "G"):
         print()
-        print("  Reward hacking in action: the agent found that bouncing on the coin")
-        print("  cell forever pays more than the goal, and that IS the optimal policy")
-        print("  for the reward we wrote. The reward was wrong, not the agent.")
-        print("  Try:  --coin --coin-reward 0.5   (loop no longer worth it)")
-        print("        --coin --gamma 0.5         (short-sighted, but does it help?)")
+        print("  Reward hacking in action: the agent steps on and off the coin cell")
+        print("  forever instead of finishing. At +2 a coin that IS the best policy for")
+        print("  the reward we wrote. The reward was wrong, not the agent.")
+        print("  Try:  --coin --coin-reward 0.1   (the loop no longer pays: what now?)")
+        print("        --coin --coin-reward 0.3   (the loop pays less than finishing. Does it finish?)")
+    elif not coin:
+        print()
+        print("  Try:  --gamma 0.5   --epsilon 0.0   --coin")
+        print("  The top of this file says what each should do. Predict first.")

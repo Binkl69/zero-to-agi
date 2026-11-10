@@ -2,8 +2,8 @@
 LAB 06 - A TINY GPT THAT WRITES SHAKESPEARE (PyTorch)
 =====================================================
 
-Run:   python labs/06_tiny_gpt.py --quick          (~1-2 min on CPU: tiny model, 300 steps)
-       python labs/06_tiny_gpt.py                  (~10-15 min on CPU, ~2 min on a GPU)
+Run:   python labs/06_tiny_gpt.py --quick          (under a minute on CPU: tiny model, 300 steps)
+       python labs/06_tiny_gpt.py                  (about half an hour on a laptop CPU, far less on a GPU)
        python labs/06_tiny_gpt.py --sample --temperature 0.8
        python labs/06_tiny_gpt.py --sample --prompt "ROMEO:" --max-new-tokens 500
 Needs: torch  (pip install torch  - the CPU-only build is fine for this lab)
@@ -34,35 +34,57 @@ sample. Here is what each loss level *means* for a 65-symbol vocabulary:
     ~3.0  Learned letter frequencies: lots of e, t, a, spaces. Still noise.
     ~2.5  Learned pairs: pronounceable nonsense - "the wither sould hin"
     ~2.0  Real short words, line breaks, "NAME:" speaker headers appear
-    ~1.7  Mostly real words, character names, sentence-ish rhythm. Expect
-          the default run (0.8M params, 5000 steps) to land around 1.6-1.8.
+    ~1.7  Mostly real words, character names, sentence-ish rhythm.
+    ~1.6  Where the default run (0.8M params, 5000 steps) ends: val 1.59.
     ~1.5  Grammar-ish phrases; nanoGPT's 10M-param model gets here at 5000
           steps on a GPU (try --n-layer 6 --d 384 --ctx 256 if you have one).
     ~1.0  Whole coherent lines. Needs a bigger model and/or more data.
     <0.9  You'd be memorising the corpus (overfitting) at this data size.
 
+--quick starts at 4.20 and ends near 2.40 (2.41-2.42 with other --seed
+values): letter pairs, word-shaped nonsense, the odd real "the" and "and".
+The saved checkpoint goes to labs/checkpoints/ and `--sample` picks it up.
+
 The val loss (held-out 10% of the text) is the honest number. When train
 keeps falling but val rises, the model is memorising - stop.
 
-WHAT TO CHANGE (3 experiments)
-------------------------------
-A. --temperature 0.3 vs 1.0 vs 1.5 in --sample mode. Temperature divides
-   the logits before softmax: low = always pick the likeliest character
-   (repetitive, "safe"), high = flatten the distribution (creative, then
-   gibberish). Every chatbot's "creativity" slider is this one number.
-B. --ctx 8 (default 128). With only 8 characters of context the model
-   cannot remember who is speaking or close a quote it opened. Watch the
-   samples lose long-range structure while the loss barely moves - loss
-   is a local measure, coherence is a global one.
-C. --n-layer 1 --d 32 (a minuscule model) vs --n-layer 6 --d 256 (if you
-   have a GPU). Same data, same steps: capacity is what turns 2.0 into 1.5.
-   Also try --dropout 0.0 with the big model and watch val loss turn up.
+WHAT TO CHANGE (5 experiments - predict the outcome BEFORE you run)
+-------------------------------------------------------------------
+All of these use --quick, so each takes well under a minute.
+A. After a --quick run: --sample --temperature 0.3, then 1.0, then 1.5.
+   Temperature divides the logits before softmax. At 0.3 the model always
+   picks its likeliest character and gets stuck in a rut: "the the the
+   thathe are the the the ther". At 1.0 you get varied word-shaped
+   nonsense. At 1.5 the distribution is so flat that capitals and
+   punctuation land mid-word: "tcede.'aEy HY". Every chatbot's
+   "creativity" slider is this one number.
+B. --quick --ctx 8 (the model sees only the last 8 characters, not 64).
+   Prediction: much worse? The val loss is 2.39 against 2.41 - no worse at
+   all. At a loss of 2.4 the model is only using the previous letter or
+   two, so taking away the other 56 costs nothing. Context only starts to
+   pay once the model is good enough to use it: on the full 5000-step
+   run, --ctx 8 ends at 2.01 where the default reaches 1.59.
+C. Capacity. --quick --n-layer 1 --d 32 (a fifth of the parameters) ends
+   at 2.51 instead of 2.41. --quick --n-layer 4 --d 128 --n-head 4 (seven
+   times the parameters, about four times slower) ends at 2.24. Same data,
+   same 300 steps: the bigger model learns more from each one.
+D. Learning rate. --quick --lr 0.0001 ends at 3.21: it has barely got past
+   letter frequencies, every step is too timid. --quick --lr 0.1 ends at
+   2.96: every step is so big it keeps kicking itself back out of
+   wherever it was settling. The default (0.003 for --quick) is in the
+   narrow band between.
+E. Cheat. In `get_batch` change the line that builds y to
+   `data[i:i + ctx]`, so the "next character" target is the character
+   the model is looking at. Run --quick: the loss falls to 0.005 by step
+   100 and 0.000 by step 300, and the samples are one character repeated
+   forever. The model has learned to copy its input, which is useless. A
+   loss that is too good to be true is always a leak; put the line back.
 
 COMMON BUGS
 -----------
 * Off-by-one in the batch: y must be x shifted by exactly ONE character.
-  If y == x the model learns to copy and the loss goes to ~0 instantly
-  (a "too good to be true" loss is always a leak).
+  If y == x the model learns to copy and the loss goes to ~0 almost at
+  once (experiment E).
 * Forgetting model.eval() / torch.no_grad() when evaluating: dropout stays
   on and the val loss is noisy; gradients are tracked and memory explodes.
 * Feeding the model more than `ctx` tokens at generation time: the position
@@ -71,13 +93,8 @@ COMMON BUGS
 * Mask applied AFTER softmax (it must be before, as -inf).
 * Mismatched device: data on CPU, model on GPU -> "expected all tensors on
   the same device". Everything must be moved with .to(device).
-* Learning rate: 1e-3 is right for AdamW at this size. 1e-2 diverges
-  (loss climbs back above 3 and stays), 1e-4 crawls.
-
-NOTE: this file was written on a machine without PyTorch installed and is
-untested end-to-end here. It follows nanoGPT's shapes exactly and has been
-read carefully for shape bugs; if you hit an error, the traceback plus the
-shape comments below should make it a two-minute fix.
+* Learning rate: too high and the loss stalls or climbs back, too low and
+  it crawls (experiment D).
 """
 
 import sys
@@ -250,9 +267,8 @@ class CharTokenizer:
 
 def load_data(device):
     if not DATA_PATH.exists():
-        print(f"Missing {DATA_PATH}. Download it with:\n"
-              "  curl -o labs/data/tinyshakespeare.txt "
-              "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt")
+        print(f"Missing {DATA_PATH}\nIt ships with the course. If you deleted it, save this page there:\n"
+              "  https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt")
         sys.exit(1)
     text = DATA_PATH.read_text(encoding="utf-8")
     tok = CharTokenizer(text)
@@ -342,11 +358,11 @@ def train(args, device):
         if step % args.eval_every == 0 or step == args.steps:
             train_loss = estimate_loss(model, train_data, args.batch_size, args.ctx)
             val_loss = estimate_loss(model, val_data, args.batch_size, args.ctx)
-            elapsed = time.time() - t0
-            per_step = elapsed / max(step, 1)
-            eta = per_step * (args.steps - step) / 60
-            print(f"step {step:5d} | train {train_loss:.3f} | val {val_loss:.3f} | "
-                  f"lr {lr_at(step, args):.1e} | {per_step:.2f} s/step | eta {eta:.1f} min")
+            line = f"step {step:5d} | train {train_loss:.3f} | val {val_loss:.3f} | lr {lr_at(step, args):.1e}"
+            if step > 0:                # no speed to report before the first step
+                per_step = (time.time() - t0) / step
+                line += f" | {per_step:.2f} s/step | eta {per_step * (args.steps - step) / 60:.1f} min"
+            print(line)
         if step % args.sample_every == 0 and step > 0 or step == args.steps:
             print("-" * 60)
             print(sample_text(model, tok, device, 200, temperature=1.0))
@@ -364,7 +380,7 @@ def train(args, device):
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)   # tame rare huge gradients
         opt.step()
 
-    CKPT_DIR.mkdir(exist_ok=True)
+    Path(args.ckpt).parent.mkdir(parents=True, exist_ok=True)
     ckpt = {
         "model_state": model.state_dict(),
         "config": dict(vocab_size=len(tok.chars), ctx=args.ctx, d=args.d,
@@ -380,7 +396,9 @@ def sample_from_checkpoint(args, device):
     if not Path(args.ckpt).exists():
         print(f"No checkpoint at {args.ckpt}. Train first: python labs/06_tiny_gpt.py --quick")
         sys.exit(1)
-    ckpt = torch.load(args.ckpt, map_location=device)
+    # weights_only=True: load numbers and plain values only, never run code
+    # hidden in a file. (A .pt file from a stranger is otherwise a program.)
+    ckpt = torch.load(args.ckpt, map_location=device, weights_only=True)
     cfg = ckpt["config"]
     model = GPT(**cfg).to(device)
     model.load_state_dict(ckpt["model_state"])
@@ -392,14 +410,18 @@ def sample_from_checkpoint(args, device):
     print(f"  loaded {args.ckpt}: {cfg}")
     print(f"  temperature {args.temperature}, prompt {args.prompt!r}")
     print("-" * 60)
-    print(sample_text(model, tok, device, args.max_new_tokens, args.temperature, args.prompt))
+    try:
+        print(sample_text(model, tok, device, args.max_new_tokens, args.temperature, args.prompt))
+    except ValueError as e:             # a prompt character the model never saw
+        print(f"Cannot use that prompt: {e}")
+        sys.exit(1)
     print("-" * 60)
 
 
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Train or sample a tiny character-level GPT.")
-    ap.add_argument("--quick", action="store_true", help="tiny model, 300 steps (~1-2 min CPU)")
+    ap.add_argument("--quick", action="store_true", help="tiny model, 300 steps (under a minute on CPU)")
     ap.add_argument("--sample", action="store_true", help="generate from a saved checkpoint")
     ap.add_argument("--device", default="auto", help="auto | cpu | cuda | mps")
     ap.add_argument("--steps", type=int, default=None)
@@ -414,7 +436,7 @@ if __name__ == "__main__":
     ap.add_argument("--sample-every", type=int, default=None)
     ap.add_argument("--ckpt", default=None)
     ap.add_argument("--temperature", type=float, default=0.8)
-    ap.add_argument("--prompt", default="\n")
+    ap.add_argument("--prompt", default="\n", help="text to continue (at least one character)")
     ap.add_argument("--max-new-tokens", type=int, default=400)
     ap.add_argument("--seed", type=int, default=1337)
     args = ap.parse_args()
@@ -425,6 +447,11 @@ if __name__ == "__main__":
               if args.quick else
               dict(steps=5000, n_layer=4, d=128, n_head=4, ctx=128, batch_size=32, sample_every=500,
                    ckpt=str(CKPT_DIR / "tiny_gpt.pt")))
+    if args.sample and args.ckpt is None and not args.quick:
+        # Sampling with no --ckpt: use the full model if you trained one,
+        # otherwise fall back to the --quick model.
+        if not (CKPT_DIR / "tiny_gpt.pt").exists() and (CKPT_DIR / "tiny_gpt_quick.pt").exists():
+            args.ckpt = str(CKPT_DIR / "tiny_gpt_quick.pt")
     for k, v in preset.items():
         if getattr(args, k) is None:
             setattr(args, k, v)
@@ -432,6 +459,11 @@ if __name__ == "__main__":
         args.lr = 3e-3       # the tiny model can take bigger steps
 
     device = pick_device(args.device)
+    if device.type == "cpu":
+        # Use half the logical cores. The other half are usually hyper-threads,
+        # which do not speed up matrix maths, and on a busy machine asking for
+        # every core can make a model this small run several times SLOWER.
+        torch.set_num_threads(max(1, (os.cpu_count() or 2) // 2))
     if args.sample:
         sample_from_checkpoint(args, device)
     else:

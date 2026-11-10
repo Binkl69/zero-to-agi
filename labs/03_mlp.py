@@ -2,14 +2,16 @@
 LAB 03 - A NEURAL NETWORK THAT LEARNS: NEURON -> LAYER -> MLP
 =============================================================
 
-Run:   python labs/03_mlp.py                (about 20-40 s on a laptop CPU)
+Run:   python labs/03_mlp.py                (about a minute on a laptop CPU)
+       python labs/03_mlp.py --quick        (10 seconds: stops the moons early)
        python labs/03_mlp.py --lr 10        (experiment: learning rate too high)
        python labs/03_mlp.py --hidden 1     (experiment: too few hidden units)
-       python labs/03_mlp.py --steps 200 --hidden 16
 Needs: labs/02_autograd.py (loaded by path - no install needed).
-Time:  ~20-40 s. Pure Python is slow; that is the point of Lab 05/06 (numpy,
-       torch). Here every one of the ~10,000 multiplications per step is a
-       Python object so you can see all the moving parts.
+Time:  about a minute, nearly all of it in Part 2. It prints a line every 25
+       steps, so a pause of several seconds between lines is normal. Pure
+       Python is slow; that is the point of Lab 05/06 (numpy, torch). Here
+       every one of the ~10,000 multiplications per step is a Python object
+       so you can see all the moving parts.
 
 WHAT YOU WILL BUILD
 -------------------
@@ -31,32 +33,44 @@ and the training loop that EVERY neural network uses, no exceptions:
 WHAT TO OBSERVE
 ---------------
 1. XOR - the thing a single perceptron could NOT learn in Lab 01 - is learned
-   in a couple of hundred steps by a 2-3-1 network. Nobody hand-set the
-   weights this time.
+   in under a hundred steps by a 2-3-1 network: train acc reaches 100% and
+   the truth table is all "ok". Nobody hand-set the weights this time.
 2. "Two moons": two interleaved crescents. Watch the loss fall, then look at
    the ASCII decision boundary - it BENDS around the moons. Every bend is
-   paid for by a hidden neuron.
-3. The loss doesn't fall smoothly: it stalls, then drops. That's normal.
+   paid for by a hidden neuron. Final train accuracy is 100% with the
+   default seed, and 95-100% with others (--seed 1, 2, 3 ...).
+3. The loss doesn't fall smoothly: it drops fast to about 0.30 (90%, a
+   straight-line answer), sits there for a hundred steps, then drops again
+   as the boundary learns to bend. That plateau is normal.
 
-WHAT TO CHANGE (3 experiments)
-------------------------------
+WHAT TO CHANGE (4 experiments - predict the outcome BEFORE you run)
+-------------------------------------------------------------------
 A. --lr 3.0 : learning rate too high. The loss stops falling smoothly and
-   BOUNCES (0.31 -> 0.47 -> 0.11 -> 0.28 ...): each step overshoots the
-   valley and lands on the far wall. Then --lr 10 : the loss jumps to
-   exactly 2.0 and freezes at 50% accuracy. Why 2.0? Every weight got so
-   huge that every tanh is pinned at +1 or -1 ("saturated"); half the
-   points are maximally wrong (error 2^2 = 4) and, worse, tanh's gradient
-   at +-1 is ~0, so NOTHING can ever move again. In a network with an
-   unbounded output the same overshoot shows up as loss -> inf/NaN.
-   Then --lr 0.01: converges, but painfully slowly. Finding the biggest lr
-   that is still stable is half of practical ML.
-B. --hidden 1 or --hidden 2 : too few hidden units. One tanh unit can only
-   draw one line-ish boundary, so it UNDERFITS: accuracy stalls ~90% and
-   the picture shows a single gentle curve cutting through both moons.
-   Then --hidden 32 and see the boundary get smoother/wigglier.
-C. Change `tanh` to `relu` in `Neuron.__call__` (keep tanh on the OUTPUT
-   neuron so it stays in [-1, 1]). ReLU nets train differently: faster
-   early, and the boundary becomes piecewise-straight (look closely).
+   BOUNCES (0.19 -> 0.14 -> 0.28 -> 0.12 -> 0.21 ...): each step overshoots
+   the valley and lands on the far wall. It ends at 97%, not 100%.
+   Then --lr 10 : the loss jumps to exactly 2.0 and freezes at 50% accuracy.
+   Why 2.0? Every weight got so huge that every tanh is pinned at +1 or -1
+   ("saturated"); half the points are maximally wrong (error 2^2 = 4) and,
+   worse, tanh's gradient at +-1 is ~0, so NOTHING can ever move again. In
+   a network with an unbounded output the same overshoot shows up as loss
+   -> inf/NaN. Then --lr 0.01: still falling at the end, but painfully
+   slowly (loss 0.33, 89%). Finding the biggest lr that is still stable is
+   half of practical ML.
+B. --hidden 1 : too few hidden units (and it runs in seconds). One tanh
+   unit can only draw one line-ish boundary, so it UNDERFITS: accuracy
+   stalls at 90% and the picture shows a single gentle curve cutting
+   through both moons. --hidden 2 gets to 95%: the bend has begun.
+C. --activation relu : swap the hidden units' tanh for ReLU (the output
+   neuron keeps tanh so it stays in [-1, 1]). It trains about as well
+   (97%), but look closely at the picture: the boundary is now made of
+   straight segments with corners, because a ReLU network can only build
+   piecewise-straight shapes.
+D. --seed 14 --quick : an unlucky start. XOR now sticks at 50% with the
+   loss flat near 0.52, and two rows of the truth table say WRONG. Nothing
+   is broken; from these particular random weights, downhill leads into a
+   dead end (a "local minimum"). About one seed in a hundred does this
+   here. It is why people report results over several seeds, and why
+   bigger networks, which have more ways around, are easier to train.
 
 COMMON BUGS
 -----------
@@ -80,6 +94,11 @@ from pathlib import Path
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
+
+# Lab 02's backward() walks the graph by recursion, and the loss over N
+# examples is a chain N nodes deep. Python's default limit (1000) is enough
+# for the 100 points used here but not if you raise n to 400, so give it room.
+sys.setrecursionlimit(10_000)
 
 # ---------------------------------------------------------------------------
 # 0. IMPORT `Value` FROM LAB 02
@@ -271,11 +290,14 @@ def sparkline(values, width=60):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--hidden", type=int, default=8, help="hidden units per layer (try 1, 2, 32)")
-    ap.add_argument("--lr", type=float, default=0.2, help="learning rate (try 3.0 or 0.01)")
-    ap.add_argument("--steps", type=int, default=250, help="gradient steps on two moons")
+    ap.add_argument("--lr", type=float, default=0.2, help="learning rate (try 3.0, 10 or 0.01)")
+    ap.add_argument("--steps", type=int, default=None, help="gradient steps on two moons (default 250)")
+    ap.add_argument("--quick", action="store_true", help="only 40 steps on two moons (~10 s)")
     ap.add_argument("--activation", default="tanh", choices=["tanh", "relu"])
     ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
+    if args.steps is None:
+        args.steps = 40 if args.quick else 250
     random.seed(args.seed)
 
     # ---------------- XOR ----------------
@@ -307,4 +329,8 @@ if __name__ == "__main__":
     print()
     draw_boundary(net, X, Y)
     print()
-    print("Try:  --lr 10 (diverges)   --hidden 1 (underfits)   --activation relu")
+    if args.quick:
+        print("(--quick stopped after 40 steps: the boundary is still a straight-ish line.")
+        print(" Run without --quick to watch it bend around the moons.)")
+    print("Try:  --lr 10 (saturates)   --hidden 1 (underfits)   --activation relu")
+    print("The top of this file says what each of those should do. Predict first.")

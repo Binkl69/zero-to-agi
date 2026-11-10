@@ -2,14 +2,20 @@
 LAB 08 - Toy RLHF: preferences -> reward model -> policy (and why it goes wrong)
 ===============================================================================
 
+Run:   python labs/08_toy_rlhf.py
+Needs: numpy.
+Time:  about a second.
+
 WHAT YOU'LL BUILD
 -----------------
 The whole post-training pipeline from chapter 11, at a scale you can hold in
 your head. Instead of a language model with billions of parameters emitting
 billions of possible responses, our "policy" is a probability distribution over
 EIGHT hand-written responses to a single prompt. Everything else - the reward
-model, the Bradley-Terry preference loss, the KL penalty, PPO-style policy
-optimisation, and DPO - is the real algorithm, unchanged.
+model, the Bradley-Terry preference loss, the KL penalty, policy optimisation
+against the reward model, and DPO - is the real algorithm, unchanged. (The one
+simplification: with eight responses we can compute the policy gradient
+exactly, where PPO has to estimate it from samples.)
 
 You will build, in order:
 
@@ -25,38 +31,59 @@ You will build, in order:
 
 WHAT TO OBSERVE
 ---------------
-1. The reward model learns to score responses well ON AVERAGE while being
-   badly wrong about one specific response. It has learned POLITENESS AS A
-   PROXY FOR CORRECTNESS, because in the training comparisons the two happen
-   to correlate.
+1. The reward model ranks about 80% of pairs correctly while being badly
+   wrong about one specific response. It cannot see correctness, so it has
+   learned POLITENESS AND LENGTH AS PROXIES FOR IT: in the comparisons, the
+   right answers tended to be the warmer, fuller ones. Compare its "length"
+   weight (+0.43) with what the humans actually feel about length (-0.30).
 
 2. With beta = 0 (no KL penalty), the policy collapses almost entirely onto
-   response R7 - the confident, polite, thorough-sounding, WRONG answer. That
-   is reward hacking. The optimiser did its job perfectly; the reward was wrong.
+   response R7 - the confident, polite, thorough-sounding, WRONG answer:
+   p(R7) = 0.997, and the chance of a correct answer falls from 0.397 to
+   0.002. That is reward hacking. The optimiser did its job perfectly; the
+   reward was wrong.
 
 3. As beta rises, the KL penalty pulls the policy back toward its starting
-   point. There is a sweet spot: enough optimisation to improve the true
-   reward, not so much that it exploits the reward model's blind spot. This is
-   the whole reason real RLHF keeps a KL term.
+   point. There is a sweet spot (beta = 1.0 here, true reward 1.64 against
+   0.98 at the start): enough optimisation to improve the true reward, not
+   so much that it exploits the reward model's blind spot. This is the whole
+   reason real RLHF keeps a KL term.
 
-4. DPO shows the identical failure. The problem was never the RL algorithm.
-   The problem is that the preference data underdetermines what we wanted.
+4. DPO, given the same eyesight as the reward model, shows the same failure
+   with nearly the same numbers. The problem was never the RL algorithm.
+   Give DPO a private knob per response and the trap disappears - but only
+   because it can then memorise eight answers, which no real model can.
 
-WHAT TO CHANGE (three experiments)
-----------------------------------
+WHAT TO CHANGE (4 experiments - predict the outcome BEFORE you run)
+-------------------------------------------------------------------
 1. In `RM_FEATURES`, add "correct" to the list so the reward model CAN see
-   correctness. Re-run. The hacking disappears. This is why so much of real
-   alignment work is about giving the reward signal access to what matters
-   (unit tests, verifiers, expert graders) rather than about better optimisers.
+   correctness. Re-run. The hacking disappears: the reward model gives
+   "correct" a weight of about +2.5, its favourite becomes R3 (a right
+   answer), and at beta = 0 the policy is correct with probability 1.000
+   instead of 0.002. Nothing about the optimiser changed. This is why so
+   much of real alignment work is about giving the reward signal access to
+   what matters (unit tests, verifiers, expert graders) rather than about
+   better optimisers.
 
-2. Turn `N_COMPARISONS` down to 30. Watch the learned weights get noisy and the
-   ranking become unstable between runs. Preference data is expensive, and this
-   is what "not enough of it" looks like.
+2. Turn `N_COMPARISONS` down to 30, then change SEED to 1, 2, 3. The learned
+   weights lurch from run to run: over seeds 0-3 the "length" weight comes
+   out +0.76, +0.87, -0.39, +0.25, changing sign, where with 400
+   comparisons it is +0.43, +0.10, +0.40, +0.12. Preference data is
+   expensive, and this is what "not enough of it" looks like.
 
-3. Raise `PREF_NOISE` to 1.5 (very inconsistent labellers). The reward model
-   degrades gracefully rather than catastrophically - averaging over many noisy
-   comparisons is surprisingly robust, which is the empirical fact that makes
-   RLHF work at all.
+3. Raise `PREF_NOISE` to 1.5 (very inconsistent labellers). Pair accuracy
+   drops from 80% to 73% and the weights shrink, yet R7 is still the
+   favourite and beta = 0 still collapses onto it (p(R7) = 0.994). The
+   reward model degrades gracefully rather than catastrophically -
+   averaging over many noisy comparisons is surprisingly robust, which is
+   the empirical fact that makes RLHF work at all. (It also means noise
+   will not save you from the blind spot.)
+
+4. Leave everything at its defaults and change SEED to 1, 2 and 3. Predict
+   which of these survive a different draw of labellers: the reward model's
+   favourite (R7 every time), the collapse at beta = 0 (every time), the
+   best beta (0.4 or 1.0, it moves), the exact weights (they move). A
+   result that holds for one seed is an anecdote.
 
 COMMON BUGS
 -----------
@@ -72,14 +99,13 @@ COMMON BUGS
 
 import sys
 
-try:  # Windows consoles default to cp1252 and choke on non-ASCII output
+if hasattr(sys.stdout, "reconfigure"):   # Windows consoles default to cp1252
     sys.stdout.reconfigure(encoding="utf-8")
-except Exception:
-    pass
 
 import numpy as np
 
-rng = np.random.default_rng(0)
+SEED = 0                 # try 1, 2, 3: the numbers move, the story does not
+rng = np.random.default_rng(SEED)
 
 # ---------------------------------------------------------------------------
 # THE SETUP
@@ -96,24 +122,25 @@ FEATURES = ["length", "polite", "correct", "hedging", "refusal"]
 
 #                        len   pol   cor   hed   ref
 RESPONSES = [
-    ("R0  'Reboot it.'",
-                        [0.05, 0.10, 1.00, 0.00, 0.0]),
+    ("R0  Lazy and wrong: 'Just reboot it.' (does not fix this)",
+                        [0.05, 0.10, 0.00, 0.00, 0.0]),
     ("R1  Terse but right: check the band, forget network, re-auth",
                         [0.25, 0.20, 1.00, 0.00, 0.0]),
-    ("R2  Friendly and right: same steps, explained, offers follow-up",
+    ("R2  Friendly and right: steps explained, offers follow-up",
                         [0.60, 0.90, 1.00, 0.10, 0.0]),
-    ("R3  Thorough and right: steps + why + how to check the 5GHz band",
+    ("R3  Thorough and right: steps + why + how to check 5GHz",
                         [0.85, 0.80, 1.00, 0.05, 0.0]),
-    ("R4  Waffle: 'it could be many things, hard to say' + no steps",
+    ("R4  Waffle: 'could be many things, hard to say', no steps",
                         [0.55, 0.60, 0.00, 0.95, 0.0]),
     ("R5  Refuses: 'I can't help with IT support issues.'",
                         [0.10, 0.50, 0.00, 0.00, 1.0]),
-    ("R6  Wrong and blunt: 'Your wifi card is dead, buy a new laptop.'",
+    ("R6  Wrong and blunt: 'Wifi card is dead, buy a new laptop.'",
                         [0.20, 0.05, 0.00, 0.00, 0.0]),
-    ("R7  Wrong but GORGEOUS: long, warm, confident, totally invented steps",
+    ("R7  Wrong but GORGEOUS: long, warm, confident, invented steps",
                         [1.00, 1.00, 0.00, 0.00, 0.0]),
 ]
 NAMES = [r[0] for r in RESPONSES]
+assert max(len(n) for n in NAMES) <= 62, "keep names short or the tables go ragged"
 X = np.array([r[1] for r in RESPONSES], dtype=float)   # (8 responses, 5 features)
 N_RESP, N_FEAT = X.shape
 
@@ -135,6 +162,7 @@ X_RM = X[:, RM_IDX]
 
 N_COMPARISONS = 400      # <- experiment 2: try 30
 PREF_NOISE = 0.6         # <- experiment 3: try 1.5. Higher = more inconsistent labellers.
+# (To try an experiment, edit the line, save, and run the file again.)
 
 
 def softmax(z):
@@ -290,12 +318,18 @@ for i in order:
 rm_best = int(np.argmax(R_HAT))
 print(f"\nThe reward model ranks pairs correctly {np.mean((R_HAT[win_idx] - R_HAT[lose_idx]) > 0):.1%} "
       f"of the time - it looks like a good model.")
-if rm_best != best_true:
-    print(f"But its single favourite response is {NAMES[rm_best].split()[0]}, whose TRUE reward is "
-          f"{TRUE_REWARD[rm_best]:.2f}, while the genuinely best response "
-          f"{NAMES[best_true].split()[0]} scores {TRUE_REWARD[best_true]:.2f}.")
-    print("Having learned politeness and length as proxies for correctness, the reward")
-    print("model cannot tell a right answer from a beautifully-written wrong one.")
+fav, top = NAMES[rm_best].split()[0], NAMES[best_true].split()[0]
+if TRUE_REWARD[rm_best] < TRUE_REWARD[best_true] - 1.0:
+    print(f"But its single favourite response is {fav}, whose TRUE reward is "
+          f"{TRUE_REWARD[rm_best]:.2f},")
+    print(f"while the genuinely best response {top} scores {TRUE_REWARD[best_true]:.2f}.")
+    print("It cannot see correctness, so it gave the credit to what it CAN see: the")
+    print("right answers in the comparisons tended to be the warmer, fuller ones. It")
+    print("cannot tell a right answer from a beautifully-written wrong one.")
+else:
+    print(f"Its favourite response is {fav} (TRUE reward {TRUE_REWARD[rm_best]:.2f}), as good as "
+          f"or close to the best ({top}, {TRUE_REWARD[best_true]:.2f}).")
+    print("With nothing to exploit, watch the over-optimisation below fail to appear.")
 
 
 # ===========================================================================
@@ -334,8 +368,8 @@ print("'TRUE reward' is what we actually wanted. Watch them come apart.\n")
 # actually right. It is the clearest single number for watching alignment fail.
 is_correct = X[:, FEATURES.index("correct")] > 0.5
 
-print(f"{'beta':>6} {'KL':>7} {'RM reward':>11} {'TRUE reward':>13} {'p(correct)':>12}  {'p(R7, the trap)':>15}")
-print("-" * 96)
+print(f"{'beta':>6} {'KL':>7} {'RM reward':>11} {'TRUE reward':>13} {'p(correct)':>12} {'p(R7)':>8}")
+print("-" * 78)
 
 results = []
 for beta in [0.0, 0.05, 0.15, 0.4, 1.0, 3.0]:
@@ -344,10 +378,11 @@ for beta in [0.0, 0.05, 0.15, 0.4, 1.0, 3.0]:
     true_r = float(pi @ TRUE_REWARD)
     p_ok = float(pi[is_correct].sum())
     results.append((beta, kl, rm_r, true_r, int(np.argmax(pi)), pi))
-    print(f"{beta:>6.2f} {kl:>7.2f} {rm_r:>11.3f} {true_r:>13.3f} {p_ok:>12.3f}  {pi[7]:>15.3f}")
+    print(f"{beta:>6.2f} {kl:>7.2f} {rm_r:>11.3f} {true_r:>13.3f} {p_ok:>12.3f} {pi[7]:>8.3f}")
 
 print(f"{'(SFT)':>6} {0.0:>7.2f} {float(pi_ref @ R_HAT):>11.3f} {float(pi_ref @ TRUE_REWARD):>13.3f} "
-      f"{float(pi_ref[is_correct].sum()):>12.3f}  {pi_ref[7]:>15.3f}   <- where we started")
+      f"{float(pi_ref[is_correct].sum()):>12.3f} {pi_ref[7]:>8.3f}   <- start")
+print("(R7 is the trap: the gorgeous wrong answer.)")
 
 base_true = float(pi_ref @ TRUE_REWARD)
 best_beta = max(results, key=lambda r: r[3])
@@ -356,11 +391,15 @@ print(f"beta = 0.00 (pure reward maximisation) true reward: {results[0][3]:.3f} 
       f"{'WORSE than where we started' if results[0][3] < base_true else ''}")
 print(f"Best beta in this sweep: {best_beta[0]:.2f}, true reward {best_beta[3]:.3f}")
 
-print("\nThis is the over-optimisation curve that every RLHF practitioner knows:")
-print("reward-model score rises monotonically as beta falls, while the thing you")
-print("actually care about rises, peaks, and then falls off a cliff. The KL term is")
-print("not a regulariser for numerical convenience. It is the only thing stopping")
-print("the optimiser from walking into the reward model's blind spot.")
+if results[0][3] < base_true:
+    print("\nThis is the over-optimisation curve that every RLHF practitioner knows:")
+    print("reward-model score rises monotonically as beta falls, while the thing you")
+    print("actually care about rises, peaks, and then falls off a cliff. The KL term is")
+    print("not a regulariser for numerical convenience. It is the only thing stopping")
+    print("the optimiser from walking into the reward model's blind spot.")
+else:
+    print("\nNo cliff this time: the reward model's favourite is a genuinely good")
+    print("answer, so optimising harder (smaller beta) just keeps helping.")
 
 print("\nFull distribution at beta = 0 (no KL penalty):")
 pi0 = results[0][5]
@@ -383,12 +422,21 @@ rule("STEP 5  DPO - skipping the reward model entirely")
 #
 # No reward model, no sampling, no RL loop - just a supervised loss on pairs.
 # Note the same beta appears, playing the same role.
+#
+# One thing we must now decide that the RL step hid from us: what can the
+# POLICY see? Its logits are  theta = theta_ref + F @ v,  and F is its eyesight.
+#   F = X_RM         the policy tells responses apart only by surface features,
+#                    like the reward model did. This is the honest stand-in for
+#                    a language model, which never meets the same response
+#                    twice and has to generalise from what the text looks like.
+#   F = identity     one private knob per response. The policy can simply
+#                    memorise which of the eight won. No real model has this.
 
-def dpo(beta, steps=3000, lr=0.15):
-    theta = theta_ref.copy()
+def dpo(beta, F, steps=400, lr=0.5):
+    v = np.zeros(F.shape[1])
     log_ref = np.log(np.clip(pi_ref, 1e-12, 1.0))
     for _ in range(steps):
-        pi = softmax(theta)
+        pi = softmax(theta_ref + F @ v)
         log_pi = np.log(np.clip(pi, 1e-12, 1.0))
         h = (log_pi - log_ref)                       # implicit reward, per response
         margin = beta * (h[win_idx] - h[lose_idx])
@@ -399,18 +447,36 @@ def dpo(beta, steps=3000, lr=0.15):
         np.add.at(g_log, lose_idx, beta * s)
         g_log /= len(win_idx)
         # chain through softmax: dlog_pi_a/dtheta_j = delta_aj - pi_j
-        grad = g_log - pi * np.sum(g_log)
-        theta -= lr * grad                            # descent: we are MINIMISING the loss
-        theta = np.clip(theta, -60, 60)
-    return softmax(theta)
+        g_theta = g_log - pi * np.sum(g_log)
+        # ...and through theta = theta_ref + F @ v. Descent: we MINIMISE the loss.
+        # (The loss is beta^2 flatter in v, so the step is scaled up to match.)
+        v -= (lr / beta ** 2) * (F.T @ g_theta)
+    return softmax(theta_ref + F @ v)
 
 
-print(f"\n{'beta':>6} {'TRUE reward':>13}  {'top response':<44} {'p(top)':>7}")
+rl_by_beta = {r[0]: r for r in results}
+print("\nDPO when the policy sees what the reward model saw:", RM_FEATURES)
+print(f"\n{'beta':>6} {'TRUE reward':>13} {'p(correct)':>12} {'p(R7)':>8}   {'Step 4 at this beta: p(R7)':>27}")
 print("-" * 78)
-for beta in [0.05, 0.1, 0.3, 1.0]:
-    pi = dpo(beta)
+for beta in [0.05, 0.15, 0.4, 1.0, 3.0]:
+    pi = dpo(beta, X_RM)
+    print(f"{beta:>6.2f} {float(pi @ TRUE_REWARD):>13.3f} {float(pi[is_correct].sum()):>12.3f} "
+          f"{pi[7]:>8.3f}   {rl_by_beta[beta][5][7]:>27.3f}")
+print("\nThe same curve as Step 4, without ever building a reward model.")
+print("That is DPO's whole claim, and here you can check it by eye.")
+
+print("\nDPO when the policy has a private knob for each of the 8 responses:")
+print(f"\n{'beta':>6} {'TRUE reward':>13} {'p(correct)':>12} {'p(R7)':>8}   top response")
+print("-" * 78)
+for beta in [0.05, 0.15, 0.4, 1.0, 3.0]:
+    pi = dpo(beta, np.eye(N_RESP))
     top = int(np.argmax(pi))
-    print(f"{beta:>6.2f} {float(pi @ TRUE_REWARD):>13.3f}  {NAMES[top][:44]:<44} {pi[top]:>7.3f}")
+    print(f"{beta:>6.2f} {float(pi @ TRUE_REWARD):>13.3f} {float(pi[is_correct].sum()):>12.3f} "
+          f"{pi[7]:>8.3f}   {NAMES[top][:36]}")
+print("\nNo trap at all - but only because this policy never had to generalise. It")
+print("was shown comparisons involving every response it will ever give, and it")
+print("memorised the winners. A real model is asked things nobody labelled, and")
+print("must guess from what an answer looks like. Then it is the first table.")
 
 rule("WHAT THIS LAB SHOWS")
 print("""
@@ -418,9 +484,9 @@ print("""
    usable reward function. This is why RLHF scales: judging is far cheaper than
    demonstrating.
 
-2. The reward model is a MEASUREMENT, and it inherits every blind spot of the
-   data it was fitted to. Ours learned that polite, thorough-looking answers win,
-   which was true on average and catastrophically false for one response.
+2. The reward model is a MEASUREMENT, and it inherits every blind spot of what
+   it can see. Ours learned that polite, thorough-looking answers win, which
+   was true on average and catastrophically false for one response.
 
 3. Optimising hard against an imperfect measurement destroys the thing being
    measured. That is Goodhart's law, and it is the mechanism behind the
@@ -429,12 +495,13 @@ print("""
 4. The KL penalty buys back safety by refusing to travel far from a policy we
    already trust. Choosing beta is choosing how much you trust your reward model.
 
-5. DPO removes the reward model but not the problem: it is fitted to the same
-   preferences, so it inherits the same blind spot. The fix is never a better
-   optimiser. It is a reward signal that can see what matters - which is exactly
-   why 2024-2025 reasoning models moved to VERIFIABLE rewards (unit tests, proof
-   checkers, exact-match answers) wherever they could.
+5. DPO removes the reward model but not the problem. Given the same eyesight
+   it walks into the same trap, with nearly the same numbers. The fix is never
+   a better optimiser. It is a reward signal that can see what matters - which
+   is exactly why 2024-2025 reasoning models moved to VERIFIABLE rewards (unit
+   tests, proof checkers, exact-match answers) wherever they could.
 
-Now go do experiment 1 in the docstring: add "correct" to RM_FEATURES and watch
-the hacking vanish.
+Now go do experiment 1 at the top of this file: add "correct" to RM_FEATURES
+and watch the hacking vanish. Three more experiments are listed there, each
+with the result you should get.
 """)

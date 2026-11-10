@@ -6,6 +6,14 @@ Run:   python labs/01_perceptron.py
 Needs: nothing but Python. No numpy, no torch.
 Time:  well under a second.
 
+WHAT YOU SHOULD SEE
+-------------------
+Four sections. AND and OR each print one line per epoch and stop with
+"-> converged after N epoch(s)" (6 and 6 with the seed below; other seeds
+give anything from 1 to about 15), then an all-"ok" truth table and a
+picture. XOR prints 20 epochs and never says "converged". The last section
+prints a small table ending in "XOR solved."
+
 WHAT YOU WILL BUILD
 -------------------
 Frank Rosenblatt's perceptron: a single artificial neuron that looks at a
@@ -38,19 +46,32 @@ WHAT TO OBSERVE
    one computing NAND) and an output neuron computing AND of those, XOR is
    solved. Depth lets you draw bent boundaries. This is why "deep" learning.
 
-WHAT TO CHANGE (3 experiments)
-------------------------------
-A. Change LEARNING_RATE to 1.0 or 0.01. For the perceptron rule the learning
-   rate only rescales the weights - it still converges (the perceptron
-   convergence theorem). Notice that the final weights differ but the LINE
-   they draw is the same shape.
-B. Change the initial weights (see `Perceptron.__init__`) to something big
-   like [5.0, -5.0]. It still converges, just needing more epochs.
-   Count them.
-C. Try to solve XOR by hand with a single perceptron: edit `w` and `b` in
-   `xor_single_layer_attempt()` and re-run. You cannot. Then look at
-   `two_layer_xor()` and change the hidden neurons: what happens if both
-   hidden neurons compute OR?
+WHAT TO CHANGE (4 experiments - predict the outcome BEFORE you run)
+-------------------------------------------------------------------
+A. Change LEARNING_RATE to 0.01, then to 1.0. Prediction to check: it
+   converges every time (the perceptron convergence theorem guarantees it
+   for any data a line can split); only the SPEED changes. At 0.01 each
+   mistake moves the line a hair, so undoing the random starting weights
+   takes 35 epochs for AND and 35 for OR instead of 6 and 6. At 1.0 each
+   mistake moves it a long way: OR is done in 4 epochs, but AND takes 9,
+   because big steps overshoot and have to be walked back. Bigger is not
+   simply faster.
+B. In `Perceptron.__init__` replace the random weights with a terrible
+   start: `self.w = [5.0, -5.0]`. It still converges - no starting point
+   can stop it - but it needs 76 epochs for AND and 57 for OR, because
+   every mistake only repairs 0.1 of a 5.0-sized error.
+C. Try to solve XOR by hand with a single perceptron: un-comment the
+   `model.w = ...` line in `xor_single_layer_attempt()`, put in any
+   numbers you like and re-run. The lab prints how many of the four
+   points your line gets right. You will never see 4; the best possible
+   is 3. Then in `two_layer_xor()` turn the NAND neuron into a second OR
+   (w = [1.0, 1.0], b = -0.5): the network now outputs 1 for (1,1) and
+   the table shows one WRONG. Two copies of the same line are no better
+   than one line; the two hidden neurons must draw DIFFERENT lines.
+D. Delete the bias: in `train_one_epoch` comment out `self.b += ...`, and
+   in `__init__` set `self.b = 0.0`. OR is still learned, but AND never
+   reaches 0 errors (it runs all 200 epochs and gives up). See the first
+   "common bug" below for why.
 
 COMMON BUGS (things that bite beginners)
 ----------------------------------------
@@ -76,7 +97,7 @@ if hasattr(sys.stdout, "reconfigure"):
 random.seed(8)  # fixed seed = the same run every time (try others: 1, 1958, ...)
 
 LEARNING_RATE = 0.1
-MAX_EPOCHS = 20
+MAX_EPOCHS = 200    # a safety net: AND and OR stop by themselves long before this
 
 
 # ---------------------------------------------------------------------------
@@ -223,14 +244,19 @@ def xor_single_layer_attempt():
     print()
     if min(history) > 0:
         print(f"  After {len(history)} epochs the best it ever did was "
-              f"{min(history)} error(s) in an epoch. It is cycling, not converging.")
+              f"{min(history)} error(s) in an epoch. It is not converging: the")
+        print("  weights wander, then fall into a loop that repeats forever.")
     print("  Why? Look at the picture: the 1s sit on one diagonal and the 0s on the")
     print("  other. Any straight line leaves at least one point on the wrong side.")
     print()
+    # Experiment C: try your own line. (Spoiler: no line gets all four.)
+    # model.w = [1.0, 1.0]; model.b = -0.5   # this is OR, gets (1,1) wrong
+    right = sum(model.predict(x) == t for x, t in zip(INPUTS, XOR_TARGETS))
+    print(f"  The line drawn below (w = [{model.w[0]:+.3f}, {model.w[1]:+.3f}], "
+          f"b = {model.b:+.3f}) gets {right} of 4 points right.")
+    print()
     draw_decision_boundary(model, INPUTS, XOR_TARGETS)
     print()
-    # Experiment C: try your own line. (Spoiler: there isn't one.)
-    # model.w = [1.0, 1.0]; model.b = -0.5   # this is OR, gets (1,1) wrong
     return model, history
 
 
@@ -281,3 +307,6 @@ if __name__ == "__main__":
     train_gate("OR", OR_TARGETS)
     xor_single_layer_attempt()
     two_layer_xor()
+    print()
+    print("Now change something: the top of this file lists four experiments (A-D),")
+    print("each with the result you should get. Predict first, then run.")
