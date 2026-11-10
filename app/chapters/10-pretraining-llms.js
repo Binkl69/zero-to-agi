@@ -11,6 +11,21 @@
     part: 'III',
     title: 'Pretraining: teaching a model the whole internet',
     tagline: 'One objective, trillions of tokens, a hundred million dollars of electricity: how "guess the next word" becomes knowledge.',
+    minutes: 50,
+    objectives: [
+      'explain why predicting the next token forces a model to learn facts, grammar and reasoning nobody labelled',
+      'compute a loss and a perplexity from the probability a model gave the true token, and say what the number means',
+      'estimate the compute and cost of a training run from its parameter and token counts using 6ND',
+      'read a log axis and a power law, and say why they let labs forecast a run before paying for it',
+    ],
+    takeaways: [
+      '<b>One objective: predict the next token.</b> Anything that lowers that loss gets learned as a side effect, including facts, arithmetic and code, and the data labels itself.',
+      '<b>Loss is −log of the probability given to the true token; perplexity is e<sup>loss</sup>.</b> Pure guessing over 100,000 tokens costs about 11.5, a good model on web text about 2.',
+      '<b>Most of the raw web is thrown away.</b> Language ID, deduplication, quality and safety filters keep a few per cent, which is then mixed with books, code and papers.',
+      '<b>Training compute ≈ 6 × parameters × tokens.</b> Ten times the parameters or ten times the tokens costs the same; Chinchilla says to grow them together, and labs deliberately over-train small models because serving cost scales with parameters.',
+      '<b>Loss falls as a power law.</b> Each 10× of data buys about half what the previous 10× did, a straight line on a log–log plot, which is what makes the next run predictable.',
+      '<b>The result is a base model, not an assistant.</b> It continues text. Asked a question, it may well write more questions; post-training (chapter 11) is what changes that.',
+    ],
     render(root, ctx) {
       const { h, p, section, sub, callout, ul } = ctx;
       const C = ctx.colors;
@@ -864,7 +879,7 @@
         let experts = 8, topK = 2, expertSize = 7, dense = false, t = 0;
         const TOKENS = ['the', 'patient', 'presented', 'with', 'acute', 'chest', 'pain', 'and', 'ST', 'elevation'];
         const eSl = ctx.slider({ label: 'experts per block', min: 2, max: 64, step: 1, value: 8, onChange: (v) => { experts = v; if (topK > v) { topK = v; kSl.value = v; } } });
-        const kSl = ctx.slider({ label: 'experts used per token', min: 1, max: 8, step: 1, value: 2, onChange: (v) => { topK = Math.min(v, experts); } });
+        const kSl = ctx.slider({ label: 'experts used per token', min: 1, max: 8, step: 1, value: 2, onChange: (v) => { topK = Math.min(v, experts); if (topK !== v) kSl.value = topK; } });
         const zSl = ctx.slider({ label: 'billions of params per expert', min: 1, max: 20, step: 1, value: 7, onChange: (v) => { expertSize = v; } });
         const denseBtn = ctx.button('compare with a dense model', () => {
           dense = !dense;
@@ -991,7 +1006,7 @@
 
       root.append(section('The factory: what it costs',
         p(`There is a rule of thumb accurate to within a factor of two for every transformer ever trained: <b>training FLOPs ≈ 6 × N × D</b>, where N is parameters and D is tokens. Every parameter is used about twice per token going forwards and about four times coming back.`),
-        p(`GPT-3: 6 × 175 billion × 300 billion ≈ 3 × 10<sup>23</sup> operations. Llama 3 405B on 15.6 trillion tokens: about 3.8 × 10<sup>25</sup>. The largest 2025 runs are estimated near 10<sup>26</sup>.`),
+        p(`GPT-3: 6 × 175 billion × 300 billion ≈ 3 × 10<sup>23</sup> operations. Llama 3 405B on 15.6 trillion tokens: about 3.8 × 10<sup>25</sup>. The largest 2025 runs are estimated at 10<sup>26</sup> and above.`),
         p(`A single H100 does roughly 10<sup>15</sup> useful operations per second on this arithmetic, and a real run keeps it only about 40% busy — the <em>model FLOPs utilisation</em>, with the rest lost waiting for memory and for other GPUs.`),
         callout('tryit', '🖐 Try this: spend a hundred million dollars',
           `<b>1.</b> Press <b>Jump to Llama 3 8B</b> and read the cost and the wall-clock time.<br>
@@ -999,6 +1014,29 @@
            <b>3.</b> Press <b>Snap to compute-optimal</b> and see where Chinchilla says the balance should sit.<br>
            <b>4.</b> Drop <b>MFU</b> from 40% to 20% and watch the wall-clock double. That number is pure engineering, and it is worth millions.`),
         scalingExplorer(),
+        /* maths beat: log axes and power laws, named after the reader has dragged across them */
+        ctx.walkthrough([
+          { say: 'Look at the bottom axis of the left-hand chart: 10M, 100M, 1.0B, 10B, 100B, 1.0T, all evenly spaced.', note: 'On an ordinary ruler 1T would sit 100,000 times further from zero than 10M, and everything else would be crushed into the first pixel.' },
+          { say: 'On this axis an equal step sideways means "multiply by ten", not "add ten", and that is all a <b>log scale</b> is.' },
+          { say: 'The <b>log</b> of a number counts those steps: how many times you multiply by 10 to reach it.', math: '1,000 = 10 &times; 10 &times; 10 &nbsp;&rarr;&nbsp; log 1,000 = 3 &nbsp;&nbsp;&middot;&nbsp;&nbsp; 10B = 10<sup>10</sup> &nbsp;&rarr;&nbsp; log 10B = 10', note: 'For a 1 followed by zeros it is just the number of zeros. This is the base-10 log; the loss uses a different base, and the idea is identical.' },
+          { ask: 'The tokens slider reads <b>1.0T</b>: one trillion, 1,000,000,000,000. What is its log?',
+            options: ['1,000', '12', 'A trillion'], answer: 1,
+            explain: 'Twelve zeros, so twelve multiplications by ten. A log turns an unreadably large number into a small one you can hold in your head, which is why every chart in this chapter uses it.' },
+          { say: 'Logs turn multiplying into adding, which is what makes the cost rule easy: set N to 10B and D to 1.0T and work out 6 &times; N &times; D.', math: '10<sup>10</sup> &times; 10<sup>12</sup> = 10<sup>10 + 12</sup> = 10<sup>22</sup> &nbsp;&rarr;&nbsp; 6 &times; 10<sup>22</sup> FLOPs', note: 'The readout prints that as C: 6.0e22. "e22" is how a computer writes "&times; 10<sup>22</sup>". It is also why the dashed equal-cost lines are straight diagonals: along each one, log N + log D stays fixed.' },
+          { say: 'Now the loss: keep N at 10B, pick the published fit, and raise D tenfold at a time, reading the loss each time.', math: '10B tokens: 2.503 &nbsp;&middot;&nbsp; 100B: 2.193 &nbsp;&middot;&nbsp; 1T: 2.031 &nbsp;&middot;&nbsp; 10T: 1.946' },
+          { say: 'Look at the drops rather than the losses.', math: '2.503 &minus; 2.193 = 0.310 &nbsp;&middot;&nbsp; then 0.162 &nbsp;&middot;&nbsp; then 0.085', note: 'Each tenfold increase in data, at ten times the bill, buys roughly half of what the previous one bought.' },
+          { ask: 'Follow the pattern. Going from 10T to 100T tokens costs ten times as much again. About how far does the loss fall?',
+            options: ['About 0.045', 'About 0.085, the same as last time', 'Nothing: the model has stopped learning'], answer: 0,
+            explain: 'Roughly half of 0.085. The demo gives 1.901, a drop of 0.045. The returns shrink at every step but never reach zero, which is why Llama 3 could say the loss was still going down.' },
+          { say: '"Multiply the input by ten and the output is multiplied by the same fraction every time" is the signature of a <b>power law</b>.', math: 'what too little data costs you &nbsp;=&nbsp; 410.7 &divide; D<sup>0.28</sup>', note: 'The small exponent is where "about half" comes from: 10<sup>0.28</sup> &asymp; 1.9, so ten times the data divides that cost by 1.9.' },
+          { say: 'Plot a power law with a log scale on <i>both</i> axes and it becomes a straight line, because equal steps to the right now give equal steps down.', note: 'Here the line falls 0.28 of a step for every step to the right. That slope is the exponent.' },
+          { ask: 'A lab is deciding whether to spend ten times more on its next run. Why does a straight line on a log&ndash;log plot matter to it?',
+            options: ['It proves the loss will eventually reach zero', 'It shows data always matters more than parameters', 'A straight line can be extended, so the next 10&times; can be priced before anyone pays for it'], answer: 2,
+            explain: 'Extrapolating a straight line is something you can do with a ruler. It does not reach zero, though: the loss settles toward a floor (1.69 in this fit) set by how unpredictable text is.' },
+        ], {
+          title: 'Reading a log axis and a power law',
+          recap: 'a log axis counts multiplications by ten, a power law shrinks by the same fraction at each of those steps, and so on log&ndash;log paper it is a straight line you can extend.',
+        }),
         p(`Meta reported roughly 16,000 H100s running for about two months for Llama 3, so the back-of-the-envelope lands within a few tens of per cent of reality. At two to three dollars per GPU-hour that is tens of millions of dollars for one run — before the failed experiments, the staff, or the data centre.`),
         callout('key', '🔑 Making a hundred thousand chips behave like one',
           `<b>Data parallelism.</b> Every GPU holds a full copy of the model and trains on a different slice of the batch, then they average their gradients so all copies stay identical. The workhorse — but the model must fit on one GPU, and at 405B parameters it does not.<br>
@@ -1053,7 +1091,7 @@
            <b>2.</b> Drag <b>experts used per token</b> up and watch the two bars close on each other. That slider is the whole trade-off.<br>
            <b>3.</b> Now press <b>compare with a dense model</b> — stored and used become the same number, and the bill per token jumps. (In dense mode the expert sliders have nothing left to do, which is the point.)`),
         moeLab(),
-        p(`So the model can hold far more knowledge while each token touches only a fraction of it. GPT-4 was widely reported to use this design; Mixtral 8×7B made it mainstream in open models in December 2023; DeepSeek-V3 has 671 billion parameters of which about 37 billion are active per token, which is why it could be trained for a reported few million dollars of GPU time.`),
+        p(`So the model can hold far more knowledge while each token touches only a fraction of it. GPT-4 was rumoured to use this design, though OpenAI has never confirmed it; Mixtral 8×7B made it mainstream in open models in December 2023; DeepSeek-V3 has 671 billion parameters of which about 37 billion are active per token, which is why it could be trained for a reported few million dollars of GPU time.`),
         p(`The cost is memory: every expert must be loaded even though most sit idle. And note what this does to the rule of thumb — for an MoE, the 6ND estimate uses the <i>active</i> parameter count, not the total.`),
         p(`<b>Context length.</b> GPT-3 could see 2,048 tokens, about three pages. GPT-4 launched with 8k and 32k variants in 2023; 128k — a short novel — became standard by 2024; Gemini 1.5 offered a million tokens.`),
         p(`That took better positional encodings (RoPE and its extensions), attention variants that avoid the quadratic memory blow-up, and simply training on long documents. Chapter 12 covers why long contexts are expensive to <i>serve</i>, and why a model does not necessarily use all of what it can see.`),
@@ -1061,7 +1099,7 @@
           `<b>GPT-1 (2018):</b> 117M parameters, ~5GB of books. Proof that pretrain-then-finetune works for language.<br>
            <b>GPT-2 (2019):</b> 1.5B parameters, 40GB of web text. Fluent enough that its staged release became a public argument about AI risk.<br>
            <b>GPT-3 (2020):</b> 175B parameters, 300B tokens. Few-shot prompting works without any finetuning at all — the paper that convinced the field scale was the road.<br>
-           <b>GPT-4 (2023) onward:</b> details undisclosed, but widely believed to be a mixture of experts trained on trillions of tokens, with the real gains increasingly coming from post-training rather than pretraining.`),
+           <b>GPT-4 (2023) onward:</b> details undisclosed; rumoured, never confirmed, to be a mixture of experts trained on trillions of tokens, with the real gains increasingly coming from post-training rather than pretraining.`),
       ));
 
       root.append(section('Why this matters for modern AI',
@@ -1074,11 +1112,11 @@
       ));
 
       root.append(ctx.quiz([
-        { q: 'Why does "guess the next token" teach a model history, arithmetic and code?', options: ['Those subjects are labelled in the training data', 'Because predicting text well requires understanding what the text is about — every fact or skill that lowers the loss gets learned as a side effect', 'Because the tokenizer separates subjects', 'It does not; those abilities are added later'], answer: 1, explain: 'To finish "and the murderer was…" on the last page of a mystery, you have to have solved the murder. No part of the objective mentions history or arithmetic; they are simply useful for prediction, so gradient descent finds them.' },
-        { q: 'A model assigns 1% probability to the token that actually came next. What is the loss, and why is the scale worth knowing?', options: ['0.01, which is small', '4.6 nats — and pure guessing over a 100,000-token vocabulary costs about 11.5, so 4.6 is bad but far from random', '100, because it was 100× wrong', '1, one per token'], answer: 1, explain: '−log(0.01) ≈ 4.6. The useful anchors are log(100,000) ≈ 11.5 for an untrained model and roughly 2 for a good one on web text. Perplexity = e^loss turns that into "as unsure as an N-way multiple choice".' },
-        { q: 'Both GPT-3 (175B params, 300B tokens) and a hypothetical 17.5B model on 3T tokens cost the same to train. Why?', options: ['They do not — bigger models always cost more', 'Training compute is about 6ND, so trading parameters against tokens at a constant product leaves the bill unchanged', 'Because tokens are free', 'Because of mixed precision'], answer: 1, explain: 'You can check this on the cost explorer: raise N by 10x or raise D by 10x and the bill moves identically. Chinchilla\'s contribution was showing which side of that trade actually buys you a better model — roughly 20 tokens per parameter.' },
-        { q: 'Why do labs train small models far past the "compute-optimal" point, as Llama 3 did with 15T tokens for an 8B model?', options: ['Because Chinchilla was wrong', 'Chinchilla minimises training cost, but a deployed model spends far more compute on inference, and inference cost scales with parameters — so a smaller, longer-trained model is cheaper to serve', 'To avoid overfitting', 'Because more tokens are always optimal'], answer: 1, explain: 'It is a deliberate trade: a higher training bill once, in exchange for a permanently cheaper model to run for millions of users. At nearly 2,000 tokens per parameter the loss was still falling.' },
-        { q: 'You ask a raw base model "What is the capital of Peru?" and it replies with three more geography questions. What is going on?', options: ['The model does not know the answer', 'It is working perfectly — on the web a question is most often followed by more questions, and a base model predicts the most plausible continuation rather than answering', 'The tokenizer failed', 'It needs a longer context window'], answer: 1, explain: 'A base model is an autocomplete engine for the internet, not a chatbot. Few-shot prompting works by making the answer the most plausible continuation, but it is fragile and has no notion of when to stop. Post-training, in chapter 11, is what fixes this.' },
+        { q: 'Nothing in the pretraining data is labelled "this is arithmetic". Why does a model still end up able to add?', options: ['Text such as "so the total cost is" can only be continued cheaply by a model that has done the sum', 'The tokenizer files numbers in a separate vocabulary with its own loss', 'Sentences containing numbers are weighted more heavily in the loss', 'It does not: arithmetic is added afterwards, in post-training'], answer: 0, explain: 'The objective never mentions arithmetic, history or code. They are simply useful for predicting what comes next, so gradient descent finds them. It is the same reason you need to have solved the murder to predict the name on the last page.' },
+        { q: 'Model A averages a loss of 2.3 nats per token. Model B averages 4.6. How much more unsure is B?', options: ['Twice as unsure, because 4.6 is twice 2.3', 'About 2.3 more options per token', 'Ten times: B is choosing among about 100 options per token, A among about 10', 'They cannot be compared without knowing the vocabulary size'], answer: 2, explain: 'Perplexity = e^loss, so 2.3 means a ten-way choice and 4.6 means a hundred-way choice. Loss is a log scale: adding to the loss multiplies the uncertainty. That is why a drop from 2.1 to 2.0 late in training is worth far more than it looks.' },
+        { q: 'A 1B-parameter model trained on 100B tokens costs about 6 × 10²⁰ FLOPs. Which of these runs costs the same?', options: ['10B parameters on 100B tokens', '10B parameters on 10B tokens', '2B parameters on 200B tokens', '1B parameters on 1T tokens'], answer: 1, explain: 'Compute ≈ 6ND, so only the product matters: 10¹⁰ × 10¹⁰ = 10⁹ × 10¹¹. Doubling both, as in the third option, quadruples the bill. The same bill does not buy the same model, though. One token per parameter is far too few, which is exactly what Chinchilla showed.' },
+        { q: 'Chinchilla says a 70B model is compute-optimal for your training budget. You will serve the result to fifty million users for two years. Why might you train a 20B model on far more tokens instead?', options: ['Smaller models hallucinate less', 'The scaling law stops holding above about 10B parameters', 'More tokens beat more parameters at every budget', 'Serving cost scales with parameters and will dwarf the training bill, so a smaller model trained past the optimum is cheaper overall'], answer: 3, explain: 'Chinchilla minimises training cost only. Every token ever served pays for every active parameter, so labs accept a worse deal on training to get a permanently cheaper model. Llama 3 8B was trained at nearly 2,000 tokens per parameter, a hundred times the Chinchilla ratio.' },
+        { q: 'You have only a raw base model and you want the French for "cheese". Which prompt is most likely to get it?', options: ['Please translate the word "cheese" into French.', 'You are a helpful translator. What is "cheese" in French?', 'sea otter => loutre de mer<br>bread => pain<br>cheese =>', 'cheese cheese cheese cheese'], answer: 2, explain: 'A base model continues text; it does not follow requests. The first two look like the start of a forum post or a homework sheet and will be continued as one. The third makes "fromage" the most plausible next token. That is few-shot prompting, and it comes straight from the GPT-3 paper.' },
       ]));
 
       root.append(section('Go deeper',

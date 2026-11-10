@@ -11,6 +11,21 @@
     part: 'II',
     title: 'Learning by doing: reinforcement learning',
     tagline: 'Find the goal with no map and one number per move, then meet the algorithms that solve the problem you just felt — and the reward that lies to you.',
+    minutes: 45,
+    objectives: [
+      'explain why a single delayed reward makes learning harder than learning from labelled examples',
+      'compute what a future reward is worth today for a given discount factor γ, and predict which of two rewards an agent will choose',
+      'read a Q-learning grid and a regret curve, and say what the agent has and has not learned',
+      'spot a reward that can be scored highly without doing what its designer meant',
+    ],
+    takeaways: [
+      '<b>RL learns from consequences, not corrections.</b> The reward says how it went, often much later, and never says what you should have done instead. Spreading that one number back over the decisions that led to it is the credit-assignment problem.',
+      '<b>γ decides how far ahead an agent looks.</b> A reward n steps away is worth γ<sup>n</sup> of its face value, and an endless stream of +1 is worth 1 ÷ (1 − γ): ten steps of foresight at 0.9, a hundred at 0.99.',
+      '<b>Q-learning moves each estimate part-way toward "reward plus the best next value".</b> Value ripples backwards from the goal one step per update, and because the target uses the best next action it learns the best policy even while acting at random.',
+      '<b>Explore or exploit is unavoidable.</b> ε-greedy explores at a fixed rate for ever, so its regret keeps climbing; UCB adds a bonus that shrinks with evidence, so its regret curve bends flat.',
+      '<b>Policy-gradient methods make chosen actions more or less likely according to what followed.</b> Because the policy gathers its own training data, one oversized update can wreck a run, and PPO exists to cap how far each update moves.',
+      '<b>An optimiser gives you what you rewarded, not what you meant.</b> The CoastRunners boat circled for points and never finished a race; in chapter 11 the same thing happens with human approval as the reward.',
+    ],
     render(root, ctx) {
       const { h, p, section, sub, callout, ul } = ctx;
       const C = ctx.colors;
@@ -67,12 +82,52 @@
       root.append(section('How far ahead should it look?',
         p(`A reward of 10 now is worth more than a reward of 10 in fifty steps — partly because the world is uncertain, partly because we want quick wins. So RL multiplies future rewards by a <em>discount factor</em> γ per step.`),
         callout('tryit', '🖐 Try this — make an agent walk past a prize',
-          `Two rewards down one corridor: a <b>+3</b> two steps away and a <b>+20</b> ten steps beyond it. The question is not which to take — the walk to the far one passes over the near one — but whether the far one is worth walking for.<br>
+          `Two rewards down one corridor: a <b>+3</b> two steps away and a <b>+20</b> ten steps beyond it. Picking one up ends the episode, so it is one or the other: stop on the +3, or step over it and walk ten more squares for the +20.<br>
            <b>1.</b> Press <b>impatient (0.50)</b>. The distant +20 is now worth about 0.005 — the agent grabs the +3 and stops.<br>
            <b>2.</b> Press <b>far-sighted (0.99)</b>. The +20 is worth around 17.7 and easily wins.<br>
            <b>3.</b> Drag γ slowly and find the exact value where the agent changes its mind. <b>Nothing about the world changed. Only its patience did.</b>`),
         discountLab(),
-        p(`With γ = 0.99 an agent effectively plans about a hundred steps ahead; with γ = 0.5 it barely sees past the next few moves. It is one number, and it silently determines whether your agent is capable of a long-term plan at all.`),
+        /* maths beat: discounting is a geometric series; value is an average over futures */
+        ctx.walkthrough([
+          { say: 'Press <b>typical (0.90)</b> in the corridor above. At that setting a reward one step away is worth 0.9 of its face value today.', note: 'Think of γ as a toll charged once per step of waiting.' },
+          { say: 'The +3 is two steps away, so it pays the toll twice.', math: '3 &times; 0.9 &times; 0.9 &nbsp;=&nbsp; 3 &times; 0.81 &nbsp;=&nbsp; 2.43', note: 'That is the "near worth" the demo prints.' },
+          { say: 'The +20 is twelve steps away, so it pays twelve times.', math: '20 &times; 0.9<sup>12</sup> &nbsp;=&nbsp; 20 &times; 0.282 &nbsp;=&nbsp; 5.65', note: '0.9<sup>12</sup> only means 0.9 multiplied by itself twelve times. 5.65 beats 2.43, so the agent keeps walking.' },
+          { ask: 'Now γ = 0.5: every step of waiting halves a reward. What is the +20 worth after twelve halvings?',
+            options: ['About 10', 'About 1.7, which is 20 &divide; 12', 'About 0.005'], answer: 2,
+            explain: 'Halving twelve times divides by 4,096, not by 12. 20 &divide; 4,096 &asymp; 0.005. Repeated multiplying shrinks things far faster than intuition expects, which is why the +3 (worth 0.75) wins.' },
+          { say: 'So the rule you were dragging has a short name: a reward <b>r</b> that arrives <b>n</b> steps from now is worth this much today.', math: '&gamma;<sup>n</sup> &middot; r' },
+          { say: 'A real agent collects a reward on every step, so it adds the whole discounted stream together, and that sum is called the <b>return</b>, written <b>G</b>.', math: 'G &nbsp;=&nbsp; r<sub>0</sub> + &gamma;&middot;r<sub>1</sub> + &gamma;<sup>2</sup>&middot;r<sub>2</sub> + &gamma;<sup>3</sup>&middot;r<sub>3</sub> + &hellip;', note: 'r<sub>0</sub> is the reward right now, r<sub>1</sub> the one a step later, and so on.' },
+          { say: 'Try the simplest stream there is: +1 on every step, for ever, at γ = 0.9.', math: '1 + 0.9 + 0.81 + 0.729 + &hellip;', note: 'Infinitely many terms. It looks as if it must add up to infinity.' },
+          { say: 'It does not: the terms shrink so fast that the total closes in on 10 and never passes it.', math: 'after 10 terms: 6.51 &nbsp;&middot;&nbsp; after 50 terms: 9.95 &nbsp;&middot;&nbsp; limit: 10' },
+          { say: 'There is a shortcut for the limit, and it is one division.', math: '1 &divide; (1 &minus; &gamma;) &nbsp;=&nbsp; 1 &divide; 0.1 &nbsp;=&nbsp; 10', note: 'Why it works: everything after the first +1 is the same stream one toll later, so G = 1 + 0.9 &times; G. Only G = 10 fits: 10 = 1 + 9. A sum like this is called a <em>geometric series</em>.' },
+          { ask: 'Same endless +1 per step, but γ = 0.99. What is it worth today?',
+            options: ['100', 'About 10, as before', 'Infinity, because 0.99 is so close to 1'], answer: 0,
+            explain: '1 &divide; (1 &minus; 0.99) = 1 &divide; 0.01 = 100. That number is the agent\'s <em>effective horizon</em>: it behaves as if roughly the next hundred steps matter. At γ = 0.9 it is ten steps; at γ = 0.5, two.' },
+          { say: 'Last piece: the world is not a fixed corridor, so the same square can lead to many different futures, and each has its own return.', note: 'The agent sometimes explores. The environment can be random. Run it twice and you get two different G.' },
+          { ask: 'From one square, half of an agent\'s runs return +8 and the other half slip into a pit and return &minus;10. What single number best describes that square?',
+            options: ['+8, the return when things go well', '&minus;1, the average over both kinds of run', '&minus;10, the worst case'], answer: 1,
+            explain: '(8 + (&minus;10)) &divide; 2 = &minus;1. The <em>value</em> of a state is the average return over all the futures that start there. Statistics calls an average like that an <em>expectation</em> and writes it E[&nbsp;].' },
+        ], {
+          title: 'From the corridor to the return, G',
+          recap: 'charge a toll of γ per step of waiting, add up everything the agent will ever collect, and average over the ways the future could go.',
+        }),
+        ctx.decoder([
+          { sym: 'V(s)', name: 'the value of state s', says: 'How much reward, in total, the agent should expect to collect starting from this state.', points: 'a chess player saying "white is winning"; soon, the small number printed in each square of the Q-learning grid.' },
+          '=',
+          { sym: 'E[', name: 'the expected value of', says: 'Average what is inside the brackets over every way the future could unfold from here.', points: 'half the runs returned +8, half returned &minus;10, so the square is worth &minus;1.' },
+          { sym: 'r<sub>0</sub>', name: 'r nought', says: 'The reward collected on the very next move. It pays no toll.', points: 'the single number that came back after each arrow press in the opening demo.' },
+          '+',
+          { sym: '&gamma;', name: 'gamma', says: 'The discount factor: the toll for one step of waiting, a number between 0 and 1.', points: 'the slider you dragged between 0.50 and 0.99.' },
+          { sym: 'r<sub>1</sub>', name: 'r one', says: 'The reward one step later, worth γ times its face value today.' },
+          '+',
+          { sym: '&gamma;<sup>2</sup>', name: 'gamma squared', says: 'Two steps of waiting, so two tolls: γ &times; γ.', points: 'the 0.81 in 3 &times; 0.81 = 2.43.' },
+          { sym: 'r<sub>2</sub>', name: 'r two', says: 'The reward two steps later.', points: 'the +3 in the corridor.' },
+          '+ … ]',
+        ], {
+          title: 'V(s) = E[ r₀ + γ·r₁ + γ²·r₂ + … ]',
+          plain: 'the value of a state is the average, over all the futures that could follow, of every reward collected from here on, each one discounted by γ for every step it makes you wait.',
+        }),
+        p(`So γ sets a horizon. At 0.99 an agent effectively plans about a hundred steps ahead; at 0.5 it barely sees past the next two. It is one number, and it silently determines whether your agent is capable of a long-term plan at all.`),
         callout('key', '🔑 Explore or exploit?',
           `You have a favourite restaurant. It is good. There are twenty others you have never tried.<br>
            Every night: <em>exploit</em> what you know (a reliable 8/10) or <em>explore</em> (a 4, or a 10)? Never explore and you never find the best. Always explore and you eat a lot of bad dinners.<br>
@@ -80,12 +135,12 @@
       ));
 
       root.append(section('Q-learning: the simplest thing that actually works',
-        p(`From 1989. Keep a table, <em>Q</em>, with one row per state and one column per action. Q(s, a) is your current estimate of the total discounted reward from taking action a in state s and behaving sensibly afterwards. Start with all zeros.`),
+        p(`From 1989. Keep a table, <em>Q</em>, with one row per state and one column per action. Q(s, a) is your current estimate of the total discounted reward from taking action a in state s and acting as well as possible afterwards. Start with all zeros.`),
         p(`Then every time you observe (state s, action a, reward r, new state s'), update one cell. Read the update as an <b>error</b>: what you just learned the value should be, minus what you previously believed. You move your belief part of the way toward the evidence.`),
         p(`That is the whole algorithm. Because the target uses the <i>next</i> state's value, information flows backwards one step per update: the cell next to the goal learns first, then the cell next to that. Credit assignment gets solved not all at once, but by a chain of one-step corrections repeated thousands of times.`),
         callout('tryit', '🖐 Try this — watch an agent learn the maze you just failed at',
           `<b>1.</b> Press <b>▶ Play</b> and watch the colours. The squares nearest the goal go green first, then the ripple spreads backwards. <b>That is credit assignment happening in front of you.</b><br>
-           <b>2.</b> Drag <b>γ discount</b> down to 0.5 and press <b>Reset Q</b>. The green ripple stops spreading: distant squares still learn, but a reward ten steps away is now worth 0.5<sup>10</sup> — about a thousandth — so their values are too faint to see or to act on.<br>
+           <b>2.</b> Drag <b>γ discount</b> down to 0.5 and press <b>Reset Q</b>. The green ripple stops spreading: distant squares still learn, but a reward ten steps away is now multiplied by 0.5<sup>10</sup> — about a thousandth — so the +10 arrives as 0.01, less than the −0.1 a single step costs. Far squares go faintly red instead of green.<br>
            <b>3.</b> Push <b>ε exploration</b> to 1.0, so the agent moves <i>entirely at random</i>. The table still converges on a good policy. That is not a bug; it is the property called off-policy learning.<br>
            <b>4.</b> Turn <b>Edit map</b> on and move the goal. Watch it unlearn the old one.`),
         gridworld(),
@@ -101,7 +156,7 @@
           `<b>1.</b> Pull the machines yourself for a while. Try to work out which is best — and notice how hard it is to tell a 0.5 machine from a 0.6 machine in twenty pulls.<br>
            <b>2.</b> Press <b>Run agents</b> and watch the regret curves. <b>Watch the shape, not the final number.</b> A good agent's curve <b>bends flat</b>; a bad one keeps climbing in a straight line.<br>
            <b>3.</b> Press <b>Reveal true rates</b> and see how close you got.<br>
-           <b>4.</b> Raise the horizon to 20,000 and run again — on most draws the two strategies change places. If they do not, press <b>Reset</b> for a fresh set of hidden rates and run again: which one wins depends on the arms you happened to get, and that is worth knowing too.`),
+           <b>4.</b> Raise the horizon to 20,000 and run again — on most draws the two strategies change places. If they do not, press <b>New machines</b> for a fresh set of hidden rates and run again: which one wins depends on the arms you happened to get, and that is worth knowing too.`),
         bandit(),
         p(`The score that matters is <em>regret</em>: what you earned compared with pulling the best machine every time. A perfect agent has zero regret. A random agent's regret grows in a straight line. A good agent's curve bends flat — it explores early, identifies the winner, and stops paying for information it no longer needs.`),
         p(`<em>UCB</em> (upper confidence bound) scores each machine by its average payout <b>plus a bonus that grows the less you have tried it</b>. Barely-touched machines look optimistic, so you try them; as evidence accumulates the bonus shrinks and the winner takes over. "Optimism in the face of uncertainty" — a good slogan for life, too.`),
@@ -160,11 +215,11 @@
       ));
 
       root.append(ctx.quiz([
-        { q: 'You found the goal in the opening demo but could not say which move was best. What is that problem called?', options: ['The exploration problem', 'The credit-assignment problem: a single delayed reward must be spread back over every decision that led to it', 'Overfitting', 'The discount problem'], answer: 1, explain: 'It is why RL needs more than gradient descent on a loss — there is no per-step loss to descend. Q-learning solves it by letting value information flow backwards one step per update, which is the ripple you watched spread out from the goal.' },
-        { q: 'With γ = 0.5, why does an agent walk past a +20 reward twelve steps away in favour of a +3 two steps away?', options: ['The +20 is harder to reach', '20 × 0.5¹² ≈ 0.005, which is far less than 3 × 0.5² = 0.75 — the distant reward is discounted almost to nothing', 'Because ε-greedy makes it act randomly', 'Because Q-learning cannot handle large rewards'], answer: 1, explain: 'γ is the single number deciding how far ahead an agent bothers to look. Nothing about the world changed when you dragged that slider — only the agent\'s patience, and with it whether a long-term plan is possible at all.' },
-        { q: 'You set exploration to 100%, so the agent moves entirely at random, and the Q table still converges on a good policy. Why?', options: ['The demo is pre-computed', 'Q-learning is off-policy: its update uses the value of the best next action regardless of what was actually done, so it learns the best policy while behaving randomly', 'Random movement is optimal in a maze', 'Because ε decays automatically'], answer: 1, explain: 'The update target uses max(Q[s2]), not the action actually taken next. That decoupling of "how I behave" from "what I learn" is precisely what off-policy means, and it is why exploration can be cranked up without destroying the result.' },
-        { q: 'Why does a too-large policy update in RL cause collapse rather than mere overshoot?', options: ['RL uses a larger learning rate', 'The model chooses its own next training set — a policy that moves too far no longer resembles the one that gathered the data, so the data becomes worthless', 'Rewards become negative', 'The value network stops training'], answer: 1, explain: 'This is the failure you produced by turning clipping off and pushing the step size past 1.5. PPO bounds each update to roughly ±20% so the data stays approximately valid, and that clip is almost all PPO is.' },
-        { q: 'A boat-racing agent drove in circles forever, never finishing, and scored 20% above human players. What went wrong?', options: ['The agent was buggy', 'Nothing went wrong with the agent — it perfectly optimised the reward it was given, which was not what the designers meant', 'The reward was too small', 'It needed more training'], answer: 1, explain: 'Goodhart\'s law: when a measure becomes a target it stops being a good measure. Hold onto it — in chapter 11 the reward becomes "a human preferred this answer", and humans reliably prefer confident, long, flattering answers.' },
+        { q: 'A robot arm earns +1 only when a cup ends up on the shelf, roughly 300 motor commands after it starts. Learning is painfully slow. Which diagnosis fits best?', options: ['The reward is too small; multiplying it by 100 would speed things up', 'The arm is overfitting to the first cup it saw', 'One number arrives after 300 decisions and nothing says which of them earned it', 'The discount factor must be exactly 1 for a task this long'], answer: 2, explain: 'That is the credit-assignment problem, the one you felt in the opening demo. Scaling the reward changes nothing about which of the 300 commands deserved it. Q-learning attacks it by passing value backwards one step per update; policy gradients attack it by averaging over a great many attempts.' },
+        { q: 'An agent with γ = 0.9 must choose: a +5 one step away, or a +10 eight steps away. Which does it take?', options: ['The +5: 5 × 0.9 = 4.5, and 10 × 0.9⁸ ≈ 4.3', 'The +10: ten is twice five, and 0.9 is a mild discount', 'Neither is preferred; discounting only changes behaviour below γ = 0.5', 'The +10: 10 × 0.9 = 9, against 5 × 0.9 = 4.5'], answer: 0, explain: 'Each step of waiting multiplies by 0.9, so the +10 pays the toll eight times: 0.9⁸ ≈ 0.43. It is close, though. Nudge γ up to 0.95 and the far reward is worth 10 × 0.95⁸ ≈ 6.6 against 4.75, and the agent changes its mind — the same flip you found by dragging the corridor slider.' },
+        { q: 'You train a Q-learning agent with ε = 1 throughout, so it never once acts on what it has learned. Then you set ε to 0. What should you expect?', options: ['Random wandering, because random wandering is all it ever practised', 'A useless table, because Q now describes the value of acting randomly', 'A good route only after a few hundred more episodes of fine-tuning', 'A good route straight away, because every update assumed the best next action whatever was actually done'], answer: 3, explain: 'Q-learning is off-policy. Its target is the reward plus the best next value in the table, not the value of the move the agent went on to make. So how it behaves and what it learns are decoupled. The second option describes a different, on-policy algorithm (SARSA), which really would learn the value of wandering.' },
+        { q: 'A policy-gradient run climbs steadily for an hour. Then, in a single update, the score falls to near zero and never recovers. What is the most likely cause?', options: ['The reward function changed sign', 'One update moved the policy so far that the data it was computed from no longer described the policy it produced', 'The agent ran out of new states to explore', 'The discount factor was too close to 1'], answer: 1, explain: 'In RL the policy gathers its own next training set. Step too far and the new policy visits situations the old data says nothing about, gathers bad data there, and updates on that. This is the cliff you produced with clipping off. PPO guards against it by removing the incentive to move an action\'s probability more than about 20% in one round.' },
+        { q: 'A support chatbot is rewarded each time a customer closes the chat within two minutes. Going by the CoastRunners boat, what should you expect it to learn?', options: ['To solve problems faster, since that is the only way to shorten a chat', 'Nothing, because the reward arrives too late to learn from', 'Whatever ends chats fastest, including curt or discouraging replies that make people give up', 'To explore more, because the reward is sparse'], answer: 2, explain: 'The reward counts short chats, not solved problems, and the cheapest way to get a short chat is to make the customer leave. The agent is not confused; the reward is. Goodhart\'s law: when a measure becomes a target it stops being a good measure.' },
       ]));
 
       root.append(section('Go deeper',
@@ -818,6 +873,7 @@
           let a = seed;
           const rnd = () => { a = (a * 1664525 + 1013904223) % 4294967296; return a / 4294967296; };
           let th = -1.5; const hist = [th];
+          hist.hit = [false];                                  // which updates invalidated their own data
           for (let i = 0; i < 40; i++) {
             const grad = -th * perf(th);                       // toward the peak
             const noise = (rnd() - 0.5) * 1.4;                 // the data is a small sample
@@ -825,9 +881,10 @@
             if (clipping) ratio = ctx.clamp(ratio, -CLIP, CLIP);
             th += ratio;
             /* off-policy damage: a huge move invalidates the data that produced it */
-            if (Math.abs(ratio) > 2.0) th += (rnd() - 0.5) * 4.5;
+            const broke = Math.abs(ratio) > 2.0;
+            if (broke) th += (rnd() - 0.5) * 4.5;
             th = ctx.clamp(th, -6, 6);
-            hist.push(th);
+            hist.push(th); hist.hit.push(broke);
           }
           return hist;
         }
@@ -865,7 +922,7 @@
           scores.forEach((v, i) => { i ? g.lineTo(px(i), py(v)) : g.moveTo(px(i), py(v)); });
           g.stroke();
           scores.forEach((v, i) => {
-            if (i && Math.abs(hist[i] - hist[i - 1]) > 0.55) {
+            if (hist.hit[i]) {
               g.fillStyle = C.danger;
               g.beginPath(); g.arc(px(i), py(v), DOT, 0, 7); g.fill();
             }
@@ -877,7 +934,7 @@
           const TX = 490;
           const final = scores[scores.length - 1];
           const worst = Math.min(...scores.slice(5));
-          const collapses = scores.slice(1).filter((v, i) => Math.abs(hist[i + 1] - hist[i]) > 2.0).length;
+          const collapses = hist.hit.filter(Boolean).length;
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
           g.fillText('the clip band', TX, 50);
           g.font = MONO; g.fillStyle = C.muted;
@@ -895,7 +952,9 @@
           g.font = FONT; g.fillStyle = C.muted;
           wrapText(g, collapses
             ? 'Each red dot is an update so large that the data which produced it no longer describes the policy you now have. Performance does not just stall — it falls off a cliff.'
-            : 'Every update stays inside the band, so the data stays roughly valid and the curve climbs instead of lurching.',
+            : clipping
+              ? 'Every update stays inside the band, so the data stays roughly valid and the curve climbs instead of lurching.'
+              : 'No update on this run was big enough to invalidate its own data. Nothing is preventing one, though: raise the step size.',
             TX, 220, 200, 16);
           ro.set({ 'step size': stepSize.toFixed(2), clipping: clipping ? 'on' : 'off', final: (final * 100).toFixed(0) + '%', collapses });
         });
