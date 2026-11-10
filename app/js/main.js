@@ -97,7 +97,7 @@
   function lookupTerm(text) {
     const g = glossaryMap();
     const k = text.toLowerCase().replace(/[“”"]/g, '').replace(/\s+/g, ' ').trim();
-    const tries = [k, k.replace(/-/g, ' '), k.replace(/ /g, '-'), k.replace(/s$/, ''), k.replace(/es$/, ''), k.replace(/ies$/, 'y'), k.replace(/isation/, 'ization'), k.replace(/ization/, 'isation'), k.replace(/iser$/, 'izer'), k.replace(/izer$/, 'iser')];
+    const tries = [k, k.replace(/-/g, ' '), k.replace(/ /g, '-'), k.replace(/s$/, ''), k.replace(/es$/, ''), k.replace(/ies$/, 'y'), k.replace(/isation/, 'ization'), k.replace(/ization/, 'isation'), k.replace(/iser$/, 'izer'), k.replace(/izer$/, 'iser'), k + ' sampling', k + ' learning', k.replace(/ (loss|projection)$/, ''), k.replace(/^max /, ''), k.replace(/ly$/, '')];
     for (const t of tries) if (g.has(t)) return g.get(t);
     return null;
   }

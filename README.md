@@ -74,7 +74,7 @@ index.html              the app shell (loads every chapter as a plain <script>)
 app/css/style.css       shared styles
 app/js/core.js          chapter registry + helper toolkit (canvas, sliders, loops, quizzes)
 app/js/main.js          router, sidebar, home / learning path / glossary pages
-app/js/glossary.js      170-term glossary
+app/js/glossary.js      the glossary (its terms pop up as definitions inside chapters)
 app/chapters/NN-*.js    one self-contained file per chapter
 labs/                   Python labs
 scripts/smoke.js        headless test harness for the chapters
