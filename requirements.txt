@@ -3,9 +3,17 @@
 # Labs 01, 02, 03, 04, 07 are PURE PYTHON and need nothing from this file.
 # Labs 05 and 08 need numpy.
 # Lab 06 (the tiny GPT) is the only one that needs PyTorch, and the CPU-only
-# build is completely fine -- the --quick preset trains in about a minute on a
-# laptop CPU. See https://pytorch.org/get-started/locally/ for the exact
-# install command for your machine if the line below picks the wrong wheel.
+# build is completely fine.
+#
+# On Windows and macOS `pip install -r requirements.txt` gets a sensible
+# PyTorch. On Linux it downloads several gigabytes of GPU libraries you do not
+# need for this course; install the small CPU build first instead:
+#
+#     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#     pip install -r requirements.txt
+#
+# See https://pytorch.org/get-started/locally/ for the exact command for your
+# machine if pip picks a wheel that fails.
 
 numpy>=1.26
 torch>=2.2

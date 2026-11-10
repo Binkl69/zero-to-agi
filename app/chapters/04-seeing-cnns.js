@@ -13,6 +13,20 @@
     part: 'II',
     title: 'Seeing: convolutional networks',
     tagline: 'Move a shape one pixel and watch an ordinary network fall apart — then meet the nine numbers that fix it, and still power how a model reads the image you upload.',
+    minutes: 40,
+    objectives: [
+      'explain why a fully-connected layer cannot cope with a shape that moves, and what weight sharing does about it',
+      'compute one cell of a feature map by hand, and read the Σ formula that describes it',
+      'predict the receptive field of a stack of 3×3 layers, and say what pooling adds',
+      'compute how many tokens an image becomes for a vision transformer, and what that does to attention cost',
+    ],
+    takeaways: [
+      '<b>A filter is nine numbers.</b> Lay it on a 3×3 patch, multiply each number by the pixel under it, add up: one cell of the feature map. In symbols, feature[r, c] = Σ w[i, j] × x[r+i, c+j].',
+      '<b>Weight sharing.</b> The same nine numbers are reused at every position, so the layer costs a handful of weights instead of millions and a pattern learned in one place is found everywhere.',
+      '<b>Equivariant, then a little invariant.</b> Move the input and the feature map moves with it. Max pooling keeps the largest value in each 2×2 block, which shrinks the map and forgives small shifts.',
+      '<b>Depth widens the view.</b> Each extra 3×3 layer adds two pixels to the receptive field, and pooling doubles the pace. Stacked layers tend to build edges into textures, parts and objects.',
+      '<b>The bet outlived the operation.</b> A vision transformer cuts the image into patches and treats each as a token: 224 ÷ 16 = 14, so 196 tokens. Attention cost grows with the square of that count.',
+    ],
     render(root, ctx) {
       const { h, p, section, callout, ul, ol } = ctx;
       const C = ctx.colors;
@@ -42,7 +56,9 @@
       const Lab = { grid: PRESET_GRIDS.t(), kernel: KERNELS.vertical.map((r) => r.slice()), feat: new Array(OUTW * OUTH).fill(null), done: 0 };
 
       function kernelNorm() { let s = 0; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) s += Math.abs(Lab.kernel[i][j]); return Math.max(1e-6, s); }
-      function featAt(r, c) { if (r < 0 || c < 0 || r >= OUTH || c >= OUTW) return 0; const v = Lab.feat[r * OUTW + c]; return (v == null || !isFinite(v)) ? 0 : v; }
+      /* The pooling figure reads the finished map straight from the grid and the kernel, not from
+         the explorer's step-by-step progress, so it is never fed a half-computed or emptied map. */
+      function featAt(r, c) { if (r < 0 || c < 0 || r >= OUTH || c >= OUTW) return 0; return computeAt(r, c); }
       function computeAt(r, c) { let s = 0; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) s += Lab.grid[r + i][c + j] * Lab.kernel[i][j]; return isFinite(s) ? s : 0; }
       function resetFeat() { Lab.feat = new Array(OUTW * OUTH).fill(null); Lab.done = 0; }
       function idxRC(i) { return { r: Math.floor(i / OUTW), c: i % OUTW }; }
@@ -492,7 +508,8 @@
         function paramsPerFilter() { return ksize * ksize; }
         const lSl = ctx.slider({ label: 'stacked conv layers', min: 1, max: 8, step: 1, value: 1, onChange: (v) => { layers = v; if (pools > v - 1) { pools = Math.max(0, v - 1); pSl.value = pools; } } });
         const kSl = ctx.slider({ label: 'filter size', min: 3, max: 7, step: 2, value: 3, onChange: (v) => { ksize = v; } });
-        const pSl = ctx.slider({ label: '2×2 pools in between', min: 0, max: 7, step: 1, value: 0, onChange: (v) => { pools = Math.min(v, layers - 1); } });
+        /* a pool needs a conv layer above it, so the slider snaps back to what the stack can hold */
+        const pSl = ctx.slider({ label: '2×2 pools in between', min: 0, max: 7, step: 1, value: 0, onChange: (v) => { pools = Math.min(v, layers - 1); if (pools !== v) pSl.value = pools; } });
         const ro = ctx.readout();
 
         ctx.loop(() => {
@@ -521,22 +538,23 @@
           g.font = FONT; g.fillStyle = C.muted;
           wrapText(g, 'The white dot is one single unit. The green square is every pixel of the original image that can influence it — its receptive field.', TX, 94, 330, 17);
           g.font = MONO; g.fillStyle = C.muted;
-          g.fillText('weights per filter: ' + paramsPerFilter(), TX, 150);
+          const stackW = paramsPerFilter() * layers;         // one filter per layer, one channel
+          g.fillText('weights: ' + paramsPerFilter() + ' per filter × ' + layers + (layers > 1 ? ' layers' : ' layer') + ' = ' + stackW, TX, 150);
           const cover = Math.min(IMG, R);                    // the image is only 64 x 64 - never claim more
           g.fillText(R >= IMG ? 'covering all ' + (IMG * IMG).toLocaleString() + ' pixels of the image'
             : 'covering ' + (cover * cover).toLocaleString() + ' pixels of the image', TX, 168);
-          const ratio = (cover * cover) / paramsPerFilter();
+          const ratio = (cover * cover) / stackW;
           g.font = 'bold ' + FONT; g.fillStyle = C.accent;
           g.fillText(ratio.toFixed(1) + '× as many pixels reached as weights spent', TX, 190);
           g.font = FONT; g.fillStyle = C.muted;
           wrapText(g, R >= IMG
             ? 'This unit now sees the entire image, and it got there with only a handful of weights per layer. That is why depth, not filter size, is how vision networks grow their view.'
-            : 'Add layers and watch the square grow. Adding a pool doubles how fast it grows, because everything above the pool is working on a half-size map.',
+            : 'Add layers and watch the square grow. Adding a pool doubles how fast it grows, because everything above the pool is working on a half-size map. (Add a layer first: a pool needs one above it.)',
             TX, 214, 330, 17);
           ro.set({ layers, filter: ksize + '×' + ksize, pools, 'receptive field': R + '×' + R });
         });
 
-        return ctx.figure(cv, 'One 3×3 filter sees a 3×3 patch. Stack a second on top and each of its units reads a 3×3 patch of <i>the first layer\'s outputs</i>, which between them covered 5×5 of the original image — so the view grows without the filters ever getting bigger. Pooling accelerates it: everything above a 2×2 pool is working on a half-size map, so each further step covers twice as much ground. This is the reason vision networks are deep rather than wide.', [lSl, kSl, pSl], ro);
+        return ctx.figure(cv, 'One 3×3 filter sees a 3×3 patch. Stack a second on top and each of its units reads a 3×3 patch of <i>the first layer\'s outputs</i>, which between them covered 5×5 of the original image — so the view grows without the filters ever getting bigger. Pooling accelerates it: everything above a 2×2 pool is working on a half-size map, so each further step covers twice as much ground. The weight count shown is for one filter per layer on a single channel; real layers hold many filters, but the comparison between settings is the same. This is a large part of why vision networks are deep.', [lSl, kSl, pSl], ro);
       }
 
       /* ------------------------------------------------------------------ */
@@ -649,26 +667,61 @@
            <b>2.</b> Press <b>▶ Play</b>. The feature map lights up along the T's vertical stem and stays almost dark along the horizontal bar.<br>
            <b>3.</b> Switch to <b>Horizontal edge</b>. The opposite happens, from the same image.<br>
            <b>4.</b> Edit one of the nine numbers by hand. Every future feature map changes with it — <b>the filter is nothing but those nine numbers.</b><br>
-           <b>5.</b> Paint your own shape and see what each filter finds in it.`),
+           <b>5.</b> Paint your own shape, then press <b>▶ Play</b> again to run the filter over it.`),
         convExplorer(),
+
+        /* maths beat: the nine products, then the sigma that abbreviates them */
+        ctx.walkthrough([
+          { say: 'Load <b>Letter T</b> with the <b>Vertical edge</b> filter and press <b>Step</b> once: the orange square sits in the top-left corner, covering nine pixels.', note: 'The yellow line under the grids reads: window at row 0, col 0 → feature[0,0] = 1.00.' },
+          { say: 'Eight of those nine pixels are black, which is 0, so eight of the nine products are 0 whatever the filter says.', math: '0×−1 + 0×0 + 0×1 + 0×−1 + 0×0 + 0×1 + 0×−1 + 0×0 + …' },
+          { say: 'The ninth pixel, bottom-right, is white (1) and the filter number lying on it is 1, so the whole sum is 1.', math: '… + 1×1 &nbsp;=&nbsp; 1' },
+          { ask: 'Two steps on, at col 2, the bottom row of the window is three white pixels: 1, 1, 1. The bottom row of the filter is −1, 0, 1. What does that row add up to?',
+            options: ['3', '0', '−1'], answer: 1,
+            explain: '1×−1 + 1×0 + 1×1 = 0. Left and right cancel. The filter only answers when its left side and its right side see different things, which is what a vertical edge is.' },
+          { say: 'To write that sum without listing nine products, give every cell an address: row <b>i</b> and column <b>j</b>, each counted 0, 1, 2 from the top-left, the way the demo counts.', note: 'So the bottom-right cell is i = 2, j = 2.' },
+          { say: 'Call the pixel at that address <b>x[i, j]</b> and the filter number lying on top of it <b>w[i, j]</b>, so one product is w[i, j] × x[i, j].', math: 'w[2,2] × x[2,2] &nbsp;=&nbsp; 1 × 1' },
+          { say: 'Adding up all of them has a symbol, <b>Σ</b>, a capital Greek S for "sum".', math: 'Σ &nbsp;w[i, j] × x[i, j]', note: 'Read it as: for every i and every j, multiply, then add the lot.' },
+          { ask: 'i runs over 0, 1, 2 and so does j. How many products does that Σ add up?',
+            options: ['3', '6', '9'], answer: 2,
+            explain: 'Three rows times three columns: the nine cells of the filter. For a 7×7 filter the same Σ would add up 49.' },
+          { say: 'Last piece: the window slides, so name its top-left corner by row <b>r</b> and column <b>c</b>, and the pixel under filter cell [i, j] becomes x[r+i, c+j].', note: 'r+i only means: start at row r, then go i rows further down.' },
+          { say: 'That gives the whole feature map in one line, and it is the line the demo prints with the numbers filled in.', math: 'feature[r, c] &nbsp;=&nbsp; Σ &nbsp;w[i, j] × x[r+i, c+j]' },
+          { ask: 'The window moves from feature[0, 0] to feature[6, 5]. Which part of that line changes?',
+            options: ['The nine w values', 'The pixels x that the w values land on', 'Both'], answer: 1,
+            explain: 'r and c appear only inside x. The w has no r or c in it at all, and that absence is the important part: nine numbers, the same at every position.' },
+        ], {
+          title: 'From nine multiplications to Σ',
+          recap: 'lay the filter on the image, multiply each filter number by the pixel under it, add up the nine results, slide, repeat.',
+        }),
+        ctx.decoder([
+          { sym: 'feature[r, c]', name: 'the feature map at row r, column c', says: 'One number of the output: how strongly the pattern showed up with the window\'s corner at row r, column c.', points: 'the orange-outlined cell in the right-hand grid.' },
+          '=',
+          { sym: 'Σ', name: 'the sum, over every i and j', says: 'Add up everything to its right, once for each of the nine filter cells.', points: 'the + signs in the long line under the grids.' },
+          { sym: 'w[i, j]', name: 'the filter number in row i, column j', says: 'One of the nine numbers you edited. There is no r or c in it: it is the same wherever the window is.', points: 'the 3×3 block of number boxes.' },
+          '×',
+          { sym: 'x[r+i, c+j]', name: 'the pixel under that filter cell', says: 'Start at the window\'s corner (r, c), then step i rows down and j columns across.', points: 'one painted square inside the orange window.' },
+        ], {
+          title: 'feature[r, c]  =  Σ w[i, j] × x[r+i, c+j]',
+          plain: 'to get one cell of the feature map, lay the filter on the image at that spot, multiply each filter number by the pixel under it, and add up the nine results. A real layer then adds one more learned number, the bias.',
+        }),
         p(`A <em>stride</em> is how many pixels the filter moves each step — one, in the demo. <em>Padding</em> is whether you add a border of zeros so the output stays the same size, or let it shrink at the edges the way the 16×16 input became a 14×14 map.`),
         p(`Different filters find different things. A horizontal-edge kernel is the same idea rotated 90°. A blur kernel averages a patch instead of contrasting it. A sharpen kernel exaggerates a pixel against its neighbours. In a real network <b>nobody chooses these numbers</b> — backpropagation learns them, exactly as it learns any other weight.`),
         callout('key', '🔑 Weight sharing is the whole trick',
           `That filter has <b>nine numbers</b> plus a bias. Not nine per position — nine <i>total</i>, reused at all 196 positions.<br>
            This buys two things at once. <b>Far fewer parameters</b>: a convolutional layer with dozens of filters costs thousands of weights where a fully connected layer over the same image costs millions.<br>
-           And <b>translation equivariance</b>: because the identical filter is dotted against every patch, a pattern in the top-left produces the same response, merely relocated, as that pattern in the bottom-right.`),
+           And <b>translation equivariance</b>: because the identical filter is laid over every patch, a pattern in the top-left produces the same response, merely relocated, as that pattern in the bottom-right.`),
         p(`Note the word: <em>equivariant</em>, not invariant. The feature map still moves when the input moves — you watched it move. It just moves in lock-step instead of demanding separate weights for every position. Not caring <i>where</i> a pattern was at all takes one more ingredient.`),
       ));
 
       root.append(section('Pooling: throwing away detail on purpose',
         p(`After a convolution produces a feature map, <em>pooling</em> shrinks it. The common form, <em>max pooling</em>, slides a 2×2 window across the map and keeps only the largest value in each window, discarding the other three. A 14×14 map becomes 7×7: a quarter of the numbers, and a quarter of the work for every layer downstream.`),
         callout('tryit', '🖐 Try this: watch resolution disappear on purpose',
-          `<b>1.</b> In the explorer above, load the <b>Circle</b> preset with the <b>Sharpen</b> filter and press <b>▶ Play</b> there.<br>
+          `<b>1.</b> In the explorer above, load the <b>Circle</b> preset with the <b>Sharpen</b> filter.<br>
            <b>2.</b> Come down here and press <b>Step</b> a few times. Read the four numbers in each 2×2 window — only the largest survives.<br>
-           <b>3.</b> Go back up, repaint the input, and watch this figure's left panel follow, then rebuild itself from the new data.`),
+           <b>3.</b> Go back up and paint over the circle. Both panels here follow every stroke.`),
         poolingDemo(),
         p(`Shrinking is only half the point. Because max pooling asks only "was this pattern present <i>somewhere</i> in this little window", it buys a small amount of genuine translation <em>invariance</em>. Shift the input one pixel and the strongest response in a 2×2 window is often still the strongest, unmoved in the pooled output.`),
-        p(`That is the effect you can measure back in the first demo: drag <b>shift ↕</b> down by one and the pooled map changes noticeably less than the feature map does. (Nudging sideways barely separates them — which is itself worth knowing: pooling buys a little tolerance, not a lot.) Stack a few rounds of convolve-then-pool and the network cares less and less about the exact pixel and more about whether something happened nearby.`),
+        p(`That is the effect you can measure back in the first demo: move the <b>shift down</b> slider by one notch and the pooled map changes noticeably less than the feature map does. (Nudging sideways barely separates them — which is itself worth knowing: pooling buys a little tolerance, not a lot.) Stack a few rounds of convolve-then-pool and the network cares less and less about the exact pixel and more about whether something happened nearby.`),
       ));
 
       root.append(section('Depth is how a network widens its view',
@@ -676,7 +729,8 @@
         callout('tryit', '🖐 Try this: scrub the depth slider',
           `<b>1.</b> Drag <b>stacked conv layers</b> from 1 to 8 and watch the green square grow, while <b>weights per filter stays at 9</b>.<br>
            <b>2.</b> Now add <b>2×2 pools in between</b>. The square grows far faster, because every layer above a pool is working on a half-size map.<br>
-           <b>3.</b> Drag <b>stacked conv layers</b> back to 1, then push <b>filter size</b> to 7. One 7×7 layer reaches 7×7 pixels for 49 weights; three stacked 3×3 layers reach the same 7×7 for 9 weights each. That trade is why the classic deep stacks — VGG, ResNet and their descendants — are built out of small filters rather than big ones. (Conv design has partly reversed it since 2022, once depthwise filters made a large kernel cheap; chapter 7's transformers are the bigger reason the question moved on.) That trade is also why modern networks stack small filters rather than using big ones.`),
+           <b>3.</b> Take the pools back to 0 and <b>stacked conv layers</b> back to 1, then push <b>filter size</b> to 7. One 7×7 layer reaches 7×7 pixels for 49 weights.<br>
+           <b>4.</b> Now set <b>filter size</b> to 3 and <b>stacked conv layers</b> to 3. The same 7×7 reach, for 27 weights. That trade is why the classic deep stacks — VGG, ResNet and their descendants — are built out of small filters rather than big ones. (Conv design has partly reversed it since 2022, once a cheaper kind of large filter caught on; chapter 7's transformers are the bigger reason the question moved on.)`),
         receptiveField(),
         p(`Layer by layer, the same trick — small filters, weight-shared, pooled down, stacked again — tends to build a hierarchy. Early layers respond to edges and simple contrasts. A little deeper, edges combine into textures and motifs: corners, stripes, curves. Deeper still, textures combine into parts — an eye, a wheel, an ear. Near the output, parts combine into whole objects.`),
         p(`Nobody designs that hierarchy. It falls out of training a deep stack of convolutions and poolings on enough labelled images, using exactly the backpropagation from chapter 2.`),
@@ -703,18 +757,28 @@
            <b>2.</b> Drag <b>patch size</b> down to 8. Four times the tokens — and look at the attention-cost bar.<br>
            <b>3.</b> Push <b>image size</b> to 672². Now you know why uploading a high-resolution screenshot costs so much more than a thumbnail, and why models tile big images rather than shrinking the patch.`),
         patchTokens(),
-        p(`This is how a modern multimodal model "sees" an image you upload. It is chopped into patches, each patch becomes the same kind of vector a word becomes, and the resulting mix of image-tokens and text-tokens is processed together by one shared architecture.`),
+        p(`This is how a modern multimodal model "sees" an image you upload. It is chopped into patches, each patch becomes the same kind of vector a word becomes, and the resulting mix of image-tokens and text-tokens is processed together by one shared architecture. One simplification to flag: most production models first run the patches through a vision network of their own and hand its output vectors to the language model. The grid and the token count work as shown; the step that turns a patch into a vector is deeper than one layer.`),
         p(`The tool changed — attention instead of a sliding kernel — but the bet did not. Images have local structure, which composes into parts, which composes into wholes. Convolution hard-coded that bet into the architecture. Transformers let the model learn it from data, which takes far more data and pays off at scale.`),
         p(`One picture to keep: <b>a convolution is a small pattern-detector that refuses to care where it is looking, and depth is how a network turns edges into objects.</b>`),
       ));
 
       root.append(
         ctx.quiz([
-          { q: 'You nudged the shape one pixel right and a dozen of the 256 input values changed. Why is that fatal for a fully-connected network but not for a convolution?', options: ['The convolution ignores the moved pixels', 'A fully-connected layer has a separate weight per position, so it must relearn the pattern at every location; the filter reuses the same nine weights everywhere', 'Convolutions use more weights and so are more robust', 'The image is too small for a fully-connected layer'], answer: 1, explain: 'Weight sharing is the whole trick. The identical filter is dotted against every patch, so a pattern found in one place produces the same response — merely relocated — anywhere else. The fully-connected layer gets a scrambled list of numbers and no hint that any of them are neighbours.' },
-          { q: 'What is the difference between equivariance and invariance here?', options: ['They mean the same thing', 'Equivariant: the feature map moves when the input moves. Invariant: the output does not change at all. Convolution gives the first, pooling starts to give the second', 'Equivariance comes from pooling and invariance from convolution', 'Invariance means the network ignores the image'], answer: 1, explain: 'You can measure both in the first demo: the feature map changes a lot when the shape moves (it moved with it — equivariance), while the pooled map changes less, because max pooling only asks whether a pattern appeared somewhere in each little window.' },
-          { q: 'A 3×3 filter sees a 3×3 patch. Why do vision networks get deeper rather than just using bigger filters?', options: ['Bigger filters are impossible to compute', 'Stacking small filters grows the receptive field while keeping weights per filter tiny; a bigger filter grows it by paying for every extra weight directly', 'Deeper networks always train faster', 'Filter size must always be 3'], answer: 1, explain: 'You can check this on the receptive-field slider: three stacked 3×3 layers reach 7×7 pixels at nine weights per filter; one layer with filter size 7 reaches the same 7×7 for forty-nine. Pushing filter size to 7 costs 49 weights per filter for far less reach. Pooling accelerates the growth further, since layers above a pool work on a half-size map.' },
-          { q: 'A modern multimodal model is given a 224×224 image in 16×16 patches. How many tokens does it become, and why does halving the patch size hurt?', options: ['196 tokens; halving the patch gives 4× the tokens and roughly 16× the attention cost', '16 tokens; halving the patch has no cost', '224 tokens; cost grows linearly', '150,528 tokens, one per number in the image'], answer: 0, explain: '224 ÷ 16 = 14 patches per side, so 14 × 14 = 196 tokens. Attention cost grows with the square of the token count, so four times the tokens is about sixteen times the cost — which is exactly why high-resolution image input is expensive.' },
-          { q: 'What was convolution\'s most durable contribution to modern AI?', options: ['The specific 3×3 filter shape', 'The proof that building a good assumption about the data\'s structure into the architecture beats making a generic network rediscover it', 'Max pooling', 'That images must be 224×224'], answer: 1, explain: 'Vision Transformers dropped the sliding filter entirely and still won, but they kept the underlying bet — that images have local structure which composes into parts and then wholes. Convolution hard-codes that bet; attention learns it from far more data.' },
+          { q: 'A fully-connected network has learned to spot a cross in the top-left corner of its 16×16 input. You show it the same cross in the bottom-right corner. What does it already know about this one?',
+            options: ['Everything, because the pixel values are identical', 'Most of it, because neighbouring inputs share similar weights', 'About half, because the rows match even though the columns do not', 'Nothing, because those pixels feed weights that never saw a cross'], answer: 3,
+            explain: 'Every input position has its own separate weights, and nothing ties the top-left set to the bottom-right set. That is what the flattened row in the first demo was showing: to this layer there is no "same thing, moved".' },
+          { q: 'A convolutional layer has 32 filters, each 3×3, reading a one-channel image. Ignore biases. The image grows from 16×16 to 1,024×1,024. How many weights does the layer have now?',
+            options: ['288, the same as before', '288 × 4,096, growing with the pixel count', 'About 30 million', '32 × 1,024'], answer: 0,
+            explain: '32 filters × 9 numbers = 288, and the image size never enters the sum. In the formula, w[i, j] has no r or c in it. A bigger image means more positions to slide over, so more arithmetic, but not one extra weight.' },
+          { q: 'You shift the input one pixel. The feature map shifts one pixel with it, while parts of the 2×2 max-pooled map do not change at all. Which description fits?',
+            options: ['Both layers are translation invariant', 'Convolution is invariant and pooling is equivariant', 'Convolution is equivariant and pooling adds a little invariance', 'Both layers are translation equivariant and nothing more'], answer: 2,
+            explain: 'Equivariant: the output moves when the input moves. Invariant: the output stays put. You measured it in the first demo, where moving the shape down one pixel changed the pooled map noticeably less than the feature map.' },
+          { q: 'With no pooling, how many stacked 3×3 layers does one unit need before it can see an 11×11 patch of the original image?',
+            options: ['3', '5', '11', '4'], answer: 1,
+            explain: 'Each 3×3 layer widens the view by two pixels: 3, 5, 7, 9, 11. Five layers. Check it on the receptive-field slider, then add one pool and watch the same five layers reach further.' },
+          { q: 'A vision transformer reads a 224×224 image in 16×16 patches: 196 tokens. You double the image side to 448 and keep the patch size. Roughly what happens?',
+            options: ['2× the tokens and 2× the attention cost', '2× the tokens and 4× the attention cost', '4× the tokens and 16× the attention cost', '4× the tokens and 4× the attention cost'], answer: 2,
+            explain: '448 ÷ 16 = 28 patches per side, and 28 × 28 = 784 tokens, four times 196. Attention cost grows with the square of the token count, so 4² = 16 times. The patch demo shows exactly that at 448².' },
         ]),
 
         section('Go deeper',

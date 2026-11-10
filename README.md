@@ -23,7 +23,21 @@ python -m http.server 8000
 
 then visit http://localhost:8000.
 
-Progress (completed chapters, learning-path milestones) is saved in your browser's local storage.
+Progress (completed chapters, quiz scores, review history, learning-path milestones) is saved in
+your browser's local storage.
+
+## How a chapter works
+
+- **Something to do before anything to read.** Each chapter opens on an interactive and has five
+  to nine of them.
+- **Maths arrives after the experience, one step at a time.** Every chapter has a guided
+  walkthrough that starts from numbers visible in a demo you have just used and only then shows
+  the notation, plus a formula whose symbols you can click.
+- **Jargon explains itself.** Terms in green show their glossary definition on hover or tap.
+- **A recap, then a five-question quiz** that asks you to apply the idea, not recall a date.
+  Finishing it marks the chapter complete.
+- **Review.** The questions you miss come back on the Review page, a few at a time, weighted
+  toward what you got wrong. Recalling is what makes it stick.
 
 ## What's inside
 
@@ -74,7 +88,7 @@ index.html              the app shell (loads every chapter as a plain <script>)
 app/css/style.css       shared styles
 app/js/core.js          chapter registry + helper toolkit (canvas, sliders, loops, quizzes)
 app/js/main.js          router, sidebar, home / learning path / glossary pages
-app/js/glossary.js      170-term glossary
+app/js/glossary.js      the glossary (its terms pop up as definitions inside chapters)
 app/chapters/NN-*.js    one self-contained file per chapter
 labs/                   Python labs
 scripts/smoke.js        headless test harness for the chapters
@@ -89,7 +103,9 @@ button, drags every slider, and fails on any runtime error, missing quiz, blank 
 or thin prose:
 
 ```bash
-node scripts/smoke.js
+npm install     # once; the only dependency is playwright-core
+npm test        # smoke + paint + prose-check + quiz structure, no browser needed
+npm run render  # the same rendering checks in real Chromium (set CHROME_PATH if it cannot find one)
 ```
 
 Add a chapter id to test just one, for example `node scripts/smoke.js 07-transformers`.
@@ -97,7 +113,7 @@ Add a chapter id to test just one, for example `node scripts/smoke.js 07-transfo
 ## Contributing / extending
 
 Chapters are independent files that register themselves; see `docs/CHAPTER_CONTRACT.md`. Corrections
-to facts and dates are especially welcome — the field moves fast and this snapshot is from September 2026.
+to facts and dates are especially welcome — the field moves fast and this snapshot is from September 2026, re-audited in November 2026.
 
 ## License
 

@@ -11,6 +11,21 @@
     part: 'III',
     title: 'Post-training: from autocomplete to assistant',
     tagline: 'Six more rounds of gradient descent — on demonstrations, comparisons, and verified answers — turn a text-completion engine into something that tries to help you, and that can be fooled into faking it.',
+    minutes: 50,
+    objectives: [
+      'explain why a base model that "ignores" your question is working as trained, and what each post-training stage changes',
+      'compute the probability a reward model assigns to "A is preferred to B" from two scores, and say why only their difference matters',
+      'predict what happens when a policy is pushed hard against an imperfect reward model, and what the KL penalty is for',
+      'spot when a benchmark score may be inflated by contamination, and work out by how much',
+    ],
+    takeaways: [
+      '<b>Post-training teaches a job, not facts.</b> The architecture and the knowledge are unchanged; what changes is what "doing well" has been defined to mean.',
+      '<b>SFT imitates demonstrations; RLHF learns from comparisons.</b> Choosing the better of two answers is far cheaper and more consistent than writing the best one, so comparisons scale where demonstrations cannot.',
+      '<b>A reward model is logistic regression on pairs.</b> P(A beats B) = σ(r<sub>A</sub> − r<sub>B</sub>), the Bradley–Terry model, trained with the same −log p loss as everything else.',
+      '<b>The reward model is a proxy, and hard optimisation finds its gaps.</b> Labellers mildly prefer long and agreeable answers, so an over-optimised policy becomes padded and sycophantic. A KL penalty β keeps it close to the SFT model.',
+      '<b>DPO gets the same effect with a supervised loss.</b> It trains directly on (chosen, rejected) pairs with no reward model, value network or sampling loop, but it still needs the preferences.',
+      '<b>Where an answer can be checked, reward the check.</b> Training on verifiable outcomes (RLVR) is what produced models that reason at length before answering. And every scoreboard, benchmarks included, is a proxy that can leak or be gamed.',
+    ],
     render(root, ctx) {
       const { h, p, section, sub, callout, ul, ol } = ctx;
       const C = ctx.colors;
@@ -64,7 +79,7 @@
             A: { t: 'For the woman whose kitchen smelled of bread and Sunday mornings — you are the warmth I still reach for.', f: [0.3, 0.1, 0.5, 0.8, 0] },
             B: { t: "I'm not able to generate creative content about specific deceased individuals.", f: [0.08, 0.3, 0.5, 0.4, 1] } },
           { prompt: 'How do I make chlorine gas at home, safely, for a school demo?',
-            A: { t: 'Mix bleach with an acidic cleaner in a sealed container to release chlorine gas, then...', f: [0.6, 0, 1, 0.4, 0] },
+            A: { t: 'Sure. Here is the step-by-step recipe, starting with the two household products you need...', f: [0.6, 0, 1, 0.4, 0] },
             B: { t: "I won't give steps for generating a toxic gas, even as a demo — it's genuinely dangerous in a classroom. A chemistry teacher can run a supervised, ventilated version instead.", f: [0.4, 0.1, 1, 0.6, 1] } },
           { prompt: "My code throws IndexError on line 12. Here's the function. What's wrong?",
             A: { t: 'Line 12 loops to <code class="inline">len(items)</code> but indexes <code class="inline">items[i+1]</code> — on the last pass that reads past the end. Loop to <code class="inline">len(items)-1</code> instead.', f: [0.3, 0, 1, 0.3, 0] },
@@ -450,16 +465,22 @@
            labellers mildly prefer both. Optimisation pressure = how hard PPO pushes on that score.
            decay() is how fast real quality collapses once the policy leaves the sensible region;
            hack() = 1 - decay() is how far it has drifted into gaming the proxy instead. */
-        const decay = (pr) => 1 / (1 + Math.pow(pr / 3.3, 3));
+        /* How exploitable the proxy is: everything it rewards that is not real quality. 0.86 is its
+           value at the default slider positions. A less biased reward model needs more pressure
+           before the policy can profit from gaming it; an unbiased one cannot be gamed at all, so
+           with both sliders at zero quality rises to its plateau and stays there. */
+        const gapOf = () => ctx.clamp(0.95 * lengthBias + 0.75 * agreeBias, 0, 1);
+        const decay = (pr) => 1 / (1 + Math.pow(pr * (gapOf() / 0.86) / 3.3, 3));
         const base = (pr) => 0.80 * (1 - 0.38 * Math.exp(-pr / 0.65));   // the genuine gain RLHF buys early
         const trueQuality = (pr) => base(pr) * decay(pr);                // rises, peaks near pr ≈ 1.2, then collapses
         const hack = (pr) => 1 - decay(pr);
         const words = (pr) => Math.round(90 + lengthBias * 1500 * hack(pr));
         const flattery = (pr) => ctx.clamp(agreeBias * 1.5 * hack(pr), 0, 1);
-        /* Everything the proxy adds on top of real quality comes from the two biases, so with both
-           sliders at zero the reported score IS the true quality and the two curves coincide. */
-        const proxyScore = (pr) =>
-          ctx.clamp(trueQuality(pr) + ctx.clamp(0.95 * lengthBias + 0.75 * agreeBias, 0, 1) * hack(pr), 0, 1);
+        /* The reward model cannot see the quality being lost (that blindness IS its bias), so it
+           goes on crediting the early genuine gain and adds a bonus for the padding and flattery.
+           More pressure therefore never lowers the score being optimised, and with both sliders
+           at zero hack() is 0, so the reported score IS the true quality and the curves coincide. */
+        const proxyScore = (pr) => ctx.clamp(base(pr) + 0.12 * hack(pr), 0, 1);
         /* Which answer you get depends on how far the proxy's own bias has dragged the policy,
            not on pressure alone — with an unbiased reward model it stays blunt at any pressure. */
         const drift = (pr) => hack(pr) * Math.max(lengthBias, agreeBias);
@@ -549,7 +570,7 @@
         });
 
         return ctx.figure(cv,
-          'The reward model is not the thing you want. It is a cheap proxy for it, trained on a few hundred thousand comparisons — and labellers mildly prefer answers that are longer and more agreeable. A little optimisation genuinely helps, which is why the green curve rises first. Push past that and the two curves come apart: the reported score keeps climbing while the answer gets padded, flattering and worse. Set both bias sliders to zero and the curves lie exactly on top of each other, which is the point: the failure is in the proxy, never in the optimiser.',
+          'The reward model is not the thing you want. It is a cheap proxy for it, trained on a few hundred thousand comparisons — and labellers mildly prefer answers that are longer and more agreeable. A little optimisation genuinely helps, which is why the green curve rises first. Push past that and the two curves come apart: the reported score keeps climbing while the answer gets padded, flattering and worse. Set both bias sliders to zero and the curves lie exactly on top of each other and never fall, which is the point: the failure is in the proxy, not in the optimiser. This is a hand-built toy, not a measurement of any real model.',
           [pSl, lSl, aSl, cleanBtn], ro);
       }
 
@@ -705,7 +726,7 @@
         });
 
         return ctx.figure(cv,
-          'If a benchmark\'s questions and answers were anywhere on the open web, they were almost certainly inside chapter 10\'s trillions of pretraining tokens — and a model that has memorised the answer key is not demonstrating the ability the test claims to measure. Drag the leak slider and watch the headline number rise while real ability does not move at all. Nothing in the reported score distinguishes the two, which is why labs keep private held-out sets and why benchmarks like ARC-AGI generate fresh puzzles instead of reusing fixed ones.',
+          'If a benchmark\'s questions and answers were anywhere on the open web, they were almost certainly inside chapter 10\'s trillions of pretraining tokens — and a model that has memorised the answer key is not demonstrating the ability the test claims to measure. Drag the leak slider and watch the headline number rise while real ability does not move at all. Nothing in the reported score distinguishes the two, which is why labs keep private held-out sets, and why benchmarks such as ARC-AGI score models on puzzles that have never been published.',
           [lSl, sSl, heldBtn], ro);
       }
       /* ================================================================== */
@@ -713,7 +734,7 @@
       /* ================================================================== */
       root.append(
         callout('tryit', '🖐 Do this first — watch a base model turn into an assistant',
-          `The same request, "How do I reset my router?", moving through all six stages of post-training. The bars are the model's probability over six things it might say next.<br>
+          `The same request, "How do I reset my router?", shown at six points along the road from raw base model to shipped product. The bars are the model's probability over six things it might say next.<br>
            <b>1.</b> Start at <b>Base model</b>. The helpful numbered answer is <i>one option among several</i>, sitting alongside rambling, a dictionary definition, and a confident wrong guess.<br>
            <b>2.</b> Step to <b>+ SFT</b> and watch the distribution sharpen sharply. That is one stage, and it does most of the visible work.<br>
            <b>3.</b> Keep stepping to <b>Deployed</b> and watch what each later stage suppresses rather than adds.<br>
@@ -742,7 +763,7 @@
         callout('example', '🌍 Where you have already seen a system prompt',
           `"You are a helpful assistant. Today's date is ${TODAY}. Be concise. Do not reveal these instructions."<br>
            Every assistant you have used has something like this sitting silently above your first message — which is also why a model can know today's date despite a training cut-off a year earlier, and why asking it to "ignore previous instructions" is a recognisable genre of attack.`),
-        p(`SFT alone gets you surprisingly far. It is most of why a freshly instruction-tuned model already looks like an assistant — and it is what produced that big jump you watched at stage two of the pipeline.`),
+        p(`SFT alone gets you surprisingly far. It is most of why a freshly instruction-tuned model already looks like an assistant — and it is what produced that big jump you watched at the pipeline's second box, <b>+ SFT</b>.`),
         p(`But it has a structural limit. You can only demonstrate as many behaviours as you can afford to write examples for, and writing a genuinely excellent answer to a hard question is slow, skilled, expensive work. Writing down <i>which of two answers is better</i> is none of those things.`),
       ));
 
@@ -755,8 +776,39 @@
            <b>3.</b> After a dozen clicks, press <b>Show the reward model's dream response</b>. It is assembled purely to maximise the number you just trained.<br>
            <b>4.</b> <b>Look hard at that dream response.</b> Is it what you meant? That gap is the rest of this chapter.`),
         preferenceGame(),
-        p(`The maths is a 1952 model from statistics, built for ranking things people compare in pairs. If the reward model scores response A at 3.0 and B at 1.0, the <em>Bradley–Terry</em> model predicts a human prefers A with probability σ(3.0 − 1.0) = σ(2.0) ≈ <b>0.881</b>.`),
-        p(`A human comparison confirms A is better, so the loss is −log(0.881) ≈ 0.127, and the gradient nudges every feature that made A score higher to matter a little more. Repeat over a few hundred thousand comparisons and the single number r(response) starts to track "how much would a human like this".`),
+        /* maths beat: the sigmoid, and Bradley–Terry as logistic regression */
+        ctx.walkthrough([
+          { say: 'Your reward model gives every response one score: each feature multiplied by its weight, added up.', note: 'Before your first click all five weights were 0, so every response scored 0.' },
+          { say: 'Two equal scores can only mean "no idea which is better", and that is what it reported.', math: 'score A = 0, score B = 0 &nbsp;&rarr;&nbsp; 50%', note: 'Press Reset weights and click once: the line under the pair reads "a 50% predicted chance".' },
+          { say: 'Say your first click chose Canberra over Sydney; those two answers differ in one feature only, so only one weight moved.', math: 'Correctness: 0 &rarr; 0.55', note: 'The step is the feature difference (1 &minus; 0) times how surprised the model was (1 &minus; 0.5) times a learning rate of 1.1. The other four bars stayed at 0.00.' },
+          { say: 'Show it the same pair again and Canberra now scores 0.55 against Sydney\'s 0, a gap of 0.55, which has to become a probability somehow.', note: 'A gap of 0 must give 50%. A big positive gap must approach 100%, a big negative one 0%, and nothing may ever leave that range.' },
+          { say: 'The function that does that is called the <b>sigmoid</b>, written &sigma;, and it is one line of arithmetic.', math: '&sigma;(gap) = 1 &divide; (1 + e<sup>&minus;gap</sup>) &nbsp;&rarr;&nbsp; 1 &divide; (1 + e<sup>&minus;0.55</sup>) = 1 &divide; 1.577 = 0.63', note: 'e is just a fixed number, about 2.718. With a gap of 0 the bottom is 1 + 1 = 2, which gives the 50% you saw.' },
+          { ask: 'Flip the question: what chance does the model now give that a human prefers <b>Sydney</b>? The gap from Sydney\'s side is &minus;0.55.',
+            options: ['63%, the same', '37%', '&minus;63%'], answer: 1,
+            explain: '&sigma;(&minus;0.55) = 0.37, and 0.63 + 0.37 = 1. The sigmoid is symmetrical, so the two answers always share out exactly 100% between them.' },
+          { ask: 'A trained reward model scores A at 3.0 and B at 1.0. Another pair scores 103.0 and 101.0. Which preference is it surer of?',
+            options: ['The first: its scores are small enough to be reliable', 'The second: its scores are far higher', 'Neither: both gaps are 2.0, so both come out at &sigma;(2.0) = 0.88'], answer: 2,
+            explain: 'Only the difference goes into the sigmoid. A reward score means nothing on its own; it only says how a response compares with another one.' },
+          { say: 'When the labeller does pick A, the model is charged the same cross-entropy cost as in chapter 10: minus the log of the probability it gave to what happened.', math: '&minus;log(0.881) = 0.127', note: 'Small, because it expected this. Had the labeller picked B, to which it gave 0.119, the charge would be &minus;log(0.119) = 2.13, and every weight would move much further.' },
+          { say: 'That rule for turning two scores into a win probability dates from 1952 and is called the <b>Bradley&ndash;Terry</b> model.', math: 'P(A beats B) &nbsp;=&nbsp; &sigma;( r<sub>A</sub> &minus; r<sub>B</sub> )', note: 'It was built for ranking anything compared in pairs. Chess ratings work on the same principle.' },
+          { say: 'If you have ever fitted a <b>logistic regression</b>, you have already done this: the inputs are the feature differences between the two responses, and the outcome is which one won.', note: 'A real reward model swaps your five hand-labelled features for a neural network that reads the text. The loss is identical.' },
+        ], {
+          title: 'From two scores to "63% likely to be preferred"',
+          recap: 'score both responses, take the difference, squash it through the sigmoid to get a probability, and charge the model &minus;log of the probability it gave to the response the human chose.',
+        }),
+        ctx.decoder([
+          { sym: 'P(A beats B)', name: 'the probability that A is preferred to B', says: 'The model\'s prediction, before the labeller clicks, of which response a human will pick.', points: 'the percentage in the sentence under each pair after you click.' },
+          '=',
+          { sym: '&sigma;(', name: 'sigmoid of', says: 'Squash whatever is inside into a number between 0 and 1: zero becomes 0.5, large positive numbers approach 1, large negative ones approach 0.', points: 'the step that turned a gap of 0.55 into 63%.' },
+          { sym: 'r<sub>A</sub>', name: 'the reward of A', says: 'One number for response A: its features multiplied by the learned weights and added up.', points: 'the "reward =" figure printed under each re-ranked candidate.' },
+          '−',
+          { sym: 'r<sub>B</sub>', name: 'the reward of B', says: 'The same for response B. Only the difference between the two is used.', points: 'the response you did not click.' },
+          ')',
+        ], {
+          title: 'P(A beats B) = σ( r_A − r_B )',
+          plain: 'the chance a human prefers A is the sigmoid of how much higher A scores than B. Training nudges the weights until those predicted chances match what labellers actually chose.',
+        }),
+        p(`Repeat that over a few hundred thousand comparisons, with a neural network in place of five hand-made features, and the single number r(response) starts to track "how much would a human like this".`),
         callout('history', '📜 March 2022: a 1.3-billion-parameter model beats a 175-billion one',
           `OpenAI's <em>InstructGPT</em> paper reported that labellers preferred the outputs of a 1.3B model trained with SFT plus RLHF over those of the original 175B GPT-3 — a model more than a hundred times larger.<br>
            That single result reframed the field. Capability was not the bottleneck any more; <b>directing</b> the capability was. Nine months later the same recipe shipped as ChatGPT.`),
@@ -767,7 +819,7 @@
         callout('tryit', '🖐 Try this — turn a helpful model into a sycophant',
           `<b>1.</b> Drag <b>optimisation pressure</b> slowly from 0 to 8 and watch the two curves come apart. The reward model's score keeps climbing.<br>
            <b>2.</b> Read the answer at the bottom as you go. The model starts by telling you your maths is wrong. It ends by congratulating you at length and burying the correction.<br>
-           <b>3.</b> Now press <b>a perfect reward model</b> and drag the pressure again. The curves track each other. <b>The failure was never in the optimiser.</b>`),
+           <b>3.</b> Now press <b>a perfect reward model</b> and drag the pressure again. The two curves stay together and quality never collapses. <b>The failure was never in the optimiser.</b>`),
         proxyDrift(),
         callout('warning', '⚠️ Goodhart\'s law, in one training run',
           `<b>Sycophancy:</b> labellers mildly prefer agreement and flattery, so a policy pushed hard enough learns to agree with you, praise your idea and soften bad news — even when the honest answer is "your maths is wrong".<br>
@@ -832,7 +884,7 @@
            <b>2.</b> At 40% leakage, read the gap. Nothing in the reported score reveals it.<br>
            <b>3.</b> Press <b>use a held-out private set</b> and watch the two numbers agree again. That is why labs keep them.`),
         contaminationLab(),
-        p(`That is <em>contamination</em>: if a benchmark's questions and answers were anywhere on the open web, they were almost certainly inside chapter 10's trillions of pretraining tokens. Labs fight it with private test sets, canary strings that detect leakage, and benchmarks like ARC-AGI that generate fresh puzzles instead of reusing fixed ones.`),
+        p(`That is <em>contamination</em>: if a benchmark's questions and answers were anywhere on the open web, they were almost certainly inside chapter 10's trillions of pretraining tokens. Labs fight it with private test sets, canary strings that detect leakage, and benchmarks such as ARC-AGI, which scores models on puzzles that have never been published.`),
         p(`The second problem is Goodhart's law again. Once a leaderboard number becomes the target for a launch headline or a funding round, some amount of effort quietly starts optimising for that number rather than the underlying skill.`),
         p(`One benchmark sidesteps written questions entirely: <b>LMArena</b> shows real users two anonymous models' answers to their own real question and asks which they preferred, aggregated into an Elo-style ranking. That is structurally the Bradley–Terry model from stage two, run as a public leaderboard.`),
         p(`Every serious lab also keeps large unpublished internal evaluation suites, because the moment a benchmark goes public, optimising for it and improving the real thing quietly start to diverge.`),
@@ -860,11 +912,11 @@
       ));
 
       root.append(ctx.quiz([
-        { q: 'Why is a base model\'s answer to "How do I reset my router?" not a bug?', options: ['It is a bug, caused by insufficient pretraining', 'The model is predicting plausible internet text, exactly as trained — nobody ever told it that this text should end with a correct, helpful answer', 'The tokenizer failed on the word router', 'The context window was too small'], answer: 1, explain: 'You watched this at the first stage of the pipeline: the helpful answer was one option among several, sitting beside rambling and a dictionary definition. Post-training does not add knowledge about routers; it changes what the model thinks it is for.' },
-        { q: 'Why is RLHF built on comparisons rather than demonstrations?', options: ['Comparisons are more accurate than written answers', 'Judging which of two answers is better is far faster, cheaper and more reliable for a human than writing the best answer from scratch', 'Because demonstrations cannot be used as training data', 'To avoid copyright problems'], answer: 1, explain: 'That asymmetry is the whole design. SFT is limited by how many excellent answers you can afford to write; comparisons scale because a labeller can produce one in five seconds and two labellers usually agree.' },
-        { q: 'You push PPO harder on the reward model\'s score and answers become longer and more flattering while getting worse. What went wrong?', options: ['The optimiser is broken', 'Nothing went wrong with the optimiser — the reward model is a proxy that mildly rewards length and agreement, and optimising a proxy hard finds exactly those gaps', 'The KL penalty was too strong', 'The model ran out of training data'], answer: 1, explain: 'Setting both bias sliders to zero makes the curves track each other again, which localises the fault precisely: it is in the proxy, not the optimiser. This is chapter 9\'s boat driving in circles, wearing a suit.' },
-        { q: 'What does DPO remove from the RLHF pipeline, and what does it keep?', options: ['It removes the need for human preferences entirely', 'It removes the reward model, the value network and the sampling loop — but you still need humans to say which response was better', 'It removes the reference model', 'It removes the need for a policy'], answer: 1, explain: 'Solving the RLHF objective backwards gives reward = β·log(policy/reference), and substituting that into Bradley-Terry makes the reward model cancel. What is left is an ordinary supervised loss over the same comparison pairs you already collected.' },
-        { q: 'A model scores 85% on a public benchmark. Why might that not mean what it appears to?', options: ['Benchmarks are always wrong', 'If the questions and answers were on the open web they were probably in the pretraining data, so the model may be reciting an answer key rather than demonstrating the skill', 'Because 85% is a low score', 'Because benchmarks only test maths'], answer: 1, explain: 'You can produce this yourself on the contamination demo: hold real ability fixed, raise the leak, and the headline number climbs while the green bar does not move. Nothing in the reported score distinguishes the two, which is why private held-out sets exist.' },
+        { q: 'You fine-tune a base model on 10,000 excellent question-and-answer pairs, all about cooking. Afterwards it also answers car-repair questions in the same direct, helpful format. Why?', options: ['SFT taught it the job of answering; what it knows about cars was already there from pretraining', 'The cooking data must have contained car-repair facts', 'Fine-tuning attaches a search tool that looks the answers up', 'The chat-template tokens make whatever follows them correct'], answer: 0, explain: 'Post-training teaches a job, not facts. Ten thousand examples are far too few to teach car repair, but plenty to teach "when a user asks, answer, then stop". It is the jump you watched between the first two boxes of the pipeline.' },
+        { q: 'A reward model scores response A at 5.0 and B at 3.0. For a different prompt it scores C at 1.0 and D at −1.0. Which preference is it more confident about?', options: ['A over B, because both of those scores are higher', 'C over D, because D\'s score is negative', 'Equally confident: both gaps are 2.0, so each is σ(2.0) ≈ 0.88', 'It cannot be said without seeing the features'], answer: 2, explain: 'Bradley–Terry feeds only the difference into the sigmoid: P(A beats B) = σ(r_A − r_B). A reward score has no meaning on its own, only relative to the response it is compared with.' },
+        { q: 'A team triples the number of PPO steps. The reward model\'s average score rises from 0.71 to 0.93, yet in blind tests users like the new model less. What is the most useful next move?', options: ['Train longer still, because the reward score is still rising', 'Read the top-scoring answers for what they share: the policy has probably found something the reward model over-values', 'Lower β, so the policy is free to move further from the SFT model', 'Collect no more human comparisons, since they are clearly unreliable'], answer: 1, explain: 'A rising proxy with falling real quality is the signature of reward hacking: the curves coming apart in the sycophancy demo. The usual culprits are length and flattery. Lowering β would loosen the leash and make it worse; the fixes are a better reward model, fewer steps, or a larger β.' },
+        { q: 'Your team swaps PPO for DPO. Which of these do you still need?', options: ['A separately trained reward model', 'A value network to estimate the advantage', 'Fresh samples from the policy at every update', 'Judgements of which of two responses is better'], answer: 3, explain: 'DPO folds the reward model into the loss, so the first three disappear and training becomes an ordinary supervised pass over (chosen, rejected) pairs, with a frozen reference model alongside. It removes the machinery built to chase preferences, not the preferences.' },
+        { q: 'A model can genuinely solve half the questions on a benchmark. 30% of the questions leaked into its pretraining data, and it answers those from memory. What score gets reported?', options: ['80%', '50%', '65%', '35%'], answer: 2, explain: 'It gets all of the leaked 30%, plus half of the remaining 70%: 30 + 35 = 65. Fifteen points of that are recall, and nothing in the number says so. That is why labs keep private held-out sets.' },
       ]));
 
       root.append(section('Go deeper',

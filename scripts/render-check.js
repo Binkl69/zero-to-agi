@@ -15,7 +15,7 @@ const { chromium } = require('playwright-core');
 const instrumentSource = require('./lib/instrument.js');
 
 const ROOT = path.join(__dirname, '..');
-const EXE = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const launchOptions = require('./lib/browser.js');
 const args = process.argv.slice(2);
 const SHOTS = args.includes('--shots');
 const only = args.filter(a => !a.startsWith('--'));
@@ -40,8 +40,11 @@ function serve() {
 (async () => {
   const srv = await serve();
   const port = srv.address().port;
-  const browser = await chromium.launch({ executablePath: EXE, args: ['--no-sandbox', '--font-render-hinting=none'] });
+  const browser = await chromium.launch(launchOptions(['--font-render-hinting=none']));
   const page = await browser.newPage({ viewport: { width: 1280, height: 1400 }, deviceScaleFactor: 1 });
+  /* geometry is checked in logical pixels, and every demo must keep animating while the
+     checker drives it, so pin the canvas scale and switch off the off-screen pause */
+  await page.addInitScript('window.__ZTA_CANVAS_SCALE = 1; window.__ZTA_ALWAYS_RUN = true;');
   await page.addInitScript(instrumentSource());
   await page.addInitScript(fs.readFileSync(path.join(__dirname, 'lib/checks.js'), 'utf8')
     .replace(/^module\.exports[\s\S]*$/m, '') + '\nwindow.__ZTA_CHECK = checkFrame;');

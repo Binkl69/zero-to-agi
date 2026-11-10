@@ -63,6 +63,21 @@
     part: 'II',
     title: 'Remembering: sequences, RNNs and LSTMs',
     tagline: 'Build a language model in two seconds, watch it hit a wall, then meet the running summary that got past it — and the forgetting that finally killed it.',
+    minutes: 45,
+    objectives: [
+      'explain why a lookup table of contexts cannot scale, and what a hidden state replaces it with',
+      'compute how much of a signal survives n steps of a fixed multiplier, and predict whether it vanishes or explodes',
+      'explain how an LSTM\'s forget and input gates hold a memory and then drop it on purpose',
+      'explain the seq2seq bottleneck and how attention removes it',
+    ],
+    takeaways: [
+      '<b>Counting hits a wall.</b> An n-gram table is exact-match memory. Ten characters of context over 27 letters is about 200 trillion possible keys, and the table knows nothing about a key it has not seen.',
+      '<b>A hidden state is a running summary.</b> One cell, reused at every step, folds each new item into a fixed handful of numbers: new summary = tanh(weights × old summary + weights × new input).',
+      '<b>Repeated multiplication is an exponent.</b> 0.9<sup>50</sup> ≈ 0.005 and 1.1<sup>50</sup> ≈ 117. A gradient sent back through 50 steps vanishes or explodes unless the multiplier is almost exactly 1.',
+      '<b>The LSTM holds the multiplier at 1.</b> Its cell state is copied through unchanged while the forget gate is open and the input gate is shut, and the gates are learned.',
+      '<b>Attention began as a patch.</b> Seq2seq squeezed a whole sentence through one vector; attention kept every encoder state and let the decoder take a weighted look-back at all of them.',
+      '<b>Why RNNs lost.</b> They cannot be trained in parallel and a fixed-size summary still forgets. Transformers keep every token and pay n² for it, which is why recurrence keeps returning in new forms.',
+    ],
     render(root, ctx) {
       const { h, p, section, sub, callout, ul, colors } = ctx;
 
@@ -103,16 +118,17 @@
       root.append(section('The recurrent network: one cell, applied over and over',
         p(`Here is the trick. Instead of a different neuron for every position, use <b>one small network</b> — the <em>cell</em> — and apply it to the items one at a time.`),
         p(`The cell takes two inputs: the current item, and the vector of numbers it produced last time. That vector is the <em>hidden state</em>, a running summary of everything read so far. Each step it reads the next item, updates the summary, and optionally emits a prediction.`),
-        callout('key', '🔑 Three weight matrices, reused at every step',
-          `<code class="inline">h_t = tanh(W<sub>hh</sub>·h<sub>t−1</sub> + W<sub>xh</sub>·x<sub>t</sub> + b)</code>, then optionally <code class="inline">y_t = W<sub>hy</sub>·h<sub>t</sub></code>.<br>
-           Because the <i>same</i> weights are used at every step, the network handles a sequence of any length — it just keeps going. This is weight sharing again, exactly as in chapter 4, but shared across <b>time</b> instead of across space.`),
-        p(`Shrink it to one number to watch it move. Let the hidden state be a single value with the rule <code class="inline">h_t = tanh(0.8·h_{t−1} + 0.5·x_t)</code>, fed the inputs 1, 1, 0, 0, 0. After the two "1"s the state rises; then it decays — multiplied by 0.8 and squashed, every step.`),
+        p(`Shrink it to one number to watch it move. Let the summary be a single value, and the rule be <b>new summary = tanh(0.8 × old summary + 0.5 × new input)</b>, where tanh is a squashing function that keeps the result between −1 and 1. Feed it the inputs 1, 1, 0, 0, 0 and the summary reads <b>0.46, 0.70, 0.51, 0.39, 0.30</b>. It rises while there is something to read, then fades — multiplied by 0.8 and squashed, every step.`),
         callout('tryit', '🖐 Try this: watch a hidden state absorb a sentence',
           `Press <b>▶ Play</b>, or drag straight across the picture to scrub word by word. Each word enters the cell in turn and the six coloured slots are rewritten by exactly that rule. The bars underneath show the decay factor still riding on each earlier word — the tanh squashes on top of that, so they are an upper bound on what could be recovered, not a measurement.<br>
            <b>1.</b> Drag <b>memory decay</b> to <b>0.5</b> and step to the end. The word "trophy" is down to 0.1% of its original strength (0.5<sup>10</sup>) — the model has no way left to know what <i>it</i> refers to.<br>
            <b>2.</b> Push decay to <b>1.0</b>. Now the decay term stops shrinking anything, so every bar reads 100% — but nothing is forgotten <i>selectively</i> either, and all twelve words are stirred into the same six numbers with equal weight, and none can be pulled back out.<br>
            <b>3.</b> Real RNNs learn a decay somewhere in between. <b>It is never right for every word.</b>`),
         buildUnrollDemo(ctx),
+        callout('key', '🔑 Three weight matrices, reused at every step',
+          `You just ran this rule six numbers at a time. Written in full, with <b>t</b> counting the steps: <code class="inline">h<sub>t</sub> = tanh(W<sub>hh</sub>·h<sub>t−1</sub> + W<sub>xh</sub>·x<sub>t</sub> + b)</code>, then optionally <code class="inline">y<sub>t</sub> = W<sub>hy</sub>·h<sub>t</sub></code>.<br>
+           h<sub>t</sub> is the summary after item t, and h<sub>t−1</sub> is the one before it. The demo's decay and its 0.5 stand in for the weight grids W<sub>hh</sub> and W<sub>xh</sub>, which a real network learns.<br>
+           Because the <i>same</i> weights are used at every step, the network handles a sequence of any length — it just keeps going. This is weight sharing again, exactly as in chapter 4, but shared across <b>time</b> instead of across space.`),
         p(`That fading is not an artefact of this toy. It is the central character flaw of the whole architecture, and the next demo shows exactly why it is so hard to escape.`),
         p(`It helps to draw the loop opened out: copy the cell once per time step, left to right, hidden state flowing along the arrows between copies. That <em>unrolled</em> picture is a deep feed-forward network — as deep as the sequence is long — except every layer shares the same weights. It is also how training works: run forward, compute the loss, and backpropagate through all the copies. Because the gradient travels backwards along the time axis, it is called <em>backpropagation through time</em>.`),
       ));
@@ -123,10 +139,44 @@
         callout('tryit', '🖐 Try this: watch a gradient vanish, then explode',
           `The chart is the unrolled network seen from the gradient's point of view: the loss sits at the far left, and the gradient travels rightwards into the past. Note the log scale — each gridline is 100× the one below.<br>
            <b>1.</b> Set the multiplier to <b>0.9</b> with length <b>50</b>. The gradient reaching the first step is 5×10<sup>−3</sup>. Watch it fall off a cliff.<br>
-           <b>2.</b> Set it to <b>1.1</b>. It rockets past 10<sup>2</sup> — training goes to NaN.<br>
+           <b>2.</b> Set it to <b>1.1</b>. It climbs past 10<sup>2</sup>. Push it to <b>1.5</b> and it hits the top of the chart — in a real run, that is the loss turning into NaN.<br>
            <b>3.</b> Now try <b>1.0</b> exactly. A flat line.<br>
            <b>Only a multiplier within a hair of one carries the signal intact.</b> The green dashed line shows what a forget gate held at 0.99 buys you.`),
         buildGradDemo(ctx),
+
+        /* maths beat: a recurrence, and the exponent that is its shortcut */
+        ctx.walkthrough([
+          { say: 'Set the multiplier to <b>0.9</b>: the gradient leaves the loss at full strength, 1, and one step back 0.9 of it is left.', math: '1 × 0.9 = 0.9' },
+          { say: 'The second step takes 0.9 of what is left, not of what it started with.', math: '0.9 × 0.9 = 0.81' },
+          { say: 'The third does the same again, so every value is made from the one before it by a single fixed rule.', math: '0.81 × 0.9 = 0.729', note: 'A rule that builds each value from the previous one is called a <b>recurrence</b>. It is the R in RNN.' },
+          { ask: 'What is left after a fourth step?',
+            options: ['0.6, because four lots of 0.1 have gone', '0.656, because 0.729 × 0.9', '0.629, because 0.729 − 0.1'], answer: 1,
+            explain: 'You multiply; you do not subtract. Taking off 0.1 a step would hit zero at step 10 and stop there. Multiplying never reaches zero. It just keeps shrinking.' },
+          { say: 'Writing "× 0.9" fifty times is tedious, so there is a shorthand: a small raised number that counts the multiplications.', math: '0.9 × 0.9 × … × 0.9 &nbsp;(fifty of them)&nbsp; = 0.9<sup>50</sup>', note: 'The raised number is an <b>exponent</b>. Read it as "0.9 to the power 50".' },
+          { say: 'Drag the length to 50 and the demo works it out for you.', math: '0.9<sup>50</sup> = 0.00515', note: 'The readout prints it as 5.15e-3, which means 5.15 with the decimal point moved three places left.' },
+          { ask: 'Now the multiplier is <b>1.1</b>: a tenth above one instead of a tenth below. What is 1.1<sup>50</sup>?',
+            options: ['About 6, because 1 + 50 × 0.1', 'About 55, because 1.1 × 50', 'About 117'], answer: 2,
+            explain: 'The readout says 1.17e+2: 1.17 with the point moved two places right. Repeated multiplication compounds, like interest paid on interest, so it leaves "add a bit each step" far behind.' },
+          { say: 'In symbols, write g for the gradient\'s strength and hang the step number on it as a label.', math: 'g<sub>t</sub> = m × g<sub>t−1</sub>', note: 'g<sub>t−1</sub> only means "the value one step earlier", and m is the multiplier slider.' },
+          { say: 'Run that rule N times from a start of 1 and you land on the exponent you just met.', math: 'g<sub>N</sub> = m<sup>N</sup>' },
+          { ask: 'Exactly one multiplier gives the same answer after 50 steps and after 5,000. Which?',
+            options: ['0.99', '1', '1.01'], answer: 1,
+            explain: '1 to any power is 1. Even 0.99 sags to 0.605 after 50 steps and to practically nothing after 5,000, and 1.01 runs away in the other direction. Hold that thought for the next section.' },
+          { say: 'The bars in the sentence demo were this same sum: at decay 0.5, "trophy" was ten steps back.', math: '0.5<sup>10</sup> = 0.001 = 0.1%' },
+        ], {
+          title: 'From "multiply again" to an exponent',
+          recap: 'each step back multiplies what is left by m, so N steps back leaves m to the power N: almost nothing if m is below 1, far too much if it is above.',
+        }),
+        ctx.decoder([
+          { sym: 'g<sub>t</sub>', name: 'the gradient\'s strength at step t', says: 'How much of the error signal is left after travelling t steps back from the loss.', points: 'the height of the blue line at one dot.' },
+          '=',
+          { sym: 'm', name: 'the multiplier', says: 'What one step back does to the signal. Below 1 it shrinks; above 1 it grows.', points: 'the per-step gradient multiplier slider.' },
+          '×',
+          { sym: 'g<sub>t−1</sub>', name: 'the strength one step earlier', says: 'The same quantity, one dot to the left. The small t−1 is a label saying which step, not arithmetic done to g.', points: 'the previous dot on the blue line.' },
+        ], {
+          title: 'The recurrence behind the chart',
+          plain: 'the strength now is the multiplier times the strength one step ago. Do that N times and you have m to the power N.',
+        }),
         p(`This is the party game where a sentence is whispered down a line of people: by the end nothing of the original survives. Signals fade to zero — the <em>vanishing gradient</em> — so the network cannot learn that something far back mattered.`),
         p(`Or, with slightly larger weights, the signal blows up — the <em>exploding gradient</em> — and training dies. Exploding has a cheap fix: clip the gradient to a maximum size, which every training loop now does. Vanishing has no such fix, and long-range dependencies are precisely what language is made of.`),
       ));
@@ -156,7 +206,7 @@
 
       root.append(section('Reading one sentence, writing another',
         p(`If an RNN can read a sentence into a summary vector, another RNN can write a sentence <i>out</i> of that vector. Sutskever, Vinyals and Le showed this in 2014: an <em>encoder</em> reads English, its final hidden state is handed to a <em>decoder</em>, and the decoder emits French one word at a time, feeding each word back in as the next input. The <em>sequence-to-sequence</em> model.`),
-        p(`It worked, and it had an obvious weakness. The entire meaning of a 40-word sentence had to squeeze through one fixed-size vector — 8,000 numbers in the 2014 seq2seq paper, and that was the whole sentence, however long it ran. Translation quality fell off sharply for long sentences — the <em>bottleneck problem</em>, a whole paragraph forced through a keyhole.`),
+        p(`It worked, and it had an obvious weakness. The entire meaning of a 40-word sentence had to squeeze through one fixed-size vector — 8,000 numbers in the 2014 seq2seq paper, and that was the whole sentence, however long it ran. In that year's encoder–decoders, translation quality sagged as sentences grew longer, which Cho and colleagues measured directly — the <em>bottleneck problem</em>, a whole paragraph forced through a keyhole.`),
         callout('tryit', '🖐 Try this — watch the keyhole, then remove it',
           `<b>1.</b> Start in <b>bottleneck</b> mode and press <b>▶ Play</b>. Every source word is crushed into one vector, and the decoder writes from that alone. Drag the source-length slider up to 20 and watch the "numbers per source word" figure collapse — the picture keeps showing six words, but the arithmetic is what matters here.<br>
            <b>2.</b> Switch to <b>attention</b>. Now the decoder looks back at <b>every</b> source word each time it writes one, and the lines show which it is leaning on.<br>
@@ -199,11 +249,21 @@
       ));
 
       root.append(ctx.quiz([
-        { q: 'Your count table got sharper as you raised the context length, but started reporting "never seen → backed off". Why can you not simply use a context of 10 characters?', options: ['Longer contexts are slower to look up', 'A 10-character context over 27 letters has about 200 trillion possible keys — no table can hold it and no text can fill it', 'The alphabet is too small', 'Backing off is a bug in the implementation'], answer: 1, explain: '27^10 is roughly 200 trillion. That is the wall you hit by dragging the context slider, and the whole motivation for replacing an exact-match table with a compressed, learned summary.' },
-        { q: 'A plain RNN multiplies its hidden state by roughly the same factor at every step. Why is that fatal for long sequences?', options: ['It makes the network too slow', 'Multiplied 50 times, a factor of 0.9 gives 0.005 and a factor of 1.1 gives 117 — the gradient either vanishes or explodes', 'It uses too much memory', 'The hidden state becomes negative'], answer: 1, explain: 'You saw both on the log-scale chart. Exploding gradients have a cheap fix (clipping). Vanishing ones do not, which is why the network simply cannot learn that something 50 steps back mattered.' },
-        { q: 'What does an LSTM forget gate set to exactly 1.0, with the input gate at 0, actually do?', options: ['Erases the memory', 'Copies the cell state through unchanged, giving a gradient multiplier of exactly 1 — so nothing vanishes', 'Doubles the cell state each step', 'Randomises the memory to prevent overfitting'], answer: 1, explain: 'That is the conveyor belt, and the flat line you produced by pressing "Remember perfectly". A multiplier of exactly one is the only value that neither decays nor explodes, and the LSTM is built entirely around being able to hold it.' },
-        { q: 'In the 2014 seq2seq paper, feeding the English sentence in backwards improved translations. What did that reveal?', options: ['That French and English have opposite word order', 'That the bottleneck was real — reversing moved the first source words closer in time to the first output words, so less had been forgotten', 'That the model was overfitting', 'That longer sentences are easier'], answer: 1, explain: 'It is a memory problem wearing a disguise. If shuffling the order in which information arrives helps, the model is forgetting the early part — which is exactly what attention fixed by keeping every encoder state instead of only the last.' },
-        { q: 'Why did transformers replace RNNs?', options: ['They need less training data', 'RNNs must process tokens strictly in order, wasting a GPU, and their fixed-size summary still forgot; attention removes both limits at once', 'RNNs cannot be trained with backpropagation', 'Transformers are smaller'], answer: 1, explain: 'Speed and memory. Attention lets every token see every other token directly, so nothing is squeezed through a summary, and with no step-by-step dependency the whole sequence trains in parallel. The cost is that attention over n tokens takes n² work — which is why recurrence is now coming back in state-space models.' },
+        { q: 'You train the count table on all of Wikipedia and set its context to 20 characters. Then you type a 20-character phrase that appears nowhere in Wikipedia. What does the table do?',
+          options: ['Predicts from the most similar phrase it has stored', 'Predicts from what the phrase means', 'Finds no match and backs off to a shorter context', 'Averages over every 20-character entry it holds'], answer: 2,
+          explain: 'A table is exact-match memory: it has no idea that two keys are similar. It is the "never seen → backed off" readout again, and more text cannot cure it, because the number of possible keys grows as 27 to the power of the context length.' },
+        { q: 'A gradient is multiplied by 0.8 at every step back through an RNN. Roughly how much of it reaches a word 10 steps earlier?',
+          options: ['About 11%', 'About 50%', 'About 80%', 'Exactly zero'], answer: 0,
+          explain: '0.8 multiplied by itself ten times: 0.8^10 ≈ 0.107. Ten more steps and it is about 1%. It never reaches zero, but it soon becomes too faint to teach the early weights anything, which is the vanishing gradient.' },
+        { q: 'An LSTM must carry the subject of a sentence across 40 filler words, then drop it at the full stop. Which gate settings do that?',
+          options: ['Forget 0.9 and input 0 the whole way', 'Forget 1 and input 1 the whole way', 'Forget 0 through the filler, then forget 1 at the full stop', 'Forget 1 and input 0 through the filler, then forget 0 at the full stop'], answer: 3,
+          explain: 'Forget 1 with input 0 copies the cell state through untouched, and forget 0 wipes it: your "Forget on cue" button. Forget 0.9 leaves only 0.9^40, about 1.5%. Input 1 lets every filler word scribble over the note.' },
+        { q: 'A seq2seq model squeezes every sentence into one 256-number vector. Its translations of 10-word sentences are good and of 60-word sentences poor. Which change attacks the cause most directly?',
+          options: ['Train for longer on the short sentences', 'Let the decoder look back at every encoder state', 'Clip the gradients to a smaller maximum', 'Generate at a lower temperature'], answer: 1,
+          explain: 'The cause is the bottleneck: 256 numbers shared among 60 words is about 4 each. Attention keeps one state per source word and lets the decoder take a weighted average of them for each word it writes, so nothing has to fit through the keyhole.' },
+        { q: 'Why can a transformer keep thousands of GPU cores busy during training while an RNN leaves most of them idle?',
+          options: ['Each RNN step needs the previous step\'s result first', 'An RNN has too few weights to spread across cores', 'A transformer does not need backpropagation', 'An RNN cannot be run on a GPU at all'], answer: 0,
+          explain: 'The hidden state at step 2 is computed from the hidden state at step 1, so the steps cannot run side by side. Attention has no such chain along the sequence during training, so every position is processed at once. The price is n² work for n tokens.' },
       ]));
 
       root.append(section('Go deeper',
@@ -301,8 +361,8 @@
       genOut.textContent = ((S.prefix || '') + out).split('').map(showChar).join('');
     }, 'primary');
     const resetBtn = ctx.button('↺ Reset', () => {
-      S.text = DEFAULT_TEXT; S.k = 3; S.prefix = 'the '; S.temp = 0.6;
-      taWrap.value = DEFAULT_TEXT; prefIn.value = 'the '; kSl.value = 3; tempSl.value = 0.6;
+      S.text = DEFAULT_TEXT; S.k = 1; S.prefix = 'the '; S.temp = 0.6;      // the state the chapter opens in
+      taWrap.value = DEFAULT_TEXT; prefIn.value = 'the '; kSl.value = 1; tempSl.value = 0.6;
       genOut.textContent = PLACEHOLDER;
       retrain();
     });

@@ -125,6 +125,21 @@
     part: 'II',
     title: 'Attention is all you need: the transformer',
     tagline: 'Watch the letters vanish, compute attention by hand, then count a real model\'s parameters on the back of an envelope — the architecture behind every model you can name.',
+    minutes: 55,
+    objectives: [
+      'explain why a model miscounts letters, from what a tokenizer actually hands it',
+      'compute one row of attention by hand: dot products, ÷√d, softmax, then a weighted blend of the Values',
+      'predict what breaks without position information, without the causal mask, and without the KV-cache',
+      'compute a transformer\'s parameter count from its width, depth and vocabulary',
+    ],
+    takeaways: [
+      '<b>A model reads tokens, not letters.</b> Byte-pair encoding glues frequent character pairs into chunks; common words become one token, rare ones several, and the letters inside a chunk are never shown to the model.',
+      '<b>Attention is four steps:</b> score every Key against the Query with a dot product, divide by √d, softmax the scores into shares that sum to 1, and blend the Values by those shares. In symbols, <code class="inline">softmax(QKᵀ/√d)·V</code>.',
+      '<b>Attention is order-blind.</b> Without a position signal, "the dog bit the man" and "the man bit the dog" are the same input. Sinusoids, learned positions or RoPE put the order back.',
+      '<b>A block is attention, then an MLP, each added back onto the residual stream.</b> Nothing is removed from the stream, which is why very deep stacks still train.',
+      '<b>Size is arithmetic:</b> about <code class="inline">12·d²·L + V·d</code> parameters. Doubling width quadruples the blocks; doubling depth only doubles them.',
+      '<b>Generation is one token at a time.</b> The KV-cache stores every earlier Key and Value so each step costs n comparisons instead of n², and it is also why long chats grow slow and heavy.',
+    ],
     render(root, ctx) {
       const { h, p, section, sub, callout, ul, ol } = ctx;
       const C = ctx.colors;
@@ -192,6 +207,9 @@
           if (!toks.length) box.append(h('span', { style: { color: C.muted } }, 'Type something above.'));
           if (clipped) box.append(h('span', { style: { color: C.warn, fontSize: '12px' } }, ' (showing first 500 characters)'));
           const nChars = text.length;
+          /* a space is drawn as a bare ␣, not a chip: real tokenizers fold it into the
+             neighbouring token, so it must not be counted as a token of its own */
+          const nTok = toks.filter((t) => t !== '·').length;
           const rate = 0.000003; // illustrative $3 / million input tokens — not any specific real price
           if (S.merges === 0) {
             mergeLine.textContent = 'merge 0 of ' + BPE_MERGES.length + ' — nothing fused yet, so every token is a single character.';
@@ -201,11 +219,11 @@
               + showSym(pair[0]) + '" + "' + showSym(pair[1]) + '"  \u2192  "' + showSym(pair[0] + pair[1]) + '"';
           }
           ro.set({
-            tokens: toks.length,
+            tokens: nTok,
             characters: nChars,
-            'chars / token': toks.length ? (nChars / toks.length).toFixed(2) : '–',
+            'chars / token': nTok ? (nChars / nTok).toFixed(2) : '–',
             'vocabulary': BPE_BASE_VOCAB + S.merges,
-            'illustrative cost @ $3/M tok': '$' + (toks.length * rate).toFixed(6),
+            'illustrative cost @ $3/M tok': '$' + (nTok * rate).toFixed(6),
           });
         }
         const ta = ctx.textarea({ label: 'Type or paste text', value: S.text, onChange: (v) => { S.text = v; render(); } });
@@ -232,7 +250,7 @@
           Q: [[1, 0], [0, 1], [1, 1]],
           K: [[1, 0], [0, 2], [1, -1]],
           V: [[1, 0], [0, 1], [2, 0]],
-          qi: 0,
+          qi: 1,   /* token 2: scores 0, 2, −1 — a clear winner and a negative, the row the walkthrough computes */
         };
         function compute() {
           const n = 3, d = 2, scale = Math.sqrt(d);
@@ -350,7 +368,7 @@
         }
         const ro = ctx.readout();
         function refresh() { draw(); const r = compute(); ro.set({ 'top key': 'K' + (r.w.indexOf(Math.max(...r.w)) + 1), weight: pct(Math.max(...r.w)) }); }
-        const qSel = ctx.select({ label: 'inspect query', options: [{ value: '0', label: 'token 1' }, { value: '1', label: 'token 2' }, { value: '2', label: 'token 3' }], value: '0', onChange: (v) => { S.qi = +v; refresh(); } });
+        const qSel = ctx.select({ label: 'inspect query', options: [{ value: '0', label: 'token 1' }, { value: '1', label: 'token 2' }, { value: '2', label: 'token 3' }], value: '1', onChange: (v) => { S.qi = +v; refresh(); } });
         const sliders = [];
         ['Q', 'K', 'V'].forEach((kind) => {
           for (let t = 0; t < 3; t++) {
@@ -365,7 +383,7 @@
         });
         refresh();
         return ctx.figure(cv,
-          'Three tokens, each with its own 2-D Query, Key and Value vector — drag any slider and every number recomputes live. Raw score = Q·K (dot product); scale by ÷√d (d = 2 here) to stop scores from growing with dimension; softmax turns the three scores into weights that are positive and sum to 1; the output is that weighted average of the three Value vectors. The default numbers match the worked example in the text below — check a slider against it.',
+          'Three tokens, each with its own 2-D Query, Key and Value vector — drag any slider and every number recomputes live. Raw score = Q·K (dot product); scale by ÷√d (d = 2 here) to stop scores from growing with dimension; softmax turns the three scores into weights that are positive and sum to 1; the output is that weighted average of the three Value vectors. The numbers it opens on — query token 2 — are the ones the step-by-step below works through.',
           [qSel, ...sliders], ro);
       }
 
@@ -1034,7 +1052,7 @@
         p(`Early merges fuse common letter pairs ("t"+"h" → "th"). Later merges fuse whole words ("th"+"e" → "the"). Rare words never earn their own symbol, so they end up spelled out as two, three or five pieces stitched together from parts learned elsewhere.`),
         callout('tryit', '🖐 Try this: watch a tokenizer learn',
           `The demo below runs that exact algorithm, live, on a few hundred words of built-in text.<br>
-           <b>1.</b> Step through the merges one at a time and read what each one fuses. The first few glue a single letter to the end-of-word mark ‿, or to another letter — the model is learning which pairs are common before it learns any words.<br>
+           <b>1.</b> It opens with all 200 merges already learned. Drag <b>merge rules learned</b> back to 0, so every chip is one character, then step forward one at a time and read what each rule fuses. The first few glue a single letter to the end-of-word mark ‿, or to another letter — the model is learning which pairs are common before it learns any words.<br>
            <b>2.</b> Keep going and watch whole words appear as single symbols.<br>
            <b>3.</b> Notice the vocabulary growing while the token count of the same text <b>falls</b>. That trade is the entire design.`),
         tokenizerDemo(),
@@ -1059,11 +1077,56 @@
         p(`Concretely: every token's embedding is multiplied by three learned weight matrices to produce a Query <b>q</b>, a Key <b>k</b> and a Value <b>v</b>. For one query token, compute its compatibility with every token's key by a dot product, scale it down, then squash the row through <em>softmax</em> so the scores are positive and sum to exactly 1 — a genuine weighted average.`),
         callout('tryit', '🖐 Try this: compute attention by hand',
           `Three tiny 2-dimensional tokens, so you can check every digit with a calculator if you want to.<br>
-           <b>1.</b> Step through the four stages: dot products, scale by √d, softmax, then blend the Values.<br>
-           <b>2.</b> Drag a Query vector and watch which token it starts leaning on.<br>
-           <b>3.</b> Watch the softmax row: it always sums to 1. Nothing is left over and nothing is negative.`),
+           <b>1.</b> Change nothing yet. Read the right-hand side top to bottom, because it is the four stages in order: raw dot products, the same scores divided by √d, the softmax weights, and at the bottom the blend of the Values.<br>
+           <b>2.</b> Token 2 is the query. Its raw scores are 0, 2 and −1, so it leans hardest on Key 2. Now slide <b>Q2.x</b> up to 3 and watch it start leaning on Key 1 instead.<br>
+           <b>3.</b> Watch the softmax row while you do it: it always sums to 1. Nothing is left over and nothing is negative, even when a raw score is.<br>
+           <b>4.</b> Switch <b>inspect query</b> to token 1 and token 3. Same keys, same values, a different question, a different blend.`),
         attentionByHand(),
-        p(`Q·Kᵀ produces one raw score for every (query, key) pair at once — a full grid. Dividing by √d matters more than it looks: as the dimension grows, a plain dot product's typical size grows with it, and uncorrected the scores swing so wildly that softmax collapses into an all-or-nothing spike, which starves the gradient during training.`),
+        ctx.walkthrough([
+          { say: 'Token 2 is asking the question, so start with its Query: two numbers.', math: 'Q<sub>2</sub> = [0, 1]',
+            note: 'The demo opens with token 2 selected. If you have moved sliders, the numbers below are the ones it started with.' },
+          { say: 'Score that Query against each Key exactly as chapter 6 scored two arrows: multiply slot by slot, then add.',
+            math: 'K<sub>1</sub> = [1, 0]: &nbsp; 0&times;1 + 1&times;0 = 0<br>K<sub>2</sub> = [0, 2]: &nbsp; 0&times;0 + 1&times;2 = 2<br>K<sub>3</sub> = [1, &minus;1]: &nbsp; 0&times;1 + 1&times;(&minus;1) = &minus;1',
+            note: 'Those are the three bars in the top panel: 0.00, 2.00, &minus;1.00.' },
+          { ask: 'Token 3\'s Query is [1, 1]. What is its raw score against K<sub>2</sub> = [0, 2]?',
+            options: ['0', '2', '3'], answer: 1,
+            explain: '1&times;0 + 1&times;2 = 2. Switch <b>inspect query</b> to token 3 and the middle bar reads 2.00.' },
+          { say: 'Three Queries against three Keys is nine dot products, a 3 &times; 3 grid, and computing the whole grid in one go is all that "matrix multiplication" means here.', math: 'Q K<sup>&#7488;</sup>',
+            note: 'The small &#7488; says "turn the Keys on their side" so each Query row meets each Key column. It is bookkeeping, not a new calculation.' },
+          { say: 'Next, shrink every score: these vectors hold 2 numbers each, so divide by &radic;2.', math: '0, &nbsp;2, &nbsp;&minus;1 &nbsp;&rarr;&nbsp; 0, &nbsp;1.414, &nbsp;&minus;0.707',
+            note: 'The second panel, which rounds them to 1.41 and &minus;0.71. Every bar is shorter and none has changed sign.' },
+          { say: 'The reason is statistics you already own: a dot product is a sum of d terms, and the spread of a sum of d independent terms grows like &radic;d.',
+            note: 'At d = 768 the raw scores would swing about 28 times wider than at d = 1, since &radic;768 = 27.7. Dividing by &radic;d cancels exactly that growth.' },
+          { say: 'Now turn scores into shares, starting by raising e to the power of each score so that everything becomes positive.', math: 'e<sup>0</sup> = 1.00 &nbsp;&nbsp; e<sup>1.414</sup> = 4.11 &nbsp;&nbsp; e<sup>&minus;0.707</sup> = 0.49',
+            note: 'e is just the number 2.718. A negative score becomes a small positive number, never a negative one.' },
+          { say: 'Then divide each by their total, 5.61, so the three shares add up to exactly 1.', math: '1.00, &nbsp;4.11, &nbsp;0.49 &nbsp;&rarr;&nbsp; 0.178, &nbsp;0.734, &nbsp;0.088',
+            note: 'Those two moves together are <b>softmax</b>. The third panel shows the result rounded: 0.18, 0.73, 0.09.' },
+          { ask: 'Skip the &divide;&radic;2 and softmax the raw scores 0, 2, &minus;1 instead. What happens to Key 2\'s share?',
+            options: ['It grows, from 0.73 to 0.84', 'It shrinks, from 0.73 to 0.58', 'Nothing: softmax ignores the size of the scores'], answer: 0,
+            explain: 'Wider gaps between scores make softmax more winner-takes-all. In hundreds of dimensions, unscaled, one key would take almost everything, the others would get almost no gradient, and training would stall. That is the whole job of &divide;&radic;d.' },
+          { say: 'Last step: blend the three Values using those shares as the weights.', math: '0.178&times;[1, 0] + 0.734&times;[0, 1] + 0.088&times;[2, 0] &nbsp;=&nbsp; [0.354, 0.734]',
+            note: 'The pink arrow, and the line at the bottom of the demo: (0.35, 0.73). It is a weighted average, the same one you would compute for exam marks.' },
+          { say: 'Do that for every token at once and the four steps collapse into the one line at the centre of the 2017 paper.', math: 'softmax( Q K<sup>&#7488;</sup> / &radic;d ) &middot; V',
+            note: 'Read it inside out: score, scale, softmax, blend.' },
+        ], {
+          title: 'One row of attention, with a calculator',
+          recap: 'dot each Key with the Query, divide by √d, softmax into shares that sum to 1, and take that weighted average of the Values.',
+        }),
+        ctx.decoder([
+          { sym: 'softmax', name: 'softmax', says: 'Raise e to each score, then divide by the total. Whatever goes in, what comes out is positive and sums to 1.', points: 'the third panel: 0.18, 0.73, 0.09.' },
+          '(',
+          { sym: 'Q', name: 'the Queries', says: 'One row per token: what that token is looking for.', points: 'the solid arrows, set by the Q sliders.' },
+          { sym: 'K<sup>&#7488;</sup>', name: 'K transpose, the Keys on their side', says: 'One Key per token: what that token offers. Q next to K<sup>&#7488;</sup> means every Query dotted with every Key, a full grid of raw scores.', points: 'the dashed arrows, and the top panel "raw QK&#7488;".' },
+          '/',
+          { sym: '&radic;d', name: 'root d', says: 'The square root of how many numbers are in each vector. It cancels the way a dot product\'s spread grows with dimension.', points: 'the second panel, "scaled &divide; &radic;2".' },
+          ')',
+          '&middot;',
+          { sym: 'V', name: 'the Values', says: 'One row per token: what that token actually hands over when attended to. The shares decide how much of each is taken.', points: 'the dotted arrows, blended into the pink output arrow.' },
+        ], {
+          title: 'Attention(Q, K, V)  =  softmax(Q Kᵀ / √d) · V',
+          plain: 'score every Key against every Query, shrink the scores, turn each row into shares that sum to 1, and use the shares to average the Values.',
+        }),
+        p(`Dividing by √d matters more than it looks. Uncorrected, the scores in a wide model swing so far apart that softmax collapses into an all-or-nothing spike, which starves the gradient during training.`),
         p(`That four-step recipe — score, scale, softmax, blend — run for every token against every other token in one matrix multiplication, <b>is the entire mechanism</b>. Nothing else in a transformer is conceptually harder. Everything else is scale and repetition.`),
       ));
 
@@ -1072,7 +1135,7 @@
         p(`The classic test is a Winograd-style sentence: "The animal didn't cross the street because <b>it</b> was too tired." Every human instantly reads "it" as the animal, because a tired street makes no sense. Real trained attention heads learn exactly this kind of link from data.`),
         callout('tryit', '🖐 Try this: the attention visualiser',
           `<b>1.</b> Click the word <b>it</b> and watch where the weight goes.<br>
-           <b>2.</b> Now swap the two nouns round: type <b>The street didn't bother the animal because it was too wide</b>. The link follows the word order, not the meaning — which is the honest limit of a hand-written rule, and exactly what a trained head learns to do better.<br>
+           <b>2.</b> Now change the last word: edit the sentence so it ends <b>because it was too wide</b>. You instantly re-read "it" as the street. The arcs do not move at all: the rule still sends "it" to the animal, because it follows word order, not meaning — which is the honest limit of a hand-written rule, and exactly what a trained head learns to do better.<br>
            <b>3.</b> Toggle <b>causal mask</b> on and off. With it on, no token can attend to anything to its right, which is the constraint every GPT-style model trains under.`),
         callout('warning', '⚠️ Illustrative, not trained',
           `The visualiser below fakes one attention head with a few hand-written rules — a crude part-of-speech guess, a boost from pronouns back toward the sentence's first content word, a boost from "the" toward the following word, and a mild preference for nearby words.
@@ -1092,7 +1155,7 @@
         positionLab(),
         p(`That is a real problem, because "the dog bit the man" and "the man bit the dog" contain exactly the same words. An RNN got order for free by reading left to right. A transformer has to be told.`),
         p(`The fix is <em>positional encoding</em>: before the first layer, add a vector to each token's embedding that encodes its position, so token 1 and token 50 differ even when the word is identical.`),
-        p(`The 2017 paper used the fixed pattern of sine and cosine waves you just dragged — no learning required, and the authors hoped it would let a model handle sequences longer than any it trained on. Measured later, it does not; that is why almost every model since 2023 uses RoPE instead. Many models instead learn a position vector per slot.`),
+        p(`The 2017 paper used the fixed pattern of sine and cosine waves you just dragged — no learning required, and the authors hoped it would let a model handle sequences longer than any it trained on. Measured later, it does not. BERT and GPT-2 dropped the waves and simply learned one position vector per slot, which works but stops dead at the longest length seen in training.`),
         p(`Most models from 2023 onward use <em>RoPE</em> (rotary position embedding), which rotates each Query and Key by an angle proportional to its position, so the dot product between two tokens naturally reflects their <i>relative</i> distance rather than absolute position. Worth knowing the name of; not worth deriving here.`),
       ));
 
@@ -1106,7 +1169,7 @@
            A gradient can always flow straight back down the highway, with every sublayer offering an optional shortcut rather than a mandatory bottleneck.`),
         callout('tryit', '🖐 Try this: follow the pulse',
           `Watch one pulse make a full pass through the stack, and note that the <b>same two-step recipe</b> repeats layer after layer.<br>
-           Drag the layer slider to its end: that is GPT-2 small's 12. The largest models today stack the same block over a hundred times, which the slider does not reach and the picture would not fit.<br>
+           Drag the layer slider to its end: that is GPT-2 small's 12. GPT-3 stacked the same block 96 times and today's large open models use around sixty, which the slider does not reach and the picture would not fit.<br>
            Attention is computed for every token in parallel; only the layer-by-layer stacking is sequential.`),
         blockDiagram(),
       ));
@@ -1132,7 +1195,7 @@
         callout('tryit', '🖐 Try this',
           `<b>1.</b> Press <b>GPT-2 small</b>: d = 768, 12 layers, 50,257 tokens. The total lands on <b>124M</b> — the published figure.<br>
            <b>2.</b> Press <b>GPT-3</b>: d = 12,288 and 96 layers. It lands near <b>175B</b>.<br>
-           <b>3.</b> Now the lesson. Press <b>GPT-2 small</b>, then double <b>layers</b>: the <b>blocks</b> row doubles exactly, 85M to 170M, while the grand total goes 124.3M to 209.3M — the embedding tables do not grow with depth. Then put the layers back and double <b>width</b> instead: the blocks row roughly <b>quadruples</b>, because the per-block cost is 12<i>d</i>².`),
+           <b>3.</b> Now the lesson. Press <b>GPT-2 small</b>, then double <b>layers</b>: the <b>blocks</b> row doubles, 84.9M to 169.9M, while the grand total goes 124.3M to 209.3M — the embedding tables do not grow with depth. Then put the layers back to 12 and double <b>width</b> to 1,536 instead: the blocks row <b>quadruples</b>, to 339.7M, because the per-block cost is 12<i>d</i>².`),
         paramCalc(),
         p(`Each block spends 4<i>d</i>² on attention — the Q, K and V matrices plus the output projection — and 8<i>d</i>² on its MLP, whose hidden layer is conventionally four times the width. That is 12<i>d</i>² per block.`),
         p(`Twelve blocks of 7.08M is about 85M. Add 38.6M of token embeddings and 0.8M of position embeddings and you get 124M. GPT-2 ties its output layer to the input embedding matrix, reusing the same numbers to turn the final vector back into probabilities, which is why there is no separate un-embedding line.`),
@@ -1142,9 +1205,10 @@
         p(`Training sees a whole sentence at once and predicts every next-token in parallel. Using the model — <em>inference</em> — is different: it only knows the tokens generated so far, so it produces its reply <em>autoregressively</em>. Draw a next token from the distribution, append it, feed the now-longer sequence back in, predict again. (<i>How</i> it draws — always the top one, or sampled with a temperature — is chapter 12, and it changes the model\'s personality without changing a single weight.)`),
         p(`That loop, repeated hundreds or thousands of times, is why a chat response streams into view word by word. It is not a UI affectation. It is the actual order of computation.`),
         callout('tryit', '🖐 Try this — the optimisation you have already felt',
-          `<b>1.</b> With the <b>KV-cache on</b>, the work curve is a straight line. Turn it <b>off</b> and watch it bend upward.<br>
-           <b>2.</b> Drag <b>prompt length</b> to 2,000 and read the "work saved" figure. That is the difference between a reply that streams and one that crawls.<br>
-           <b>3.</b> Now the part you have felt without knowing why: with the cache on, drag <b>tokens generated</b> up and watch the per-step cost keep climbing anyway.`),
+          `<b>1.</b> Read the two legend lines under the chart. With a 200-token prompt and 300 tokens generated, the last step costs <b>500</b> comparisons with the cache and <b>250K</b> without. The axis is logarithmic, so that modest-looking gap is a factor of 500.<br>
+           <b>2.</b> Drag <b>prompt length</b> to 2,000 and read the "work saved" figure: 2,300×. The saving always equals the length of the context, which is the difference between a reply that streams and one that crawls.<br>
+           <b>3.</b> Now the part you have felt without knowing why: drag <b>tokens generated</b> up and watch the green with-cache figure keep climbing anyway.<br>
+           Both curves are always drawn so you can compare them. The <b>KV-cache</b> button only switches which one is highlighted.`),
         kvCacheLab(),
         p(`Done naively, the loop recomputes Key and Value vectors for every earlier token at every step — wasteful, since a token's Key and Value never change once computed. Only new tokens are ever added to the end.`),
         p(`The fix is a <em>KV-cache</em>: store every token's Key and Value the first time, and at each step compute Q, K and V for only the newest token, comparing its fresh Query against the whole cached history. It is the single biggest reason chat responses feel fast.`),
@@ -1162,11 +1226,46 @@
 
       root.append(
         ctx.quiz([
-          { q: 'Why do language models miscount the letters in "strawberry"?', options: ['Arithmetic on letters is hard for computers', 'The word arrives as a couple of opaque chunk-numbers, so the model must recall how each chunk is spelled rather than simply looking at the letters', 'The model was never trained on the word', 'Tokenizers delete repeated letters'], answer: 1, explain: 'You saw it in the opening demo: press "See it the way the model does" and only the numbers remain. Spelling is one step removed from the meaning those numbers were built to carry. Try "the" — one token, no unpacking, no problem.' },
-          { q: 'What does dividing by √d accomplish in the attention formula?', options: ['It normalises the output to length 1', 'It keeps raw dot products in a sane range as the dimension grows, so softmax does not collapse into an all-or-nothing spike and starve the gradient', 'It makes the computation faster', 'It is required for the causal mask'], answer: 1, explain: 'A dot product of longer vectors sums more terms, so its typical size grows like √d — which is exactly why the divisor is √d and not d. Uncorrected, the scores swing far enough that softmax saturates, gradients go to nearly zero, and training stalls.' },
-          { q: 'You turned positional encoding off and swapped two words. What happened to the attention grid, and why?', options: ['It went blank', 'The same numbers came back, merely rearranged — because Q·Kᵀ compares content against content and has no idea where either token sat', 'The scores doubled', 'Nothing, because attention already tracks order'], answer: 1, explain: 'Attention is a set operation. That is why a position-dependent vector is added to every embedding before layer 1: without it, "the dog bit the man" and "the man bit the dog" are literally indistinguishable to the mechanism.' },
-          { q: 'A transformer block has 12d² parameters. What does that imply about making a model bigger?', options: ['Depth and width cost the same', 'Doubling the width roughly quadruples the per-block cost, while doubling the depth only doubles it', 'Width is free', 'Parameter count does not depend on d'], answer: 1, explain: 'The per-block cost is quadratic in width and linear in the number of blocks, which you can verify on the calculator: press GPT-2 small, then double layers (total doubles), then double width instead (total roughly quadruples).' },
-          { q: 'What is a KV-cache and what does it cost you?', options: ['It stores the model weights closer to the GPU; it costs nothing', 'It stores every token\'s Key and Value so they are not recomputed each step — making replies fast, but growing with the conversation, so long chats get slower and heavier', 'It caches common prompts so repeated questions are free', 'It compresses the context window'], answer: 1, explain: 'A token\'s Key and Value never change once computed, so storing them turns each generation step into a small increment instead of redoing all the past work. The cache lives in GPU memory and grows with every token exchanged, which is exactly why a very long conversation feels slower.' },
+          { q: 'You paste an invented product name, "Zyrqalith", into a chat model and ask for it backwards. It gets it wrong, though it reverses "table" without trouble. What is the best explanation?',
+            options: [
+              'The model has never seen the word, so it has no representation for it at all and has to guess',
+              'The name arrives as several chunk-numbers, and the model has to recall how each chunk is spelled, since it is never shown the letters',
+              'Long or unusual words overflow the context window, so the end of the word is cut off before layer 1',
+              'Attention can only move information left to right, so reversing any string is beyond it',
+            ], answer: 1,
+            explain: 'A subword tokenizer never fails to represent a string: it falls back to smaller pieces. But the pieces are numbers, not letters. "table" is one familiar token whose spelling the model has met countless times; a fresh name is several rare chunks whose spellings it must recall, one step removed from what those numbers were built to carry.' },
+          { q: 'An engineer widens a model from d = 64 to d = 4,096 and forgets the ÷√d in attention. What is the most likely symptom?',
+            options: [
+              'Attention weights turn nearly one-hot, each token fixed on a single other token, and training stalls',
+              'Attention weights turn nearly uniform, so every token attends to all the others equally',
+              'The model trains normally, but each step runs about 64 times slower than it should',
+              'The causal mask stops working, so tokens start attending to the future',
+            ], answer: 0,
+            explain: 'A dot product over more dimensions sums more terms, so raw scores spread about √d wider: eight times wider here. You saw the direction in the walkthrough, where dropping ÷√2 pushed the top share from 0.73 to 0.84. Wide gaps saturate softmax, the losing keys get almost no gradient, and learning stalls.' },
+          { q: 'Someone ships a transformer with every trace of position information removed. Which pair of inputs can it no longer tell apart?',
+            options: [
+              '"dog" and "dogs"',
+              '"The dog" and "the dog"',
+              '"the dog bit the man" and "the man bit the dog"',
+              'A five-word sentence and a five-hundred-word document',
+            ], answer: 2,
+            explain: 'Attention compares content with content and has no idea where anything sat, which is what you saw when the grid came back merely shuffled. The same tokens in a different order are the same set. The other pairs differ in which tokens are present or how many, and that it can still see.' },
+          { q: 'Two ways to grow GPT-2 small: model A doubles the layers (12 → 24), model B doubles the width (768 → 1,536). How do the parameters in their blocks compare?',
+            options: [
+              'They are equal: doubling either dial doubles the blocks',
+              'A has about twice as many as B, because depth multiplies every matrix',
+              'B has about four times as many as A, because width is squared',
+              'B has about twice as many as A: doubling width quadruples the blocks, doubling depth only doubles them',
+            ], answer: 3,
+            explain: 'Blocks cost 12·d²·L. Doubling L doubles that: 84.9M to 169.9M on the calculator. Doubling d quadruples it: 84.9M to 339.7M. So B ends up at twice A. Note it is the blocks that scale this way; the embedding tables grow with width but not with depth.' },
+          { q: 'A chatbot answers the first message quickly, but deep into a very long conversation each reply starts more slowly and the server needs more memory. The KV-cache is on. Why?',
+            options: [
+              'The cache is thrown away and rebuilt from scratch at every turn, so the saving disappears',
+              'The cache holds a Key and Value for every token so far, so it grows with the conversation and each new token is compared against all of it',
+              'The model\'s weights grow as it learns from the conversation, so every pass costs more',
+              'The tokenizer has to re-merge the whole conversation each turn, which is slow for long text',
+            ], answer: 1,
+            explain: 'The cache turns each step from n² comparisons into n, a saving equal to the context length. But n itself keeps rising, and every stored Key and Value sits in GPU memory. Nothing about the weights changes during a chat.' },
         ]),
 
         section('Go deeper',

@@ -11,6 +11,21 @@
     part: 'III',
     title: 'Inference, tools and agents: how a model is actually used',
     tagline: 'A trained model is a frozen function. This is everything that happens between you pressing enter and an agent editing your codebase.',
+    minutes: 45,
+    objectives: [
+      'predict how temperature, top-k and top-p change what a model says, without a single weight moving',
+      'compute the memory a long context costs, and explain why the KV cache turns quadratic work into linear work',
+      'spot whether a RAG system or an agent is answering from something it actually read or from nothing at all',
+      'price a product from its prompt size, reply size and call volume, and say when prompt caching decides the bill',
+    ],
+    takeaways: [
+      '<b>Inference changes no weights.</b> Temperature divides every logit by T before softmax; top-k and top-p cut the tail. Same model, different personality, and temperature can never change which token is the favourite.',
+      '<b>Decode is one token at a time.</b> Prefill reads the whole prompt in one parallel pass; the reply is emitted single-file, which is why long answers take time and output tokens cost more.',
+      '<b>The KV cache trades work for memory.</b> Without it an n-token reply costs about n²/2 token-passes; with it, n. The price is memory that grows in a straight line with tokens, layers and concurrent users.',
+      '<b>A big window is not a usable window.</b> Recall is best at the start and end of a context and sags in the middle, so put what matters at an edge.',
+      '<b>RAG and tools are how a frozen model touches reality.</b> Retrieval pastes facts into the prompt; a tool call asks a harness to run something. With neither, the same confident prose is invented.',
+      '<b>An agent is a loop: think, act, observe.</b> It resends its growing transcript every step, so its bill is almost all input tokens and prompt caching is what makes it affordable.',
+    ],
     render(root, ctx) {
       const { h, p, section, sub, callout, ul, ol } = ctx;
       const C = ctx.colors;
@@ -150,6 +165,7 @@
       function kvCalculator() {
         const BYTES = { fp16: 2, int8: 1, int4: 0.5 };
         const H100_GB = 80;
+        const KV_BYTES = 2;
         const PRESETS = {
           '7b': { layers: 32, dModel: 4096, label: '~7B dense (e.g. Llama-2-7B shape)' },
           '13b': { layers: 40, dModel: 5120, label: '~13B dense' },
@@ -166,7 +182,9 @@
           // Standard transformer parameter-count approximation (ignores embeddings): 12 * L * d^2.
           const params = 12 * S.layers * S.dModel * S.dModel;
           const weightGB = (params * bpv) / (1024 ** 3);
-          const kvPerSeqBytes = 2 * S.layers * S.dModel * ctxTok * bpv; // ×2 for Key and Value
+          // ×2 for Key and Value. The cache holds activations, not weights, and is normally kept
+          // at 16 bits however hard the weights were quantized, so it does not shrink with them.
+          const kvPerSeqBytes = 2 * S.layers * S.dModel * ctxTok * KV_BYTES;
           const kvTotalGB = (kvPerSeqBytes * S.batch) / (1024 ** 3);
           const totalGB = weightGB + kvTotalGB;
           const leftoverBytes = Math.max(0, H100_GB - weightGB) * (1024 ** 3);
@@ -222,7 +240,7 @@
         const dModelSl = ctx.slider({ label: 'd_model', min: 256, max: 16384, step: 128, value: 4096, onChange: (v) => { S.dModel = v; recompute(); } });
         const ctxSl = ctx.slider({ label: 'context length', min: 9, max: 18, step: 1, value: 13, fmt: (v) => fmtInt(Math.pow(2, v)) + ' tok', onChange: (v) => { S.ctxExp = v; recompute(); } });
         const batchSl = ctx.slider({ label: 'concurrent requests (batch)', min: 1, max: 64, step: 1, value: 1, onChange: (v) => { S.batch = v; recompute(); } });
-        const precSel = ctx.select({ label: 'precision', value: 'fp16', options: [{ value: 'fp16', label: 'fp16 (2 bytes/weight)' }, { value: 'int8', label: 'int8 (1 byte/weight)' }, { value: 'int4', label: 'int4 (0.5 byte/weight)' }], onChange: (v) => { S.prec = v; recompute(); } });
+        const precSel = ctx.select({ label: 'weight precision', value: 'fp16', options: [{ value: 'fp16', label: 'fp16 (2 bytes/weight)' }, { value: 'int8', label: 'int8 (1 byte/weight)' }, { value: 'int4', label: 'int4 (0.5 byte/weight)' }], onChange: (v) => { S.prec = v; recompute(); } });
 
         recompute();
         const costTable = ctx.table(
@@ -235,7 +253,7 @@
           ]
         );
         return h('div', {},
-          ctx.figure(cv, 'Live for the sliders above, on a dense-model approximation (an MoE would have to hold all of its experts resident, not just the ones a token uses): the blue segment is model-weight memory, the orange segment is total KV-cache memory across every concurrent request, and the red dashed line marks one H100’s 80 GB. Longer context and more concurrent users both push the orange segment right — that is the entire cost story of serving a model.', [presetSel, layersSl, dModelSl, ctxSl, batchSl, precSel], ro),
+          ctx.figure(cv, 'Live for the sliders above, on a dense-model approximation (an MoE would have to hold all of its experts resident, not just the ones a token uses): the blue segment is model-weight memory, the orange segment is total KV-cache memory across every concurrent request, and the red dashed line marks one H100’s 80 GB. The cache is counted at 16 bits per number whatever the weight precision, because that is how it is normally stored: quantizing weights does not shrink it. Longer context and more concurrent users both push the orange segment right — that is the entire cost story of serving a model.', [presetSel, layersSl, dModelSl, ctxSl, batchSl, precSel], ro),
           p('<b>Rough, order-of-magnitude only</b> — real throughput and pricing depend on the specific hardware, software stack, batching strategy and provider margin, and change every few months. Treat this table as "which order of magnitude", not a quote:'),
           costTable,
         );
@@ -589,7 +607,7 @@
       root.append(
         callout('tryit', '🖐 Do this first — make the model say the wrong thing',
           `The bars are a model's next-word distribution after <b>"The capital of Australia is"</b>. Canberra is correct. Sydney is the answer most people would guess.<br>
-           <b>1.</b> At the defaults, press <b>Sample 20×</b>. Canberra wins nearly every time.<br>
+           <b>1.</b> At the defaults, press <b>Sample 20×</b>. Canberra takes about half the draws and Sydney about one in five — the model's honest spread of opinion.<br>
            <b>2.</b> Now push <b>temperature</b> to 2 and sample again. Canberra's share halves, from 52% to 26% — three draws in four are now something other than the right answer. But watch what <i>never</i> happens: Sydney never overtakes Canberra. Temperature divides every logit by the same number, so it cannot change which token the model prefers — only how often it wanders off it.<br>
            <b>3.</b> Set temperature back and pull <b>top-k</b> down to 1. Now it is frozen on one answer forever, however high you push the temperature afterwards.<br>
            <b>4.</b> That is the entire difference between a model that feels creative and one that feels reliable, and it is a dial, not a retraining run.`),
@@ -613,7 +631,7 @@
           p(`Generating a reply happens in two phases. <em>Prefill</em> reads your whole prompt at once — every token processed in one big, parallel matrix multiplication — so a long prompt is "digested" almost instantly. <em>Decode</em> is what follows: the reply is produced one token at a time, each new token depending on every token before it, so the same computation repeats, single-file, for as long as the reply runs. Decode, not prefill, is why a long answer visibly takes time.`),
           p(`Naively, producing token 500 would mean recomputing attention over all 499 tokens before it from scratch — and token 501 over 500, redoing nearly all of the same work every step.`),
           p(` The <em>KV cache</em> avoids that: every layer stores the Key and Value vectors it computes for each token, once, and reuses them for every later step; decode then only computes one new token's own Key/Value pair. That reuse is what makes generation feel roughly linear in speed — but the cache is memory, and it grows with every token kept around.`),
-          p(`Its size is roughly <code class="inline">2 × layers × d<sub>model</sub> × tokens × batch × bytes-per-value</code> (2 for Key and Value). A 7B-shaped model — 32 layers, d<sub>model</sub> = 4096, fp16 — at 8,192 tokens: 2×32×4096×8192×1×2 = 4,294,967,296 bytes, exactly <b>4 GB</b> of cache. Stretch to 131,072 tokens (16× longer) and the cache grows 16× too, to exactly <b>64 GB</b> — most of an H100's 80 GB, before the model's own 12 GB of weights even load. Long context is a standing memory bill, multiplied by every concurrent conversation.`),
+          p(`Its size is roughly <code class="inline">2 × layers × d<sub>model</sub> × tokens × batch × bytes-per-value</code> (2 for Key and Value). A 7B-shaped model — 32 layers, d<sub>model</sub> = 4096, fp16 — at 8,192 tokens: 2×32×4096×8192×1×2 = 4,294,967,296 bytes, exactly <b>4 GB</b> of cache. Stretch to 131,072 tokens (16× longer) and the cache grows 16× too, to exactly <b>64 GB</b> — most of an H100's 80 GB, before the model's own 12 GB of weights even load. (The calculator counts in binary gigabytes, 2<sup>30</sup> bytes, which is why these come out round.) Long context is a standing memory bill, multiplied by every concurrent conversation.`),
           p(`That formula assumes every attention head keeps its own Key and Value pair, which was true of the first generation of these models and is what the calculator below computes. Nearly every model shipping a long window today uses <em>grouped-query attention</em>, where several query heads share one Key/Value head — Llama-3-8B has 32 query heads but only 8 KV heads — dividing the cache by that ratio, commonly 4–8×. The shape of the bill is unchanged: still linear in tokens, still multiplied by every concurrent request. Read the numbers below as an upper bound.`),
           p(`Several tricks push that bill down:`),
           ul([
@@ -623,8 +641,37 @@
             `<b>Distillation</b> trains a smaller "student" model to mimic a larger "teacher's" outputs instead of shrinking one model's numbers; most cheap "mini"/"flash" tiers are distilled relatives of a bigger sibling.`,
             `<b>Mixture-of-experts (MoE)</b> serving (chapter 10) trades memory for speed the other way: it holds far more total parameters than a same-quality dense model but activates only a fraction per token — more memory to hold everything, less compute per token than its size suggests.`,
           ]),
-          callout('tryit', 'Try it: watch a laptop-sized model become a datacenter model', `<b>1.</b> Leave the preset at 7B, fp16, and slide context from 512 tokens up to 200K+: watch the orange KV segment swallow the chart and blow past the red H100 line. <b>2.</b> Switch precision to int4 with the same settings: the whole bar shrinks by roughly 4×. <b>3.</b> Pick the 70B preset: at fp16 the readout says the weights alone don't fit — 120 GB against 80, before a single token of context. Switch precision to <b>int8</b> to halve them, then sweep context: "max concurrent requests" falls 32 → 8 → 2 → 0 between 512 and 32K tokens. That number is the entire reason API providers cap context and charge more for it. <b>4.</b> Push batch up to 64 at a long context on the frontier preset: this is the regime real inference clusters live in.`),
+          callout('tryit', 'Try it: watch a laptop-sized model become a datacenter model', `<b>1.</b> Leave the preset at 7B, fp16, and slide context from 512 tokens up to 200K+: watch the orange KV segment swallow the chart and blow past the red H100 line. <b>2.</b> Switch weight precision to int4 with the same settings: the blue segment shrinks 4× and the orange one does not move. Quantizing the weights does nothing for the cache. <b>3.</b> Pick the 70B preset: at fp16 the readout says the weights alone don't fit — 120 GB against 80, before a single token of context. Switch precision to <b>int8</b> to halve them, then step context up from 512 to 16K tokens: "max concurrent requests" falls 16 → 8 → 4 → 2 → 1 → 0, halving every time the context doubles. That number is the entire reason API providers cap context and charge more for it. <b>4.</b> Push batch up to 64 at a long context on the frontier preset: this is the regime real inference clusters live in.`),
           kvCalculator(),
+          ctx.walkthrough([
+            { say: 'Count the work of writing a reply in <b>token-passes</b>: one token pushed through every layer, once.', note: 'It is the unit the GPU actually spends its time on.' },
+            { say: 'With no cache, writing token 3 means reading tokens 1, 2 and 3 again from scratch.', math: 'token 1 &rarr; 1 pass &nbsp;&middot;&nbsp; token 2 &rarr; 2 passes &nbsp;&middot;&nbsp; token 3 &rarr; 3 passes' },
+            { say: 'So a three-token reply costs six passes, not three.', math: '1 + 2 + 3 = 6' },
+            { ask: 'Same rule, a <b>four</b>-token reply. How many passes?',
+              options: ['4', '10', '16'], answer: 1,
+              explain: '1 + 2 + 3 + 4 = 10. Every new token re-pays for all the ones before it.' },
+            { say: 'For the 500-token reply in the text above, the sum runs all the way to 500.', math: '1 + 2 + &hellip; + 500 &nbsp;=&nbsp; 500 &times; 501 &divide; 2 &nbsp;=&nbsp; 125,250', note: 'The shortcut: pair the first with the last (1 + 500), the second with the second-last (2 + 499). That is 250 pairs, each worth 501.' },
+            { say: 'With the KV cache every token goes through the layers exactly once, and the old ones are looked up.', math: '500 passes instead of 125,250 &nbsp;&rarr;&nbsp; about 250&times; less work' },
+            { ask: 'Double the reply to 1,000 tokens. Without the cache the work goes from 125,250 passes to 500,500. That is roughly&hellip;',
+              options: ['2&times; the work', '4&times; the work', '1,000&times; the work'], answer: 1,
+              explain: 'Twice the length, four times the work. That is what "grows like n&sup2;" means. With the cache it goes 500 &rarr; 1,000: twice the length, twice the work.' },
+            { say: 'In symbols, for a reply of <b>n</b> tokens. For a long reply the +1 hardly matters, so people round it.', math: '1 + 2 + &hellip; + n &nbsp;=&nbsp; n(n+1)/2 &nbsp;&asymp;&nbsp; n&sup2;/2' },
+            { say: 'The cache buys that saving with memory, and memory grows in a straight line: the calculator showed 4 GB at 8,192 tokens and 64 GB at 131,072.', math: '16&times; the tokens &nbsp;&rarr;&nbsp; 16&times; the memory', note: 'A straight line you can budget for. A square you cannot.' },
+            { say: 'One simplification to own up to: even with the cache, each new token still compares itself against every earlier one.', note: 'That is one cheap comparison per old token rather than a full pass through the layers, so a long reply slows gently instead of grinding to a halt. It is also why attention cost never quite stops mattering at a million tokens.' },
+          ], {
+            title: 'Why n² hurts, and what the cache does about it',
+            recap: 'redo everything each step and the work is 1 + 2 + &hellip; + n, about n&sup2;/2; remember it instead and the work is n, paid for in memory that grows in a straight line.',
+          }),
+          ctx.decoder([
+            { sym: '1 + 2 + &hellip; + n', name: 'one plus two plus, and so on, up to n', says: 'The cost of each step added up: step 1 reads one token, step 2 reads two, and the last step reads all n.', points: 'the 1 + 2 + 3 = 6 you added up for a three-token reply.' },
+            '=',
+            { sym: 'n(n+1)/2', name: 'n times n-plus-one, over two', says: 'The same sum without doing the adding. Pair the ends: n/2 pairs, each worth n + 1.', points: '500 &times; 501 &divide; 2 = 125,250 passes for the 500-token reply.' },
+            '&asymp;',
+            { sym: 'n&sup2;/2', name: 'n squared over two', says: 'What is left when n is large enough that the +1 is noise. The square is the part that matters: double n and this quadruples.', points: '125,250 &rarr; 500,500 when the reply doubled from 500 to 1,000 tokens.' },
+          ], {
+            title: 'The cost of generating n tokens with no cache',
+            plain: 'Add up every whole number to n and you get about half of n squared. Anything that grows like a square is affordable when small and ruinous when large, which is why the cache is not optional.',
+          }),
         ),
 
         section('Context windows and the "lost in the middle" effect',
@@ -668,7 +715,7 @@
 
         callout('history', 'November 2024: Anthropic ships a common language for tools', `Before MCP, every AI product wired its model to its tools its own bespoke way — one integration per tool per product, rebuilt from scratch each time. In November 2024, Anthropic open-sourced the <em>Model Context Protocol</em>: an open specification for how a model-calling app discovers and calls external tools and data sources, regardless of model or client. A tool built to speak MCP once can be picked up by any MCP-aware agent, the way USB let one plug fit any device instead of a new port per manufacturer. Within about a year it was adopted well beyond Anthropic's own products, becoming shared plumbing for the whole agent ecosystem — including several of the connectors this course's own authoring tools use.`),
 
-        callout('example', 'Where this is already running', `Perplexity and ChatGPT's browsing mode are RAG: search first, answer grounded in what was found, citations included. Siri and Alexa's weather answers are function calling: a structured request to a weather service, the result read back as words. Claude Code and Cursor run the full agent loop over a real repository — reading, editing, testing, repeating — and Anthropic's computer-use demos run the identical loop over a screenshot instead of a file tree, filling out forms and navigating apps with no dedicated API at all.`),
+        callout('example', 'Where this is already running', `Perplexity and ChatGPT's browsing mode are RAG: search first, answer grounded in what was found, citations included. Ask any current chat assistant for today's weather and you are watching function calling: a structured request to a weather service, the result read back as words. Claude Code and Cursor run the full agent loop over a real repository — reading, editing, testing, repeating — and Anthropic's computer-use demos run the identical loop over a screenshot instead of a file tree, filling out forms and navigating apps with no dedicated API at all.`),
 
         section('Beyond text: multimodality and structured output',
           p(`The same next-token machinery generalises past words. An image is cut into a grid of small square <em>patches</em> (commonly 16×16 pixels), each embedded into a vector exactly like a word token — the model attends across patches and words identically, as one long mixed sequence.`),
@@ -697,11 +744,11 @@
         ),
 
         ctx.quiz([
-          { q: 'You lower the temperature from 1.5 to 0.2. What happens to the sampled distribution?', options: ['It becomes flatter and more random', 'It becomes sharper, concentrating almost all probability on the model’s top few tokens', 'The vocabulary size changes', 'Nothing — temperature only affects training'], answer: 1, explain: 'Dividing logits by a smaller T stretches the gaps between them before softmax, so the largest logit dominates even more. T→0 is the limit case: always the single top token (greedy).' },
-          { q: 'What does the KV cache actually store, and why does it matter?', options: ['A copy of the prompt for logging purposes', 'Each layer’s Key and Value vectors for every token already processed, so decode never recomputes them from scratch', 'A backup of the model’s weights', 'The user’s previous conversations, for personalization'], answer: 1, explain: 'Without the cache, generating token 500 would mean redoing attention over all 499 earlier tokens from scratch. The cache reuses that work — at the cost of memory that scales with layers × tokens × batch.' },
-          { q: 'Two servers run the exact same model at temperature 0. Why might they still occasionally produce different tokens?', options: ['Temperature 0 is not really deterministic in principle, by definition', 'Floating-point sums are computed in different orders on different hardware/batches, and tiny rounding differences can flip which logit is largest', 'The tokenizer changes randomly between runs', 'Temperature 0 disables the KV cache, causing drift'], answer: 1, explain: 'Floating-point addition is not associative; a GPU’s parallel summation order depends on hardware and batch composition. When two logits are separated by less than that rounding error, "the top token" can differ between runs.' },
-          { q: 'Per Liu et al.’s "Lost in the Middle" (2023), where in a long context is a model least likely to make good use of a relevant fact?', options: ['At the very start', 'At the very end', 'Buried in the middle', 'Equally poor everywhere'], answer: 2, explain: 'Accuracy was highest for facts placed at the start or end of the context and dropped for facts placed in the middle — a U-shaped curve. A bigger context window doesn’t fix this; it adds more middle.' },
-          { q: 'An agent claims it read a config file, found a bug, and fixed it — but "tools" were switched off. What is actually true here?', options: ['The claim is reliable because the model is trained to be honest', 'Nothing was read or executed; the model generated plausible-sounding text with no way to verify any of it', 'The KV cache substituted for the missing tool call', 'This can only happen with very small models'], answer: 1, explain: 'Tool use is what connects a model’s output to reality. Without it, "I read the file and fixed it" is exactly as fabricated as any other fluent, confident, false sentence — which is what hallucination is.' },
+          { q: 'A support bot has the refund policy in its prompt, yet words the answer slightly differently, and occasionally wrongly, each time the same question is asked. Which single change addresses that most directly?', options: ['Raise top-p to 1 so that no token is ever excluded', 'Double the context window so the policy fits twice', 'Lower the temperature towards 0, or set top-k to 1', 'Retrain the model on the policy document'], answer: 2, explain: 'The variation comes from sampling, not from the weights. A low temperature (or top-k = 1) makes the model take its favourite token every time. Raising top-p widens the tail and makes it worse; the window and the weights were never the problem.' },
+          { q: 'A server has 20 GB free once the weights are loaded. One 8,000-token conversation needs 10 GB of KV cache. Product now wants 32,000-token conversations. How many fit at once?', options: ['None: a single one needs 40 GB of cache', 'Two, as before: the cache depends on the model, not on the length', 'One, because the cache is shared between requests', 'Eight, because longer prompts batch more efficiently'], answer: 0, explain: 'The cache is linear in tokens: four times the context is four times the memory, 40 GB, against 20 GB free. This is the calculator\'s "max concurrent requests" hitting zero, and it is why long context is capped and priced.' },
+          { q: 'Your word-overlap RAG bot answers "I don\'t know" to "How much holiday do I get?", though the handbook says "Employees accrue 15 vacation days". What went wrong?', options: ['The temperature is too low for the model to risk an answer', 'The context window is too small to hold a ten-page handbook', 'The model hallucinated a refusal it was never asked for', 'The retriever missed: "holiday" and "vacation" share no words'], answer: 3, explain: 'The model can only use what reaches the prompt. A ranking built on shared words scores the right page at zero when the question uses a synonym, which is exactly why production systems retrieve by embedding (meaning) rather than by spelling. Retrieval quality is the bottleneck.' },
+          { q: 'An agent takes 40 steps. Each step resends a transcript of about 50,000 tokens and gets back about 200. Which change cuts the bill most?', options: ['Capping each reply at 100 tokens', 'Prompt caching for the repeated prefix', 'Lowering the temperature to 0', 'Asking for the reply as structured JSON'], answer: 1, explain: 'At the illustrative rates in the cost lab, 50,000 input tokens cost $0.15 a step and 200 output tokens $0.003. The prompt is 98% of the bill, so halving the reply saves almost nothing, while caching the prefix cuts the input cost about tenfold.' },
+          { q: 'You are pasting 30 retrieved documents into one prompt and you know which is the most relevant. Where should it go?', options: ['In the exact middle, equally near to everything else', 'Anywhere: attention can see every token equally well', 'At the very start or the very end of the documents', 'Cut into pieces and spread evenly through the prompt'], answer: 2, explain: 'Recall follows a U-shape: strong at both edges of the context, weakest in the middle, and the sag deepens as the context grows. Attention can reach every token, but it does not use every position equally well.' },
         ]),
 
         section('Go deeper',

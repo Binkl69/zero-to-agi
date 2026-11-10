@@ -11,6 +11,21 @@
     part: 'V',
     title: 'What separates us from AGI, and how you could help build it',
     tagline: 'Fourteen chapters of mechanism, one honest reckoning: what today\'s models still can\'t do, and where a single person can actually push.',
+    minutes: 45,
+    objectives: [
+      'explain why "is it AGI yet?" has no single answer, by naming the definition a claim relies on',
+      'name the specific gaps between 2026 frontier models and a capable human, and say which are measured',
+      'compute what a doubling time implies for a future date, and say what it does not imply',
+      'predict how a small per-step error rate wrecks a long task',
+    ],
+    takeaways: [
+      '<b>AGI is a line, not a unit.</b> Turing, Legg and Hutter, the OpenAI charter and DeepMind\'s levels each draw it somewhere else, so the same models score anywhere from "arrived" to "not close".',
+      '<b>The gap has a shape.</b> 2026 models pass human experts on knowledge, maths and coding, and fall far short on continual learning, sample efficiency, the physical world and energy.',
+      '<b>Errors compound.</b> 98% right per step is about a one-in-three chance of a clean 50-step run, which is why a five-minute success does not predict a five-day one.',
+      '<b>Doubling is multiplication.</b> Later = now × 2<sup>time ÷ doubling time</sup>. The arithmetic is exact; the doubling time is a measured guess, and halving it squares the growth.',
+      '<b>A 50% horizon is a coin flip.</b> A model with a 14-hour horizon fails such tasks half the time; the length it finishes dependably is several times shorter.',
+      '<b>The worry is verification.</b> Capability is outrunning our ability to check what a system did and why, and that gets worse with autonomy.',
+    ],
     render(root, ctx) {
       const { h, p, section, sub, callout, ul, ol } = ctx;
       const C = ctx.colors;
@@ -37,10 +52,10 @@
         const V2026 = [9, 8, 8, 5, 2, 3, 3, 5, 4, 3];
         const VHUMAN = [6, 5, 6, 9, 9, 9, 9, 7, 8, 9];
         const GAP = [
-          { name: 'Knowledge recall', gap: 'On raw facts, the gap has flipped: a 2026 frontier model has read far more than any single human ever will, and it shows on PhD-qualifying-exam questions (GPQA) across fields no one person masters all of. The residual problem isn\'t how much it knows — it\'s that it states wrong facts just as fluently as right ones.', close: 'Retrieval that grounds answers in checkable sources, and training that rewards "I don\'t know" as much as a correct answer, so confidence tracks truth.' },
+          { name: 'Knowledge recall', gap: 'On raw facts, the gap has flipped: a 2026 frontier model has read far more than any single human ever will, and it shows on graduate-level science questions (the GPQA benchmark) across fields no one person masters all of. The residual problem isn\'t how much it knows — it\'s that it states wrong facts just as fluently as right ones.', close: 'Retrieval that grounds answers in checkable sources, and training that rewards "I don\'t know" as much as a correct answer, so confidence tracks truth.' },
           { name: 'Maths & logic', gap: 'Frontier reasoning models now solve International Mathematical Olympiad and Putnam-level problems that stump most humans, using long chains of search-like reasoning before answering. The gap that remains is genuinely novel proof: work far outside anything like the patterns seen in training.', close: 'More reinforcement learning on <em>verifiable</em> problems — ones with a checkable right answer — plus formal proof assistants like Lean that can confirm a step is actually valid, not just plausible-sounding.' },
           { name: 'Coding', gap: 'Models now write, run, debug and ship real pull requests across a multi-hour agentic session, holding a whole task in mind. Reliability still falls as the task lengthens: small mistakes compound over a long chain of edits, and there is often no ground truth to self-correct against beyond "does it compile".', close: 'Environments with fast, automatic feedback (tests that pass or fail, sandboxes that run the code), and training that specifically rewards recovering from an error rather than just avoiding one.' },
-          { name: 'Long-horizon agency', gap: 'Not the widest gap on the chart — continual learning, sample efficiency, the physical world and energy use all sit further inside — but the one that most directly limits what an agent can be trusted to finish. METR measures the length of task a frontier model finishes at 50% reliability: about an hour for the best models of early 2025, and roughly five hours by late 2025 — up enormously from seconds a few years earlier, but still far short of a week of autonomous work a competent employee could be trusted with.', close: 'Better internal state-tracking and planning, the ability to notice its own mistakes mid-task, and — per the chart below — a doubling trend that has to keep compounding for years, not just one clever trick.' },
+          { name: 'Long-horizon agency', gap: 'Not the widest gap on the chart — continual learning, sample efficiency, the physical world and energy use all sit further inside — but the one that most directly limits what an agent can be trusted to finish. METR measures the length of task a frontier model finishes at 50% reliability: about an hour for the best models of early 2025, roughly five hours by late 2025, and a noisy fourteen hours or so in early 2026 — up enormously from seconds a few years earlier, but a coin-flip success rate is still far short of the week of autonomous work a competent employee is trusted with.', close: 'Better internal state-tracking and planning, the ability to notice its own mistakes mid-task, and — per the chart below — a doubling trend that has to keep compounding for years, not just one clever trick.' },
           { name: 'Continual learning', gap: 'A model\'s weights are frozen the moment training ends. Whatever it "learns" during a conversation lives only in that conversation\'s context window; close the tab and it is gone. A junior employee who is corrected on Monday does not need to be corrected again on Friday. A deployed model does.', close: 'Safe ways to keep updating weights after deployment (without the model forgetting old skills or being poisoned by bad data), or architectures with an explicit, persistent, editable memory that is not just "more context".' },
           { name: 'Sample efficiency', gap: 'A frontier model sees trillions of words before it can reliably use a comma. A child learns a new word, often for life, from one or two encounters, because a young brain arrives with strong built-in priors about objects, causes and agents that a model has to discover the hard way from data.', close: 'Better inductive biases baked into the architecture, meta-learning (learning <i>how</i> to learn from few examples), and world models rich enough that a new fact needs less repetition to stick.' },
           { name: 'Physical world', gap: 'Ask a model trained mostly on text and images to predict what happens when you stack seven blocks unevenly, or how a rope will fall, and it is guessing from pictures of similar scenes, not from ever having pushed a block. Video-generation models are visibly better than they were in 2020, but they still routinely produce impossible physics.', close: 'Real interaction with the physical world — robotics, simulation with real physics engines, video pretraining at far larger scale — so the model\'s notion of "what happens next" is grounded in consequence, not just correlation between pixels.' },
@@ -275,6 +290,8 @@
       function taskHorizonChart() {
         const W = 720, H = 320;
         const [cv, g] = ctx.canvas(W, H);
+        /* 50% time horizons in minutes, approximate reconstructions of METR's published
+           results. The last two are Time Horizon 1.1 figures (5 h 20 and about 14.5 h). */
         const DATA = [
           { year: 2019.5, min: 0.05, label: 'GPT-2' },
           { year: 2020.5, min: 0.2, label: 'GPT-3' },
@@ -282,39 +299,46 @@
           { year: 2023.3, min: 6, label: 'GPT-4' },
           { year: 2024.8, min: 28, label: 'Claude 3.5' },
           { year: 2025.15, min: 59, label: 'Claude 3.7' },
-          { year: 2025.9, min: 290, label: 'Opus 4.5' },
+          { year: 2025.9, min: 320, label: 'Opus 4.5' },
+          { year: 2026.1, min: 870, label: 'Opus 4.6' },
         ];
-        /* Least squares on log2(minutes) against year. The line used to be pinned to
-           the single oldest point with a hard-coded 7-month doubling, which left the
-           most important point — o3 at 110 minutes — a factor of 2.8 above its own
-           "fit". These six points give a 6.4-month doubling. */
+        const LAST = DATA[DATA.length - 1].year;
+        /* Least squares on log2(minutes) against year, over a chosen window of the data.
+           Two windows, because which points you fit IS the argument: all eight give a
+           6.0-month doubling, the four since 2024 give 3.3 months. */
         const Y0 = 2019;
-        const FIT = (() => {
-          const n = DATA.length;
+        function fitOf(pts) {
+          const n = pts.length;
           let sx = 0, sy = 0, sxx = 0, sxy = 0;
-          for (const d of DATA) { const x = d.year - Y0, y = Math.log2(d.min); sx += x; sy += y; sxx += x * x; sxy += x * y; }
+          for (const d of pts) { const x = d.year - Y0, y = Math.log2(d.min); sx += x; sy += y; sxx += x * x; sxy += x * y; }
           const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx);
-          return { slope, t0: Math.pow(2, (sy - slope * sx) / n) };
-        })();
-        const DOUBLE_MONTHS = 12 / FIT.slope;
-        function fit(year) { return FIT.t0 * Math.pow(2, FIT.slope * (year - Y0)); }
-        /* wide enough for the longest y-axis label ('23.1 months'), right-aligned */
+          return { slope, t0: Math.pow(2, (sy - slope * sx) / n), from: pts[0].year, n };
+        }
+        const FITS = { all: fitOf(DATA), recent: fitOf(DATA.filter((d) => d.year >= 2024)) };
+        const S = { extrap: 2026, win: 'all' };
+        function fit(year) { const F = FITS[S.win]; return F.t0 * Math.pow(2, F.slope * (year - Y0)); }
+        /* wide enough for the longest y-axis label ('10.0 months'), right-aligned */
         const plot = { x: 92, y: 16, w: 594, h: 240 };
         const X0 = 2019, X1 = 2033;
-        const YMIN = 0.02, YMAX = 4e6; // minutes: ~1 sec .. ~7.6 years
+        const YMIN = 0.02, YMAX = 1e7; // minutes: ~1 sec .. ~83 working years
         const xAt = (yr) => plot.x + (yr - X0) / (X1 - X0) * plot.w;
-        const yAt = (min) => plot.y + plot.h - (Math.log10(ctx.clamp(min, YMIN, YMAX)) - Math.log10(YMIN)) / (Math.log10(YMAX) - Math.log10(YMIN)) * plot.h;
+        const yRaw = (min) => plot.y + plot.h - (Math.log10(min) - Math.log10(YMIN)) / (Math.log10(YMAX) - Math.log10(YMIN)) * plot.h;
+        const yAt = (min) => yRaw(ctx.clamp(min, YMIN, YMAX));
+        /* Task length is how long a skilled human WORKS on it, so the units are working
+           time: a 40-hour week, a 167-hour month, a 2,000-hour year. Reading 24-hour days
+           into it would understate every long horizon threefold. */
         function humanLabel(min) {
           if (min < 1) return Math.round(min * 60) + ' sec';
           if (min < 90) return f1(min) + ' min';
-          if (min < 60 * 24 * 2) return f1(min / 60) + ' hr';
-          if (min < 60 * 24 * 14) return f1(min / (60 * 24)) + ' days';
-          if (min < 60 * 24 * 60) return f1(min / (60 * 24 * 7)) + ' weeks';
-          return f1(min / (60 * 24 * 30)) + ' months';
+          const hr = min / 60;
+          if (hr < 40) return f1(hr) + ' hr';
+          if (hr < 334) return f1(hr / 40) + ' weeks';
+          if (hr < 4000) return f1(hr / 167) + ' months';
+          return f1(hr / 2000) + ' years';
         }
-        const S = { extrap: 2026 };
         const ro = ctx.readout();
         function draw() {
+          const F = FITS[S.win];
           g.clearRect(0, 0, W, H);
           g.fillStyle = '#0f1520'; g.fillRect(plot.x, plot.y, plot.w, plot.h); g.strokeStyle = C.line; g.strokeRect(plot.x, plot.y, plot.w, plot.h);
           // log gridlines
@@ -332,36 +356,54 @@
           const ex = ctx.clamp(S.extrap, X0, X1), exY = fit(ex);
           const mx = xAt(ex), my = yAt(exY);
           g.strokeStyle = C.danger; g.lineWidth = 1.5; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(mx, plot.y); g.lineTo(mx, plot.y + plot.h); g.stroke(); g.setLineDash([]);
-          // fitted curve: solid through observed range, dashed into extrapolation
-          g.lineWidth = 2.5;
-          g.beginPath();
-          for (let yr = X0; yr <= 2025.1; yr += 0.1) { const x = xAt(yr), y = yAt(fit(yr)); yr === X0 ? g.moveTo(x, y) : g.lineTo(x, y); }
-          g.strokeStyle = C.accent; g.stroke();
-          g.setLineDash([5, 4]); g.beginPath();
-          for (let yr = 2025.1; yr <= X1; yr += 0.1) { const x = xAt(yr), y = yAt(fit(yr)); yr === 2025.1 ? g.moveTo(x, y) : g.lineTo(x, y); }
-          g.strokeStyle = C.accent; g.globalAlpha = 0.6; g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
+          /* fitted line: solid across the window it was fitted to, dashed beyond the last dot. It is
+             clipped to the plot, not clamped, so a line that leaves the chart is seen to
+             leave it instead of crawling along the top edge. */
+          g.save(); g.beginPath(); g.rect(plot.x, plot.y, plot.w, plot.h); g.clip();
+          const seg = (a, b, dashed) => {
+            if (b <= a) return;
+            g.beginPath();
+            const N = Math.max(2, Math.ceil((b - a) * 10));
+            for (let i = 0; i <= N; i++) { const yr = a + (b - a) * i / N, x = xAt(yr), y = yRaw(fit(yr)); i ? g.lineTo(x, y) : g.moveTo(x, y); }
+            g.lineWidth = 2.5; g.strokeStyle = C.accent;
+            if (dashed) { g.setLineDash([5, 4]); g.globalAlpha = 0.6; }
+            g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
+          };
+          seg(F.from, LAST, false); seg(LAST, X1, true);
+          g.restore();
           // observed points
           DATA.forEach((d, i) => {
             const x = xAt(d.year), y = yAt(d.min);
-            g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fillStyle = C.warn; g.fill(); g.strokeStyle = '#0a0e16'; g.lineWidth = 1; g.stroke();
+            const used = d.year >= F.from;
+            g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fillStyle = C.warn; g.globalAlpha = used ? 1 : 0.45; g.fill(); g.strokeStyle = '#0a0e16'; g.lineWidth = 1; g.stroke();
             /* every dot names itself; the dots march up and to the right, so labels
-               alternate above-left and below-right of the line rather than colliding */
+               alternate above-left and below-right of the line rather than colliding.
+               The first point would otherwise land on the y-axis labels, and the last
+               two sit almost on top of each other, so the final one goes above-right. */
             g.font = MONO; g.fillStyle = C.warn;
-            /* alternate above-left / below-right along the line; the first point would
-               otherwise land on the y-axis labels, and the last on the year marker */
             const last = i === DATA.length - 1;
             const below = !last && i % 2 === 0;
             g.textAlign = below || last ? 'left' : 'right';
             g.fillText(d.label, below || last ? x + 9 : x - 7, below ? y + 14 : y - 9);
+            g.globalAlpha = 1;
           });
           g.beginPath(); g.arc(mx, my, 6, 0, Math.PI * 2); g.fillStyle = C.danger; g.fill();
-          g.fillStyle = C.text; g.font = FONT; g.textAlign = 'left';
-          g.fillText('solid = least-squares fit through the seven points · dashed = extrapolation · red = your year', plot.x + 4, plot.y + 14);
-          ro.set({ year: f1(ex), 'projected 50%-task horizon': humanLabel(exY), 'fitted doubling time': f1(DOUBLE_MONTHS) + ' months' });
+          /* the key sits under the year ticks: inside the plot, a steep fit runs through it */
+          g.fillStyle = C.muted; g.font = FONT; g.textAlign = 'left';
+          g.fillText('solid = fit through ' + (S.win === 'all' ? 'all eight points' : 'the four points since 2024') + ' · dashed = extrapolation · red = your year', plot.x, plot.y + plot.h + 42);
+          ro.set({
+            year: f1(ex),
+            'projected 50%-task horizon': humanLabel(exY) + (exY > YMAX ? ' (off the chart)' : ''),
+            'fitted doubling time': f1(12 / F.slope) + ' months',
+            'points fitted': F.n + ' of ' + DATA.length,
+          });
         }
         const sl = ctx.slider({ label: 'extrapolate to year', min: 2019, max: 2033, step: 0.1, value: 2026, fmt: (v) => f1(v), onChange: (v) => { S.extrap = v; draw(); } });
+        const winSel = ctx.select({ label: 'fit the line through', options: [
+          { value: 'all', label: 'all eight points (2019 on)' }, { value: 'recent', label: 'the four points since 2024' },
+        ], value: 'all', onChange: (v) => { S.win = v; draw(); } });
         draw();
-        return ctx.figure(cv, 'The length of task (measured in how long a skilled human takes) that a model completes with 50% reliability, on a log scale. Orange dots are approximate reconstructions of published results; the 2025 paper (Kwa et al.) put the doubling at roughly 7 months, and METR\'s Time Horizon 1.1 re-measurement in January 2026 revised that on a larger task suite to 6.3 months all-time, 4.3 months from 2023 on, and about 3 months from 2024 on. The blue line is a least-squares fit to these seven points and lands at 6.5 months — close to the all-time figure, and slower than what the last two years alone are doing. A single straight line on a log scale cannot show an acceleration, which is the main way this chart understates things. It is not a guarantee either: extrapolating any exponential this far is a bet, not a fact.', [sl], ro);
+        return ctx.figure(cv, 'The length of task, measured by how long a skilled human works on it, that a model completes with 50% reliability, on a log scale. Weeks, months and years are working time: a 40-hour week, a 167-hour month. Yellow dots are approximate reconstructions of METR\'s published results. Their 2025 paper (Kwa et al.) put the doubling at roughly 7 months; the Time Horizon 1.1 re-measurement of January 2026 gave about 6.5 months all-time, 4.3 months from 2023 on and about 3 months from 2024 on. The blue line is a least-squares fit to whichever dots you choose: all eight give 6.0 months, the last four give 3.3. One straight line on a log scale cannot show an acceleration, so the choice of window does the arguing. The top dot, Opus 4.6, carries very wide error bars, because the test suite is running out of tasks long enough to stump the best models. Extrapolating any exponential this far is a bet, not a fact.', [sl, winSel], ro);
       }
 
       /* ================================================================== */
@@ -474,6 +516,50 @@
           [...btns, pTuring, pLegg, pOpenAI, pStrict], ro);
       }
 
+      /* ================================================================== */
+      /*  MATHS BEAT — doubling times, and what they do and do not imply     */
+      /*  Every number below is one the task-horizon chart shows.            */
+      /* ================================================================== */
+      const BEAT_WALK = ctx.walkthrough([
+        { say: 'Put the fit back on <b>all eight points</b> and the year on 2026.0, where the line reads <b>4.7 hours</b>.', note: 'That is the line, not a model. Opus 4.6, the top dot, sits well above it.' },
+        { say: 'Drag on half a year at a time and it reads <b>9.4 hours</b> at 2026.5 and <b>18.8 hours</b> at 2027.0: each half-year, twice as long.', math: '4.7 &times; 2 = 9.4 &nbsp;&nbsp;&nbsp; 9.4 &times; 2 = 18.8', note: 'The readout calls this a doubling time of 6.0 months. That phrase means nothing more than: every six months, multiply by two.' },
+        { ask: 'Two more doublings take you to 2028.0. What does the line read there?',
+          options: ['About 23 hours (18.8 + 2 + 2)', 'About 38 hours (18.8 &times; 2)', 'About 75 hours (18.8 &times; 2 &times; 2)'], answer: 2,
+          explain: 'Two doublings is &times;4, and 18.8 &times; 4 = 75.2. The chart says 1.9 weeks, which is the same thing in 40-hour weeks. (It is a shade under 75 because the fitted doubling time is 6.03 months, not 6.)' },
+        { say: 'So the recipe has two moves: count the doublings, then multiply by 2 that many times.', math: 'doublings = months &divide; doubling time' },
+        { say: 'From 2026 to 2030 is 48 months, which is 8 doublings, and 2 multiplied by itself 8 times is 256.', math: '48 &divide; 6 = 8 &nbsp;&nbsp;&rarr;&nbsp;&nbsp; 2&times;2&times;2&times;2&times;2&times;2&times;2&times;2 = 256' },
+        { say: 'Multiply: 4.7 hours &times; 256 is about 1,200 hours, which is seven months of full-time work, the number you read at 2030.', math: '4.7 &times; 256 &asymp; 1,200 hours &asymp; 7 months', note: 'A working month is 167 hours.' },
+        { say: 'Writing "2 multiplied by itself 8 times" gets old, so it is written 2<sup>8</sup>, and the whole recipe fits on one line.', math: 'later &nbsp;=&nbsp; now &times; 2<sup>&thinsp;months &divide; doubling time</sup>' },
+        { ask: 'Which stretch adds more hours to the line: 2026 &rarr; 2028, or 2028 &rarr; 2030?',
+          options: ['2026 &rarr; 2028', 'They add the same: two years each', '2028 &rarr; 2030'], answer: 2,
+          explain: 'The first two years add about 70 hours (4.7 &rarr; 75). The next two add about 1,100 (75 &rarr; 1,200). Equal waits <b>multiply</b> by equal amounts; they do not add equal amounts. That is also why the line is straight on this chart: its axis counts multiplications.' },
+        { say: 'Now the fragile part: switch the fit to <b>the four points since 2024</b>, where the doubling time reads 3.3 months, and the same 48 months hold about 14.5 doublings.', math: '48 &divide; 3.3 &asymp; 14.5 &nbsp;&nbsp;&rarr;&nbsp;&nbsp; 2<sup>14.5</sup> &asymp; 23,000', note: 'A factor of 23,000 where there was 256. That is how 2030 went from seven months to about a century.' },
+        { ask: 'Suppose the doubling time halved exactly, from 6 months to 3. Over those four years the growth factor would go from 256&times; to&hellip;',
+          options: ['512&times; (twice as much)', '65,536&times; (256 &times; 256)', '2,560&times; (ten times as much)'], answer: 1,
+          explain: 'Half the doubling time means twice as many doublings: 16 where there were 8. And 2<sup>16</sup> = 2<sup>8</sup> &times; 2<sup>8</sup> = 256 &times; 256. Halving the doubling time <b>squares</b> the growth, which is why two people who disagree mildly about the doubling time disagree wildly about 2030.' },
+        { say: 'So a doubling time describes the dots you already have, and promises nothing about the next one.', note: 'Moore\'s law held for decades and then slowed. This curve has so far done the opposite and sped up. Neither turn was in the formula.' },
+        { say: 'One more limit: the horizon is the task length at a <b>50%</b> success rate, so a 14-hour horizon means failing about half of all 14-hour tasks.', note: 'METR also reports the length a model finishes 80% of the time, and it runs several times shorter. For Claude 3.7 Sonnet it was about 15 minutes, against 59 at 50%.' },
+      ], {
+        title: 'Doubling times, with the numbers on the chart',
+        recap: 'later = now &times; 2<sup>&thinsp;time &divide; doubling time</sup>. The arithmetic is exact. The doubling time is a measured guess, and the answer is brutally sensitive to it.',
+      });
+      const BEAT_DEC = ctx.decoder([
+        { sym: 'T<sub>later</sub>', name: 'T later', says: 'The task horizon on the date you are asking about. This is the only part that is a forecast.', points: 'the red dot, and the "projected 50%-task horizon" readout.' },
+        '=',
+        { sym: 'T<sub>now</sub>', name: 'T now', says: 'The horizon on the date you start from. A measurement, with error bars of its own.', points: 'the line at 2026.0, which read 4.7 hours.' },
+        '×',
+        { sym: '2', name: 'two', says: 'It is a 2 because the thing being counted is doublings. Count triplings and this would be a 3.', points: '9.4 hours being twice 4.7.' },
+        '^ (',
+        { sym: 't', name: 't, the wait', says: 'How far ahead you are looking, in months.', points: 'how far you dragged the year: 2026 to 2030 is 48 months.' },
+        '÷',
+        { sym: 'd', name: 'd, the doubling time', says: 'How many months one doubling takes. The only number here that is fitted, not counted, and the one the answer is most sensitive to.', points: 'the "fitted doubling time" readout: 6.0 months or 3.3, depending on which dots you chose.' },
+        ')',
+      ], {
+        title: 'T later = T now × 2^(t ÷ d)',
+        hint: 'Click any symbol. Each one is a number you read off the chart above.',
+        plain: 'Take where you are, and double it once for every doubling time that fits into the wait.',
+      });
+
       root.append(
         callout('tryit', '🖐 Do this first — draw your own finish line',
           `Ten things people have seriously proposed as the definition of AGI. Tick whichever ones <b>you</b> think it has to mean.<br>
@@ -500,7 +586,7 @@
 
         section('What 2026 frontier models can already do',
           p(`Whatever you think "AGI" should mean, it's worth being precise about the checkable capabilities of 2026 frontier models — both the hype and the dismissal usually skip this part. `),
-          p(`Today's best models answer PhD-qualifying-exam science questions (the GPQA benchmark) at a level beating most non-specialist PhDs outside their own field. They solve International Mathematical Olympiad and Putnam-competition problems most strong maths graduates cannot. Handed an open-ended coding task, they work autonomously for hours across dozens of files, run their own tests, and open a real pull request. They look at a screen, decide what to click, and operate real software (<em>computer use</em>). And they do all of this across text, images, audio and video in one system, not four bolted together.`),
+          p(`Today's best models answer graduate-level science questions written by specialists (the GPQA benchmark) more accurately than PhD holders working outside their own field. They solve International Mathematical Olympiad and Putnam-competition problems most strong maths graduates cannot. Handed an open-ended coding task, they work autonomously for hours across dozens of files, run their own tests, and open a real pull request. They look at a screen, decide what to click, and operate real software (<em>computer use</em>). And they do all of this across text, images, audio and video in one system, not four bolted together.`),
           p(`That list would have sounded like science fiction to this field's own researchers in 2015. It is real, measured, and why the conversation about AGI stopped being purely academic around 2023.`),
         ),
 
@@ -521,11 +607,15 @@
 
         section('The clock nobody agrees on: how fast is "long-horizon" moving?',
           p(`Of the four gaps above, long-horizon reliability is the one with the best public data behind it. In 2025 the AI safety research group METR asked a direct question: for a task of a given length (measured by how long a skilled human takes to do it), what is the longest task a given model can complete with 50% success? They call this the model's <em>time horizon</em>, and they have been tracking it since the GPT-2 era.`),
-          p(`Their 2025 finding: the 50%-success time horizon of frontier models had been doubling roughly every seven months since 2019, and Claude 3.7 Sonnet reached about an hour. Their January 2026 re-measurement, on a task suite a third larger, revised the doubling to 6.3 months all-time — and to about 3 months if you count only from 2024. The trend did not just continue; it got faster. `),
-          p(`That single number is easy to misread in either direction. Read pessimistically, "about an hour" sounds unimpressive next to a human workweek. Read as a trend, six years of doubling every six months or better is one of the fastest sustained capability curves in the history of any technology — and extrapolating it says tasks that take a skilled human a full month come within reach around 2030, which is what the chart below draws.`),
+          p(`Their 2025 finding: the 50%-success time horizon of frontier models had been doubling roughly every seven months since 2019, and Claude 3.7 Sonnet reached about an hour. Their January 2026 re-measurement, on a task suite a third larger, left the all-time doubling at about six and a half months, but put it at 4.3 months counting from 2023 and about 3 months counting only from 2024. The trend did not just continue; it got faster. A month later Claude Opus 4.6 measured about 14.5 hours, with error bars running from 6 hours to 98, because the suite was running out of tasks long enough to pin the number down.`),
+          p(`That curve is easy to misread in either direction. Read as a snapshot, fourteen hours at a coin-flip success rate is nowhere near a dependable working week. Read as a trend, seven years of doubling every six months or faster is one of the fastest sustained capability curves in the history of any technology. <i>If</i> it holds, the whole-history line reaches a full month of skilled human work in the second half of 2028, which is what the chart below draws.`),
           p(`Notice the word <i>if</i>. Every exponential trend in this field's history — Moore's law, model scale, benchmark scores — has eventually bent, sometimes up and sometimes down, when it hit a wall nobody had priced in yet. Treat the extrapolation below as the trend's honest continuation, not a prophecy.`),
-          callout('tryit', 'Try it: drag the horizon forward', `Start at 2026 and read the projected task length. Now drag to 2030: notice it jumps from hours to weeks, because a fixed <i>doubling time</i> compounds into an enormous absolute number surprisingly fast — that is what exponentials do, and it is the same math as chapter 14's compute curve. Then drag back to 2020 and compare the model's projected horizon there against what GPT-3 could actually do; a mismatch is the fit being a smooth idealisation of noisy, lumpy real progress.`),
+          callout('tryit', 'Try it: drag the horizon forward, then change the fit', `<b>1.</b> Leave the year on 2026.0 and read the projection: <b>4.7 hours</b>. Move the year to 2030.0 and it becomes <b>7.0 months</b> of full-time work. A fixed <i>doubling time</i> compounds into an enormous number fast — the same maths as chapter 14's compute curve.<br><b>2.</b> Drag back to 2020.5 and compare the line with the GPT-3 dot beside it. They disagree: the line is a smooth idealisation of lumpy real progress.<br><b>3.</b> Now look at the last two dots. Both sit above the line. Switch <b>fit the line through</b> to <b>the four points since 2024</b> and go back to 2030.0. The doubling time drops from 6.0 months to 3.3, and the projection reads <b>108 years</b>.<br><b>4.</b> Same dots, two defensible fits, answers nearly two hundred times apart. Hold on to that.`),
           taskHorizonChart(),
+          p(`You have just made the same curve say seven months and a hundred years. Here is the arithmetic underneath, because it is short, and because knowing it tells you exactly which number to argue about.`),
+          BEAT_WALK,
+          BEAT_DEC,
+          p(`So a doubling time is a summary of the past, and a forecast is that summary plus a bet that nothing changes. Both halves deserve scrutiny. The dots can be re-measured and have been. The bet cannot be checked until the date arrives.`),
         ),
 
         section('Candidate paths to close the gaps',
@@ -575,7 +665,7 @@
         ),
 
         section('Cost of compute, in round numbers (2026, approximate)',
-          p(`Order-of-magnitude estimates for late 2026, not quotes — and stale within a year or two, so treat them that way.`),
+          p(`Order-of-magnitude estimates for late 2026, not quotes — and stale within a year or two, so treat them that way. The models here are smaller than the explorer above suggests for the same money, on purpose: the explorer gives the biggest model a budget can train on the minimum sensible amount of text, and real runs feed a smaller model far more of it.`),
           ctx.table(
             ['Budget', 'What it approximately buys in 2026'],
             [
@@ -595,11 +685,11 @@
         ),
 
         ctx.quiz([
-          { q: 'According to OpenAI\'s charter, what does "AGI" mean?', options: ['A robot physically indistinguishable from a human', 'Highly autonomous systems that outperform humans at most economically valuable work', 'Any system that passes a five-minute text conversation test', 'A system with unlimited persistent memory'], answer: 1, explain: 'That is the charter\'s own working definition — an economic bar, not a behavioural or architectural one. Anthropic and DeepMind frame the same underlying question differently (transformative impact; graded levels of depth and breadth).' },
-          { q: 'What did METR\'s 2025 study actually measure?', options: ['The dollar cost of training a frontier model', 'The length of task, measured by human completion time, that a model finishes with 50% reliability, tracked from 2019 onward', 'The number of parameters needed to match human Go-playing ability', 'Energy used per generated token'], answer: 1, explain: 'This is the "50%-task-completion time horizon," and METR found it doubling roughly every 7 months since 2019 — reaching about 110 minutes for early-2025 reasoning models, with the trend possibly accelerating since 2024.' },
-          { q: 'Why can\'t a deployed 2026 model permanently learn from a single bad interaction, the way a new employee learns from one correction?', options: ['It is legally forbidden from learning', 'Its weights are frozen after training; anything it "learns" mid-conversation lives only in that context window and disappears when the conversation ends', 'It only processes images, not language', 'Its memory is unlimited, so nothing is ever lost, including mistakes'], answer: 1, explain: 'This is the continual-learning gap — one of the widest on the capability radar. In-context adaptation is real but temporary; nothing updates the underlying weights after deployment by default.' },
-          { q: 'Richard Sutton\'s "Bitter Lesson" (2019) argues that across AI\'s history, what has consistently beaten hand-engineered domain knowledge?', options: ['Smaller, more efficient models', 'General methods that leverage more computation — search and learning — scaled up', 'Rule-based expert systems refined over decades', 'Better mathematical proofs of correctness'], answer: 1, explain: 'Sutton\'s observation, drawn from seventy years of AI research, is uncomfortable for domain experts but has held up repeatedly: methods that scale with compute keep beating methods that encode human insight by hand.' },
-          { q: 'Per this chapter, what is the failure mode that safety researchers actually worry about most as models get more capable?', options: ['Models becoming too expensive to run for anyone but large labs', 'Capability outpacing our ability to verify and oversee what a model is actually doing — not the model "turning evil"', 'Running out of GPUs entirely by 2027', 'Benchmarks becoming too easy to saturate'], answer: 1, explain: 'The concrete concern is a capable, somewhat unreliable system whose internal reasoning we cannot fully inspect or verify — which is why interpretability and scalable oversight are active research areas, not solved problems.' },
+          { q: 'A headline says "Lab X has achieved AGI". Using what the first demo showed you, what is the most useful first question?', options: ['How many parameters does the model have?', 'Which definition of AGI is the claim using?', 'Did it pass the Turing test?', 'How much did the training run cost?'], answer: 1, explain: 'The same 2026 models scored 100%, 50% and 0% in the definer without a single fact about them changing. Until you know where the line was drawn, the claim tells you about the line, not about the model.' },
+          { q: 'A model\'s 50% time horizon is 5 hours and has been doubling every 6 months. If that held for two more years, what would it be?', options: ['20 hours', '40 hours', '80 hours', '320 hours'], answer: 2, explain: 'Two years is four doublings: 5 → 10 → 20 → 40 → 80 hours, two full working weeks. Twenty hours is the mistake of adding 5 four times; a doubling time multiplies.' },
+          { q: 'An agent gets each step right 98% of the time. Roughly how often does it get through a 50-step task without a single error?', options: ['About a third of the time', 'About 98% of the time', 'About 90% of the time', 'Almost never'], answer: 0, explain: '0.98 multiplied by itself 50 times is about 0.36. Every step is a fresh chance to fail, and the chances multiply. That is most of why an agent that nails a five-minute task can still fail a five-day one.' },
+          { q: 'A lab reports that its model has a 14-hour time horizon on METR\'s measure. What does that tell you about handing it a 14-hour task?', options: ['It will finish, but may need all 14 hours', 'It will finish in far less than 14 hours', 'It can work for 14 hours before its context window fills', 'It succeeds about half the time; the length it finishes dependably is far shorter'], answer: 3, explain: 'The horizon is the task length, in skilled-human working time, at which the model succeeds 50% of the time. The 80% horizons METR reports run several times shorter than the 50% ones. It is a coin-flip line, not a guarantee and not a stopwatch.' },
+          { q: 'A team deploys an agent that is highly capable, occasionally wrong, and whose internal reasoning they cannot inspect. Why does this chapter say more autonomy makes that combination worse?', options: ['Longer tasks cost more compute than the team can afford', 'An autonomous agent will develop goals of its own and turn on them', 'Nobody can tell when it has gone wrong, and each unsupervised step adds to what goes unchecked', 'Benchmarks saturate, so its scores stop improving'], answer: 2, explain: 'The concern is capability outpacing our ability to verify what a system is doing and why. That is not a story about intent. It is why interpretability and scalable oversight are active research areas, not solved problems.' },
         ]),
 
         section('Go deeper: the reading list, roughly in order',
@@ -619,7 +709,7 @@
             `<a href="http://www.incompleteideas.net/IncIdeas/BitterLesson.html" target="_blank" rel="noopener">Sutton, "The Bitter Lesson"</a> (2019) — one page, and worth reading twice.`,
             `<a href="https://arxiv.org/abs/2407.21783" target="_blank" rel="noopener">Meta AI, "The Llama 3 Herd of Models"</a> (2024) — the most detailed public account of a frontier-scale training run.`,
             `<a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">DeepSeek-AI, "DeepSeek-V3 Technical Report"</a> and <a href="https://arxiv.org/abs/2501.12948" target="_blank" rel="noopener">"DeepSeek-R1"</a> (2024–2025) — open-weight frontier training and RL-driven reasoning, at reported cost far below Western labs' equivalents.`,
-            `<a href="https://www.anthropic.com/news/core-views-on-ai-safety" target="_blank" rel="noopener">Anthropic, "Core Views on AI Safety"</a> (2023) — one lab's public reasoning for why safety work is urgent, including the Responsible Scaling Policy framing.`,
+            `<a href="https://www.anthropic.com/news/core-views-on-ai-safety" target="_blank" rel="noopener">Anthropic, "Core Views on AI Safety"</a> (2023) — one lab's public reasoning for why safety work is urgent. It predates the Responsible Scaling Policy linked above.`,
             `<a href="https://situational-awareness.ai" target="_blank" rel="noopener">Aschenbrenner, "Situational Awareness"</a> (2024) — a widely-read, deliberately aggressive extrapolation; read it and the more cautious pieces on this list against each other.`,
             `<a href="https://arxiv.org/abs/2503.14499" target="_blank" rel="noopener">Kwa et al. (METR), "Measuring AI Ability to Complete Long Software Tasks"</a> (2025) — the task-horizon study behind the chart above.`,
             `<a href="https://www.youtube.com/@AndrejKarpathy" target="_blank" rel="noopener">Karpathy, "Neural Networks: Zero to Hero" and onward</a> — the videos this course's labs are built to follow, start to finish.`,

@@ -14,6 +14,21 @@
     part: 'I',
     title: 'The recipe: data, loss, optimizer, generalization',
     tagline: 'Build an answer key with your own hands, watch it fail the real exam, then learn the discipline that stops every model doing the same thing.',
+    minutes: 50,
+    objectives: [
+      'spot overfitting and underfitting from a training score and a held-out score',
+      'explain why data is cut into three piles, and why a validation score you tuned against is inflated',
+      'predict how much noise an average carries from the number of examples behind it (σ ÷ √n)',
+      'read a confusion matrix and say when accuracy is hiding a useless model',
+    ],
+    takeaways: [
+      '<b>The gap is the number that matters.</b> A model is judged by the distance between its training score and its held-out score, never by the training score alone.',
+      '<b>Too rigid or too twitchy.</b> Underfitting misses the signal; overfitting fits the noise. Held-out error traces a U between them, and weight decay, dropout, early stopping and more data all push against the right-hand side.',
+      '<b>Three piles.</b> Train on one, make choices against validation, score once on test. Picking the best of many validation scores picks the luckiest, so that score is spent.',
+      '<b>Averages are noisy by σ ÷ √n.</b> Four times the examples halves the noise. It explains the fan of mini-batch gradients and the luck in a small validation set.',
+      '<b>Momentum remembers, Adam rescales.</b> Momentum keeps most of its last step so one noisy batch barely dents it; Adam gives every weight a step size from its own gradient history. AdamW is the default.',
+      '<b>Accuracy lies on unbalanced data.</b> Precision asks how much of what was flagged was right; recall asks how much of what was there got caught. Moving the threshold trades one for the other.',
+    ],
     render(root, ctx) {
       const { h, p, section, sub, callout, ul, ol, cards } = ctx;
       const C = ctx.colors;
@@ -341,19 +356,20 @@
            validation and test each see it through their own sampling noise */
         let tried = [];   // {trueQ, valObs, testObs}
         let best = [];    // running best-on-validation after each try
-        function sdFor(n) { return Math.sqrt(0.8 * 0.2 / Math.max(1, n)); }
+        /* Mark n examples, each right with probability q, and report the fraction
+           right. A real score is a count out of n, so it can never pass 100% and
+           its luck shrinks as 1/sqrt(n) without anyone coding that in. */
+        function score(n, q) { let k = 0; for (let i = 0; i < n; i++) if (Math.random() < q) k++; return k / Math.max(1, n); }
         function reset() { tried = []; best = []; }
         function tryOne() {
-          const r = Math.random;
-          const trueQ = 0.72 + 0.14 * r();
-          const gs = () => { let u = 0, v = 0; while (u === 0) u = r(); while (v === 0) v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
-          tried.push({ trueQ, valObs: trueQ + gs() * sdFor(nVal), testObs: trueQ + gs() * sdFor(nTest()) });
+          const trueQ = 0.72 + 0.14 * Math.random();
+          tried.push({ trueQ, valObs: score(nVal, trueQ), testObs: score(nTest(), trueQ) });
           let bi = 0;
           for (let i = 1; i < tried.length; i++) if (tried[i].valObs > tried[bi].valObs) bi = i;
           best.push(tried[bi]);
         }
 
-        const trSl = ctx.slider({ label: 'training examples', min: 400, max: 900, step: 10, value: 500, onChange: (v) => { nTrain = v; if (nTrain + nVal > TOTAL - 50) { nVal = TOTAL - 50 - nTrain; vaSl.value = nVal; } reset(); } });
+        const trSl = ctx.slider({ label: 'training examples', min: 400, max: 900, step: 10, value: 700, onChange: (v) => { nTrain = v; if (nTrain + nVal > TOTAL - 50) { nVal = TOTAL - 50 - nTrain; vaSl.value = nVal; } reset(); } });
         const vaSl = ctx.slider({ label: 'validation examples', min: 25, max: 400, step: 5, value: 150, onChange: (v) => { nVal = v; if (nTrain + nVal > TOTAL - 50) { nTrain = TOTAL - 50 - nVal; trSl.value = nTrain; } reset(); } });
         const oneBtn = ctx.button('Tune once', () => tryOne());
         const manyBtn = ctx.button('Tune 50 times', () => { for (let i = 0; i < 50; i++) tryOne(); }, 'primary');
@@ -408,10 +424,10 @@
           const P = { x: 60, y: 110, w: 430, h: 230 };
           const MAXT = Math.max(60, best.length);
           const px = (i) => P.x + i / MAXT * P.w;
-          const py = (q) => P.y + P.h - (q - 0.68) / 0.26 * P.h;
+          const py = (q) => P.y + P.h - (q - 0.66) / 0.36 * P.h;
           g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(P.x, P.y, P.w, P.h);
           g.font = MONO; g.fillStyle = C.muted;
-          for (let q = 0.70; q <= 0.94; q += 0.06) {
+          for (const q of [0.70, 0.80, 0.90, 1.00]) {
             g.beginPath(); g.moveTo(P.x, py(q)); g.lineTo(P.x + P.w, py(q)); g.stroke();
             g.fillText((q * 100).toFixed(0) + '%', P.x - 34, py(q) + 4);
           }
@@ -424,7 +440,7 @@
           series.forEach(([k, col]) => {
             if (best.length < 2) return;
             g.strokeStyle = col; g.lineWidth = 2; g.beginPath();
-            best.forEach((b, i) => { const y = py(ctx.clamp(b[k], 0.68, 0.94)); i ? g.lineTo(px(i), y) : g.moveTo(px(i), y); });
+            best.forEach((b, i) => { const y = py(ctx.clamp(b[k], 0.66, 1.0)); i ? g.lineTo(px(i), y) : g.moveTo(px(i), y); });
             g.stroke();
           });
           g.font = 'bold ' + FONT; g.fillStyle = C.text;
@@ -462,7 +478,7 @@
           }
         });
 
-        return ctx.figure(cv, 'A thousand examples, cut into three piles. Each "tune" tries one more hyperparameter setting, scores it on the validation set, and keeps whichever looks best so far. Because validation is a finite sample, its score is the true quality plus a bit of luck — and picking the maximum of many noisy scores systematically picks the lucky ones. The yellow line drifts above the white one. The test set, never used for choosing, stays honest.', [trSl, vaSl, oneBtn, manyBtn, resetBtn], ro);
+        return ctx.figure(cv, 'A thousand examples, cut into three piles. Each "tune" tries one more hyperparameter setting, scores it on the validation set, and keeps whichever looks best so far. Because validation is a finite sample, its score is the true quality plus a bit of luck — and picking the maximum of many noisy scores systematically picks the lucky ones. The yellow line drifts above the white one. The test set was never used for choosing, so its luck is not selected for: the green line wobbles to either side of the truth instead of climbing away from it.', [trSl, vaSl, oneBtn, manyBtn, resetBtn], ro);
       }
 
       /* ================================================================== */
@@ -549,7 +565,7 @@
           ro.set({ batch, 'avg angle error': avgAng.toFixed(1) + '°', 'noise ∝ 1/√b': (1 / Math.sqrt(batch)).toFixed(3) });
         });
 
-        return ctx.figure(cv, 'Left: forty different mini-batches, each drawn fresh from the same 2,000 examples, each pointing where <i>it</i> thinks downhill is. The white arrow is the true gradient over all the data. At batch 1 the fan is wild. Above a handful of examples the error shrinks with 1/√(batch size), so 4× the batch halves the noise. Right: a CPU does the same total work however you slice it, while a GPU has a fixed cost per step it can amortise over a whole batch at once — which is why batching is nearly free there and the reason deep learning waited for graphics hardware.', [bSl, ...presets], ro);
+        return ctx.figure(cv, 'Left: forty different mini-batches, each drawn fresh from the same 2,000 examples, each pointing where <i>it</i> thinks downhill is. The white arrow is the true gradient over all the data. At batch 1 the fan is wild. Above a handful of examples the error shrinks with 1/√(batch size), so 4× the batch halves the noise. Right: a CPU does the same total work however you slice it, while a GPU has a fixed cost per step it can amortise over a whole batch at once — which is why batching is nearly free there, and one reason deep learning waited for graphics hardware. Both cost curves are drawn schematically, not measured: a real CPU gains a little from batching too, but nothing like this.', [bSl, ...presets], ro);
       }
 
       /* ================================================================== */
@@ -735,8 +751,8 @@
         callout('tryit', '🖐 Do this first — build an answer key, then watch it fail',
           `Blue dots are the questions you get to study. Orange dots are next year's exam, which you never see while fitting.<br>
            <b>1.</b> Set <b>degree</b> to 1. A straight line, wrong nearly everywhere — the model is too rigid.<br>
-           <b>2.</b> Push <b>degree</b> to 15. The curve now threads almost perfectly through every blue dot: training error near zero.
-           <b>Now look at the orange dots</b>, and at the wild swings between them.<br>
+           <b>2.</b> Push <b>degree</b> to 15. The curve now bends to chase the blue dots, and <b>train error</b> in the readout is the lowest it has been at any degree.
+           <b>Now read the number beside it</b>, the error on the orange dots, and look at the wild swings where there are no blue dots to pin the curve down.<br>
            <b>3.</b> Still at degree 15, press <b>New noise sample</b> a few times. The true curve never moves. Yours reshapes itself completely.<br>
            <b>4.</b> Find the degree with the lowest <i>held-out</i> error on the lower chart.`),
         curveFit(),
@@ -762,7 +778,7 @@
         p(`So you hold data back. Cut it into three piles before you write a line of training code — and the reason there are three, not two, is subtler than it looks.`),
         callout('tryit', '🖐 Try this — spend the validation set and watch it lie to you',
           `<b>1.</b> Press <b>Tune 50 times</b>. Each press tries another hyperparameter setting and keeps whichever scored best on validation.<br>
-           <b>2.</b> Watch the <b>yellow</b> line (what validation reports) pull away from the <b>white</b> line (the truth). The <b>green</b> line, the untouched test set, stays with the truth.<br>
+           <b>2.</b> Watch the <b>yellow</b> line (what validation reports) pull away above the <b>white</b> line (the truth). The <b>green</b> line, the untouched test set, lands on either side of the truth and does not chase the yellow one.<br>
            <b>3.</b> Drag <b>validation examples</b> down to 25 and tune 50 times again. The lie gets much bigger.<br>
            <b>4.</b> Drag it up to 400. The lie shrinks. <b>Nothing about the model changed</b> — only how many examples you were judging it with.`),
         splitDeck(),
@@ -772,7 +788,7 @@
       ));
 
       root.append(section('Four levers against overfitting',
-        p(`Four practical tools push back, and you will meet all four in every chapter from here on.`),
+        p(`Four practical tools push back, and you will keep meeting them for the rest of the course.`),
         ul([
           `<b>Weight decay</b> — add a small penalty for large weights, so the optimizer keeps them small unless the data really insists. Small weights make smoother functions, and smooth functions memorise noise less easily. (The ridge term quietly stabilising the polynomial fit above is exactly this.)`,
           `<b>Dropout</b> — during training, randomly switch off a fraction of neurons on every pass, so the survivors cannot rely on one teammate always being present. The network is forced to learn redundant, robust features.`,
@@ -802,8 +818,8 @@
         p(`<em>Momentum</em> fixes the first problem by changing the metaphor. Instead of a marble that stops dead when you stop pushing, imagine a heavy ball: it keeps most of its previous velocity and adds the new gradient on top. Down a narrow valley it builds speed along the floor, while the side-to-side component flips sign each step and largely cancels itself out.`),
         callout('key', '🔑 Momentum, by hand',
           `v ← β·v − η·∇L, then position ← position + v, with β ≈ 0.9 (keep 90% of last step's velocity).<br>
-           Say the ball is rolling left, v = −0.40, and one noisy batch now says "go right": gradient 0.30, with β = 0.9 and η = 0.1.<br>
-           New velocity = 0.9 × (−0.40) − 0.1 × 0.30 = <b>−0.39</b>. Still heading left, barely dented.
+           Say the ball is rolling left, v = −0.40, and one noisy batch now says "go right": its gradient is −0.30 (downhill is always against the gradient), with β = 0.9 and η = 0.1.<br>
+           New velocity = 0.9 × (−0.40) − 0.1 × (−0.30) = −0.36 + 0.03 = <b>−0.33</b>. Still heading left, only dented.
            The ball remembers where it was heading and shrugs off one noisy gradient — which is exactly what you want when every gradient comes from a small random batch.`),
         p(`<em>Adam</em> fixes the second problem. For each parameter it tracks a running average of the gradient <i>and</i> of the gradient's squared size, then divides the first by the square root of the second. A parameter with consistently huge gradients gets shrunk to a sane step; one with tiny rare gradients gets amplified. Every parameter effectively gets a learning rate chosen from its own history.`),
         p(`A neat fact falls out of the algebra: on the very first update Adam's step is almost exactly η × sign(gradient), regardless of the gradient's actual size. Plain SGD's first step is η × gradient, so one freak batch throws it wildly off. That is why Adam tolerated the much wider slider range you just tested.`),
@@ -821,10 +837,44 @@
            <b>2.</b> Press <b>batch 32</b>, then <b>batch 512</b>. The fan collapses toward the white arrow.<br>
            <b>3.</b> Watch the right-hand chart as you do it: on a GPU, all that extra accuracy costs almost nothing.`),
         batchNoise(),
+
+        /* maths beat: the average, its spread, and sigma / sqrt(n) — named after the fan */
+        ctx.walkthrough([
+          { say: 'Each thin blue line in that fan is an <b>average</b>: every example in one mini-batch voted on which way is downhill, and the votes were added up and divided by the batch size.', note: 'That is all a mini-batch gradient is.' },
+          { say: 'The white arrow is the same average taken over all 2,000 examples, and it is what every blue line is trying to guess.', note: 'The value a noisy average is aiming at has a name: its <b>expectation</b>. You already know it as the long-run average.' },
+          { say: 'A guess made from few examples is jumpy: at batch 32 the fan missed the white arrow by about 12°.', math: 'batch 32 &rarr; about 12° off' },
+          { say: 'Then you pressed batch 512, sixteen times the examples, and the miss fell to about 3°: a quarter, not a sixteenth.', math: '&times;16 the examples &rarr; &divide;4 the error' },
+          { ask: 'Sixteen times the data cut the error by four. If that pattern holds, how much data cuts the error by <b>ten</b>?',
+            options: ['10 times as much', '20 times as much', '100 times as much'], answer: 2,
+            explain: 'The error shrinks with the <b>square root</b> of the number of examples. √16 = 4, and √100 = 10.' },
+          { say: 'The readout under the demo has been printing exactly this, as one divided by the square root of the batch size.', math: '1 &divide; √32 = 0.177 &nbsp;&nbsp;&nbsp; 1 &divide; √512 = 0.044' },
+          { say: 'The 1 on top stands in for how much single examples disagree with each other, which statisticians measure with the <b>standard deviation</b>, written <b>&sigma;</b>.', note: 'Square it and you have the <b>variance</b>. In this demo each single example\'s vote has &sigma; = 1.6.' },
+          { say: 'So the spread of an average of <b>n</b> things is &sigma; divided by the square root of n.', math: 'batch 64: &nbsp; 1.6 &divide; √64 = 1.6 &divide; 8 = 0.2' },
+          { say: 'You met the same law in the three piles, because a validation score is an average too: 150 rights and wrongs, added up and divided by 150.', math: '0.4 &divide; √150 = 0.033 &rarr; about 3 points of luck', note: 'For a model that is right 80% of the time, the &sigma; of a single right-or-wrong is √(0.8 &times; 0.2) = 0.4.' },
+          { ask: 'With only <b>25</b> validation examples, how much luck rides on each score?',
+            options: ['About 8 points', 'About 3 points', 'About 1 point'], answer: 0,
+            explain: '0.4 ÷ √25 = 0.4 ÷ 5 = 0.08. Eight points of luck on every score, and you kept the luckiest of fifty. That is why the yellow line ran away.' },
+          { say: 'The training loss is one more average, of chapter 2\'s &minus;log p over every example in the batch, so it wobbles by the same law.', note: 'Which is why the curves in the early-stopping chart jitter from one replay to the next.' },
+        ], {
+          title: 'From a fan of arrows to σ ÷ √n',
+          recap: 'an average of n noisy things misses by about &sigma; &divide; √n, so four times the data buys half the noise.',
+        }),
+        ctx.decoder([
+          { sym: 'noise', name: 'how far a typical average lands from the truth', says: 'Statisticians call it the <em>standard error</em>. It is the standard deviation of the average itself, not of one example.', points: 'the width of the blue fan; the gap that opened between the yellow line and the white one.' },
+          '=',
+          { sym: '&sigma;', name: 'sigma', says: 'How much single examples disagree with each other: the standard deviation. The data sets it. You do not.', points: 'the wild fan at batch 1, where each line is one example.' },
+          '÷',
+          { sym: '√', name: 'the square root of', says: 'The reason the exchange rate is punishing. Four times the data gives twice the precision; a hundred times gives ten.', points: 'batch 32 to batch 512 taking 12° down to 3°.' },
+          { sym: 'n', name: 'the number of things averaged', says: 'The only part you control.', points: 'the mini-batch size slider, and the validation examples slider before it.' },
+        ], {
+          title: 'noise  =  σ ÷ √n',
+          plain: 'the noise in an average is the disagreement between single examples, divided by the square root of how many you averaged.',
+        }),
+
         p(`Real training almost never computes the gradient from one example (that was chapter 2's playground, for clarity) nor from the whole dataset at once (far too slow to ever take a step). It averages over a <em>mini-batch</em> — commonly 32 to a few thousand — takes one step, then moves on.`),
-        p(`The noise falls as 1/√(batch size), so quadrupling the batch halves the error. That is a punishing exchange rate, which is why batches are not simply enormous: past a point you are paying four times the work <i>in each update</i> to halve a noise that was not hurting you much anyway.`),
+        p(`That square root is a punishing exchange rate, which is why batches are not simply enormous: past a point you are paying four times the work <i>in each update</i> to halve a noise that was not hurting you much anyway.`),
         p(`A GPU's advantage was never doing one multiplication fast — it is doing thousands at the same instant. Feed it one example and most of the chip idles. Feed it 512 stacked into one matrix and the same multiply handles all of them for barely more time. `),
-        p(`Bigger batches buy a CPU nothing at all — it does the same total work however you slice it, which is what the flat red line says. On a GPU they are nearly free, and that asymmetry is one quiet reason deep learning did not take off until graphics hardware was repurposed for it.`),
+        p(`In this idealised picture bigger batches buy a CPU nothing at all — it does the same total work however you slice it, which is what the flat red line says. On a GPU they are nearly free, and that asymmetry is one quiet reason deep learning did not take off until graphics hardware was repurposed for it.`),
         callout('key', '🔑 Parameters vs hyperparameters',
           `<b>Parameters</b> are what the optimizer learns: weights and biases, everything adjusted by ∂L/∂w.<br>
            <b>Hyperparameters</b> are what a human sets before training and the optimizer never touches: learning rate, batch size, number of layers, dropout rate, the polynomial degree you dragged at the top of this chapter.<br>
@@ -868,7 +918,7 @@
 
       root.append(section('Why this matters for modern AI',
         p(`Every headline about a new frontier model is this chapter's recipe run at a scale a 2012 researcher would have called science fiction. Tens of terabytes of self-supervised text, filtered down from petabytes of raw crawl, standing in for hand-made labels. Cross-entropy for the loss. AdamW for the optimizer.`),
-        p(`Hundreds of billions of parameters for the model, often a few trillion. Most frontier models are now <em>sparse mixtures of experts</em>, so only a fraction of those parameters are used on any one token — which is why a single headline number tells you less than it used to. Chapter 10 takes that apart.`),
+        p(`Hundreds of billions of parameters for the model, often a few trillion. Most frontier models whose design is public are now <em>sparse mixtures of experts</em>, so only a fraction of those parameters are used on any one token — which is why a single headline number tells you less than it used to. Chapter 10 takes that apart.`),
         p(`And a held-out benchmark — never the training data — standing in for the report card anyone trusts. The training-versus-validation gap you watched turn upward is the same gap researchers track at the scale of trillions of tokens.`),
         p(`A striking share of frontier-lab effort goes into data curation and evaluation: the first and last levers in this chapter. The regularizers change as you scale — a single pass over trillions of tokens leaves little to memorise, so frontier pretraining generally drops dropout altogether. The recipe does not change as it scales. Only its size does.`),
         callout('warning', '⚠️ The failure mode that survives at every scale',
@@ -879,11 +929,21 @@
 
       root.append(
         ctx.quiz([
-          { q: 'Your degree-15 curve passed through every training point with near-zero error. Why is that bad news rather than good?', options: ['It is good news — zero error is the goal', 'It fitted the random noise as well as the signal, and noise never repeats on new data', 'Degree 15 is too slow to compute', 'It used too much training data'], answer: 1, explain: 'That is overfitting. You saw it directly: press "New noise sample" and the fitted curve reshapes completely while the true sine never moves. The model learned the dots, not the curve.' },
-          { q: 'You try 50 hyperparameter settings, keep the one that scores best on validation, and report that validation score as your result. What is wrong?', options: ['Nothing — validation is held-out data', 'Picking the best of 50 noisy scores systematically picks the luckiest one, so the reported number is inflated', '50 settings is too few to be meaningful', 'You should have used the training score instead'], answer: 1, explain: 'This is exactly the yellow-line-versus-white-line gap in the tuning demo. Each validation score is true quality plus sampling luck; taking the maximum selects for luck. The untouched test set is the only honest judge, which is why there are three piles and not two.' },
-          { q: 'A spam filter reports 95% accuracy. Why is that not enough to know it works?', options: ['Accuracy is never a valid metric', 'If only 5% of mail is spam, flagging nothing at all scores 95% while catching zero spam', '95% is a low score for a filter', 'Accuracy only applies to balanced regression problems'], answer: 1, explain: 'You built exactly that model by pressing "Flag nothing ever" at a 5% spam rate. Accuracy hides the failure because the majority class dominates it. Precision and recall expose it immediately — recall was zero.' },
-          { q: 'Why does real training use mini-batches of, say, 32–512 examples rather than one example or the whole dataset?', options: ['Because GPUs cannot hold more than 512 examples', 'One example gives a very noisy gradient and the whole dataset is far too slow per step; a batch is a good compromise, and GPUs process it almost as fast as a single example', 'Because the loss function requires it', 'To prevent the model from seeing any example twice'], answer: 1, explain: 'Mini-batch gradient noise falls as 1/√(batch size), which you watched as the fan of arrows collapsing toward the true gradient. And a GPU amortises its fixed per-step cost across the whole batch, so the accuracy is nearly free there.' },
-          { q: 'Which of these is a hyperparameter rather than a parameter?', options: ['A weight in the second hidden layer', 'A bias term', 'The learning rate', 'The gradient ∂L/∂w'], answer: 2, explain: 'Parameters are what the optimizer adjusts by gradient descent. Hyperparameters are set by a human before training and never touched by it — learning rate, batch size, layer count, dropout rate. There is no ∂L/∂(learning rate) to compute, which is why they are tuned against validation instead.' },
+          { q: 'A colleague shows you a model with training error 0.01 and held-out error 0.48, and wants to make it more flexible to push the training error lower still. What do you tell them?',
+            options: ['Go ahead: a lower training error always carries over to new data', 'It is underfitting, so more flexibility is exactly what it needs', 'That gap says it is already fitting noise, and more flexibility will widen it', 'Held-out error is only noisier than training error, so ignore it'], answer: 2,
+            explain: 'Numbers like these are what your degree-15 curve produced. Underfitting would show as two bad scores close together. A tiny training error beside a large held-out one is overfitting, and the cure is less flexibility, more data or regularization.' },
+          { q: 'You try 50 settings, and the best one scores 90% on a 150-example validation set. What is the most honest forecast for that setting on fresh data?',
+            options: ['Somewhat below 90%, because the best of fifty noisy scores is partly luck', 'About 90%, because the validation set was never trained on', 'Above 90%, because fresh data has not been tuned against', 'No forecast is possible until the model is retrained'], answer: 0,
+            explain: 'This is the yellow line pulling away from the white one. Each score is true quality plus about 3 points of sampling luck (0.4 ÷ √150), and keeping the maximum selects for the luck. An untouched test set is how you find out how much.' },
+          { q: 'A cancer-screening test is tuned so that it almost never misses a real case. As a result it sends many healthy people for follow-up scans. In this chapter\'s terms it has…',
+            options: ['High precision and low recall', 'High precision and high recall', 'Low precision and low recall', 'High recall and low precision'], answer: 3,
+            explain: 'Recall is the share of real cases caught: high. Precision is the share of flagged people who really have it: low. It is the spam dial with the yellow line dragged far to the left, and here that is the right trade, because a miss costs far more than a false alarm.' },
+          { q: 'Your gradient at batch size 32 points about 12° away from the true one. Roughly what batch size brings that down to about 6°?',
+            options: ['64', '128', '1,024', '16'], answer: 1,
+            explain: 'Noise falls as σ ÷ √n, so halving it takes four times the examples: 32 × 4 = 128. Doubling to 64 only buys a factor of √2. That exchange rate is why batches are not simply made enormous.' },
+          { q: 'A momentum optimizer keeps 90% of its last velocity. It is moving at −0.40 (leftwards) when one noisy batch adds a push of +0.03 to the right. What is its new velocity?',
+            options: ['0.00: it stops dead', '+0.03: it turns and follows the newest gradient', '−0.33: still heading left, slightly slower', '−0.43: the push adds to its speed'], answer: 2,
+            explain: '0.9 × (−0.40) + 0.03 = −0.36 + 0.03 = −0.33. Plain SGD would have followed the noisy batch. Momentum averages over recent steps, so a single bad gradient only dents it.' },
         ]),
 
         section('Go deeper',

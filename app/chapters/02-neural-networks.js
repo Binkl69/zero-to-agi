@@ -13,6 +13,21 @@
     part: 'I',
     title: 'Neural networks and backpropagation',
     tagline: 'The puzzle that beat you in chapter 1, solved with your own hands in ten seconds — then the one idea that lets a billion weights learn at once.',
+    minutes: 55,
+    objectives: [
+      'explain why a hidden layer solves XOR, and why stacked layers with no activation between them do not',
+      'compute a slope by nudging a weight and dividing, and say which way gradient descent then moves it',
+      'read ∂L/∂w and the chain rule as "multiply the slopes along the chain"',
+      'predict what a learning rate that is too high or too low does to training',
+    ],
+    takeaways: [
+      '<b>A hidden layer invents easier questions.</b> Two neurons answer "at least one on?" and "both on?"; a third combines the two answers into XOR.',
+      '<b>No squash, no depth.</b> Layers with no activation between them multiply into a single matrix, so a hundred of them still draw one straight line.',
+      '<b>Loss puts a number on "wrong".</b> Cross-entropy charges −log(probability given to the right answer): about 0.7 for a 50% shrug, 4.6 for a confident 1%.',
+      '<b>A derivative is a measured slope.</b> Nudge the weight, see how far the loss moved, divide. Then step the other way: <code class="inline">w ← w − η · ∂L/∂w</code>.',
+      '<b>Backpropagation is the chain rule run backwards.</b> ∂L/∂y is computed once and reused by every weight, so all the gradients cost about one extra pass.',
+      '<b>The learning rate is stride length.</b> Too long and the loss ricochets; too short and it crawls; and plain descent can settle in a dip that is not the deepest.',
+    ],
     render(root, ctx) {
       const { h, p, section, callout, ul, ol } = ctx;
       const C = ctx.colors;
@@ -875,11 +890,10 @@
         };
         let act = 'tanh', depth = 3, probe = 0.8;
         let W = [];
-        function reroll() {
+        function roll() {
           W = [];
           for (let i = 0; i < 6; i++) W.push({ w: ctx.rand(-2.2, 2.2), b: ctx.rand(-1.4, 1.4) });
         }
-        reroll();
         /* pass x through `depth` layers of (weight, bias, activation) */
         function net(x) {
           let v = x;
@@ -889,13 +903,41 @@
           }
           return v;
         }
+        /* the curve the stack draws, and how far it strays from the straight line through
+           its own endpoints, as a fraction of the panel's height */
+        function measure() {
+          let lo = Infinity, hi = -Infinity;
+          const ys = [];
+          for (let i = 0; i <= 220; i++) {
+            let v = net(-4 + i / 220 * 8);
+            if (!isFinite(v)) v = 0;
+            v = ctx.clamp(v, -1e12, 1e12);   /* the panel autoscales; clipping here made a straight line read as bent */
+            ys.push(v); if (v < lo) lo = v; if (v > hi) hi = v;
+          }
+          if (hi - lo < 1e-6) { lo -= 1; hi += 1; }
+          const pad = (hi - lo) * 0.12; lo -= pad; hi += pad;
+          let dev = 0;
+          for (let i = 0; i <= 220; i++) dev = Math.max(dev, Math.abs(ys[i] - (ys[0] + (ys[220] - ys[0]) * i / 220)));
+          return { ys, lo, hi, rel: dev / Math.max(1e-9, hi - lo) };
+        }
+        /* Each layer here is ONE neuron wide, and a one-wide chain is fragile: if every input
+           lands on the flat side of a single ReLU, that neuron is dead and everything after
+           it is a constant. With six ReLU layers 85% of random rolls came out flat, and the
+           panel then told the reader a squashed stack "stays a straight line" — the opposite
+           of the lesson. So a roll that lands dead is thrown away and drawn again. Linear is
+           exempt: its straightness is the point, and no reroll can change it. */
+        function reroll() {
+          roll();
+          for (let k = 0; k < 400 && act !== 'linear' && measure().rel <= 0.01; k++) roll();
+        }
+        reroll();
 
         const actSel = ctx.select({
           label: 'Activation', value: 'tanh',
           options: Object.keys(ACTS).map(k => ({ value: k, label: ACTS[k].label })),
-          onChange: (v) => { act = v; },
+          onChange: (v) => { act = v; if (act !== 'linear' && measure().rel <= 0.01) reroll(); },
         });
-        const depthSl = ctx.slider({ label: 'Layers', min: 2, max: 6, step: 1, value: 3, onChange: (v) => { depth = v; } });
+        const depthSl = ctx.slider({ label: 'Layers', min: 2, max: 6, step: 1, value: 3, onChange: (v) => { depth = v; if (act !== 'linear' && measure().rel <= 0.01) reroll(); } });
         const probeSl = ctx.slider({ label: 'input z', min: -4, max: 4, step: 0.05, value: 0.8, digits: 2, onChange: (v) => { probe = v; } });
         const rollBtn = ctx.button('New random weights', reroll, 'primary');
         const ro = ctx.readout();
@@ -938,17 +980,7 @@
 
           /* ---- right: what a whole stack can draw ---- */
           const R = { x: 390, y: 40, w: 290, h: 250 };
-          let lo = Infinity, hi = -Infinity;
-          const ys = [];
-          for (let i = 0; i <= 220; i++) {
-            const x = -4 + i / 220 * 8;
-            let v = net(x);
-            if (!isFinite(v)) v = 0;
-            v = ctx.clamp(v, -1e12, 1e12);   /* the panel autoscales; clipping here made a straight line read as bent */
-            ys.push(v); if (v < lo) lo = v; if (v > hi) hi = v;
-          }
-          if (hi - lo < 1e-6) { lo -= 1; hi += 1; }
-          const pad = (hi - lo) * 0.12; lo -= pad; hi += pad;
+          const M = measure(), ys = M.ys, lo = M.lo, hi = M.hi;
           const rx = (x) => R.x + (x + 4) / 8 * R.w;
           const ry = (v) => R.y + R.h - (v - lo) / (hi - lo) * R.h;
           g.strokeStyle = C.line; g.lineWidth = 1;
@@ -961,25 +993,22 @@
           g.fillText(depth + ' layers stacked, end to end', R.x, 26);
 
           /* straightness test: max deviation from the straight line through the endpoints */
-          let dev = 0;
-          for (let i = 0; i <= 220; i++) {
-            const t = i / 220, straight = ys[0] + (ys[220] - ys[0]) * t;
-            dev = Math.max(dev, Math.abs(ys[i] - straight));
-          }
-          const rel = dev / Math.max(1e-9, hi - lo);
-          const bent = rel > 0.01;
+          const rel = M.rel;
+          const bent = rel > 0.01, dead = !bent && act !== 'linear';
           g.font = 'bold 15px Inter, system-ui, sans-serif';
-          g.fillStyle = bent ? C.green : C.danger;
-          g.fillText(bent ? 'bent — this can fold' : 'perfectly straight — no matter what', R.x, R.y + R.h + 26);
+          g.fillStyle = bent ? C.green : dead ? C.warn : C.danger;
+          g.fillText(bent ? 'bent — this can fold' : dead ? 'flat on this roll — roll again' : 'perfectly straight — no matter what', R.x, R.y + R.h + 26);
           g.font = FONT; g.fillStyle = C.muted;
           wrapText(g, bent
             ? 'Press "New random weights" all day: with a squash in the middle, the stack keeps producing shapes one line cannot.'
-            : 'Press "New random weights" all day. Add layers. It stays a straight line. That is the 1969 wall, rebuilt.',
+            : dead
+              ? 'These weights parked every input on a flat part of the squash, so nothing gets through. A chain one neuron wide can die like this. Roll again.'
+              : 'Press "New random weights" all day. Add layers. It stays a straight line. That is the 1969 wall, rebuilt.',
             R.x, R.y + R.h + 46, R.w, 17);
           ro.set({ activation: A.label, layers: depth, 'bendiness': (rel * 100).toFixed(1) + '%' });
         });
 
-        return ctx.figure(cv, 'Left: the activation function on its own — the little squash applied after each neuron\'s weighted sum. Right: what you get when you chain several weight-and-bias layers together with that squash between them. "Bendiness" measures how far the output curve strays from a straight line. Choose <b>linear (none)</b> and it is pinned at 0.0% forever, however many layers you stack.', [actSel, depthSl, probeSl, rollBtn], ro);
+        return ctx.figure(cv, 'Left: the activation function on its own — the little squash applied after each neuron\'s weighted sum. Right: what you get when you chain several weight-and-bias layers together with that squash between them. "Bendiness" measures how far the output curve strays from a straight line. Choose <b>linear (none)</b> and it is pinned at 0.0% forever, however many layers you stack. Each layer here is a single neuron wide, which makes the chain fragile: a roll that would leave a ReLU switched off for every input is thrown away and drawn again.', [actSel, depthSl, probeSl, rollBtn], ro);
       }
 
       /* ------------------------------------------------------------------ */
@@ -1069,7 +1098,7 @@
           ro.set({ 'P(right)': p.toFixed(2), 'cross-entropy': cev.toFixed(3), 'squared err': sqv.toFixed(3) });
         });
 
-        return ctx.figure(cv, 'Both curves are zero when the model is certain and right (far right) and rise as it gets things wrong. They part company at the left edge: squared error tops out at 0.5, while cross-entropy goes to infinity. "How hard it shoves" is how steeply each loss climbs as the probability slips — the slope in p, which is what the weight updates inherit — the push the wrong weights receive. A model that is 1% sure of the right answer gets a 100× shove from cross-entropy and almost nothing from squared error.', [pSl, tSel, confBtn, hedgeBtn, rightBtn], ro);
+        return ctx.figure(cv, 'Both curves are zero when the model is certain and right (far right) and rise as it gets things wrong. They part company at the left edge: squared error tops out at 0.5, while cross-entropy goes to infinity. "How hard it shoves" is how steeply each loss climbs as the probability slips: the slope in p, which is the push the weight updates inherit. A model that is 1% sure of the right answer gets a 100× shove from cross-entropy and 0.99× from squared error, a hundred times weaker.', [pSl, tSel, confBtn, hedgeBtn, rightBtn], ro);
       }
 
       /* ------------------------------------------------------------------ */
@@ -1168,7 +1197,7 @@
            <b>tanh</b> is the same shape centred on zero and trains better in hidden layers.
            <b>ReLU</b> — literally <code class="inline">max(0, z)</code> — looks too crude to work, and won:
            it is cheap, and its slope is exactly 1 for positive inputs, which keeps gradients from fading in deep stacks.
-           Modern language models use smoother descendants of ReLU: GELU, and SwiGLU — which pairs one of those smooth curves with a second, learned gate (chapter 7).`),
+           Modern language models use smoother descendants of ReLU: GELU, and SwiGLU — which pairs one of those smooth curves with a second, learned gate. Both live inside the transformer blocks of chapter 7.`),
       ));
 
       root.append(section('Giving "wrong" a number',
@@ -1179,7 +1208,7 @@
            Now drag the slider slowly from right to left and watch the red curve leave the top of the chart.`),
         lossLab(),
         p(`Squared error treats a confident mistake as only slightly worse than a shrug. Cross-entropy treats it as a catastrophe, because it charges you <b>−log(probability you gave the right answer)</b>, and minus the log of a small number is enormous.`),
-        p(`That is exactly the incentive you want. A model that says "99% sure" should be punished far harder for being wrong than one that admitted it was guessing. Cross-entropy is why a language model's raw next-token probabilities end up roughly honest about their own uncertainty. The catch, which chapter 11 returns to: the fine-tuning that turns that model into an assistant measurably degrades this, so the thing you talk to is less well calibrated than the thing underneath it.`),
+        p(`That is exactly the incentive you want. A model that says "99% sure" should be punished far harder for being wrong than one that admitted it was guessing. Cross-entropy is why a language model's raw next-token probabilities end up roughly honest about their own uncertainty. The catch: the fine-tuning that turns that model into an assistant (chapter 11) measurably degrades this, so the thing you talk to is less well calibrated than the thing underneath it.`),
         callout('key', '🔑 The whole of training in one line',
           `Every model in this course — the toy below, ResNet, GPT — is trained by the same loop:
            <b>predict, measure the error with a loss function, ask the chain rule which way each weight should move, move it a little, repeat.</b>
@@ -1295,7 +1324,7 @@
           `<b>1.</b> Start with <b>XOR</b>, 4 hidden units, tanh. Press <b>▶ Play</b>. Watch the heatmap fold into four quadrants and the loss curve fall.<br>
            <b>2.</b> Switch to <b>Two circles</b>. Turn <b>Hidden-unit lines</b> on and count how many straight cuts it takes to fake a circle.<br>
            <b>3.</b> Try <b>Spiral</b> with 4 units. It cannot, and the loss flattens out. Push hidden units to 16 and let it run. Roughly half of random starts still stall around 60% — when that happens press <b>Reset weights</b> and let it go again, which is itself worth knowing about training.<br>
-           <b>4.</b> Let it converge, then set the learning rate to 1.0 — the loss jumps around and the accuracy falls back. (This playground clips its own gradients, so it will not blow up to infinity; chapter 3 shows one that does.) Set it to 0.001 and press <b>Reset weights</b>: the same boundary forms, perhaps fifty times slower. Those are failures 2 and 3 from the fog, in a real network.`),
+           <b>4.</b> Let it converge, then set the learning rate to 1.0 — the loss jumps around and the accuracy falls back. (This playground clips its own gradients, so it will not blow up to infinity. A training run without that guard can.) Set it to 0.001 and press <b>Reset weights</b>: the same boundary forms, perhaps fifty times slower. Those are failures 2 and 3 from the fog, in a real network.`),
         playground(),
         p(`Everything in this chapter is implemented by hand underneath that figure, in a few dozen lines of plain JavaScript: a forward pass, a backward pass, a gradient step, repeated a few hundred times per animation frame. Nothing is pre-computed and nothing is faked. When the boundary wobbles, that is the gradient wobbling.`),
         ctx.code(
@@ -1337,11 +1366,11 @@ b2 -= lr * dz;`),
 
       root.append(
         ctx.quiz([
-          { q: 'In the first interactive, the output neuron scored 4/4 on XOR. What did neurons A and B actually contribute?', options: ['They each solved XOR and the output neuron voted', 'They answered two easier, linearly separable questions, and the output neuron combined those answers', 'They stored the four correct labels', 'They increased the learning rate'], answer: 1, explain: 'A fired for "at least one switch on", B for "both on". Neither is XOR. The output neuron only ever saw those two 0/1 answers, and "A and not B" is exactly XOR. That is what a hidden layer is for: inventing easier questions.' },
-          { q: 'A network has six layers but no activation function between them. Why can it still not learn XOR?', options: ['Six layers is too few', 'Without a non-linearity the layers collapse into one linear map, which still draws a single flat boundary', 'The learning rate must be zero', 'XOR needs at least four inputs'], answer: 1, explain: 'W₃·(W₂·(W₁·x)) = (W₃W₂W₁)·x, a single matrix. That is why "bendiness" stayed pinned at 0.0% however many layers you stacked. Depth without a hinge adds nothing.' },
-          { q: 'You set the learning rate very high and the loss starts going <i>up</i>. What is happening?', options: ['The network has found the global minimum', 'Each step overshoots the valley and lands higher on the far slope', 'Backpropagation has stopped working', 'The data has changed'], answer: 1, explain: 'Gradient descent only knows the local slope. A stride longer than the valley is wide jumps clean across it, and each jump can land higher, until the numbers blow up. That is failure 2 in the fog demo.' },
-          { q: 'What is backpropagation, in one sentence?', options: ['A way to choose the learning rate', 'A special activation function', 'The chain rule applied backwards through the layers, so every weight\'s gradient is computed in one sweep', 'A method for collecting training data'], answer: 2, explain: 'Backprop computes ∂L/∂(output) once and reuses it at every edge, multiplying by the slopes of the links in between. That is why the gradient for a million weights costs about as much as one forward pass.' },
-          { q: 'A classifier gives the correct class a probability of 1%. Roughly what is its cross-entropy loss, compared with giving it 90%?', options: ['About the same', 'About 4.6 versus 0.1: confident mistakes cost far more', 'Exactly ten times more', 'Zero, because it still ranked the class'], answer: 1, explain: '−log(0.9) ≈ 0.105 and −log(0.01) ≈ 4.6, the two numbers you read off the loss explorer. Cross-entropy punishes confidently wrong predictions hardest, which is what pushes a model toward being honest about its own uncertainty.' },
+          { q: 'You place line A so it fires only when <b>both</b> switches are on, and line B so it fires when <b>at least one</b> is on. Which output rule now scores 4/4 on XOR?', options: ['A AND B', 'A OR B', 'NOT A AND B', 'A AND NOT B'], answer: 2, explain: 'XOR is "at least one, but not both", which with these two lines is "B, and not A". Neither hidden neuron solves XOR. Each answers an easier question, and the output neuron only ever sees those two answers.' },
+          { q: 'A colleague stacks ten layers with no activation function and gets one straight boundary. She proposes a hundred layers. What will she get?', options: ['One straight boundary again: a hundred matrices multiply into a single matrix', 'A slightly bent boundary, because small bends add up with depth', 'A boundary that bends but takes far longer to train', 'A boundary that fits the training data and fails on new data'], answer: 0, explain: 'W₃·(W₂·(W₁·x)) = (W₃W₂W₁)·x, and the same goes for a hundred. That is why "bendiness" stayed pinned at 0.0% however many layers you stacked. Depth without a hinge adds nothing.' },
+          { q: 'You nudge a weight from 2.00 to 2.01 and the loss falls from 0.500 to 0.470. What is the slope, and which way does gradient descent move the weight?', options: ['+3, so lower the weight', '−0.03, so lower the weight', '−3, so lower the weight', '−3, so raise the weight'], answer: 3, explain: 'The loss moved by −0.030 while the weight moved by 0.01, and −0.030 ÷ 0.01 = −3. A negative slope means raising the weight lowers the loss, so raise it. That is the minus sign in w ← w − η·∂L/∂w.' },
+          { q: 'Two models are scored on the same example. One gave the right answer a probability of 50%, the other 1%. Roughly what does cross-entropy charge each?', options: ['0.125 and 0.49', '0.69 and 4.6', '0.5 and 0.99', '50 and 1'], answer: 1, explain: '−log(0.5) ≈ 0.69 and −log(0.01) ≈ 4.6. The first pair are the squared-error charges, which barely tell a shrug from a confident mistake. Cross-entropy makes confidence expensive when it is wrong.' },
+          { q: 'On one path through a network, ∂L/∂y = −2, ∂y/∂h = 0.5 and ∂h/∂w = 0.3. What is ∂L/∂w?', options: ['−1.2, the three added together', '−2, because only the link nearest the loss counts', '−0.3, the three multiplied together', '0.15, the two local slopes multiplied'], answer: 2, explain: 'The chain rule: multiply the slopes of every link, −2 × 0.5 × 0.3 = −0.3. Backpropagation computes that first factor, ∂L/∂y, once and reuses it for every weight, which is why all the gradients cost about one extra pass.' },
         ]),
 
         section('Go deeper',

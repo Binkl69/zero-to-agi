@@ -1,4 +1,4 @@
-# Runs the four checkers on every push and pull request.
+# Runs the chapter checkers and the Python labs on every push and pull request.
 #
 # They exist because this course has been wrong in ways that still ran: a demo
 # whose "try this" step named a state it could not reach, an axis label 39px off
@@ -29,3 +29,22 @@ jobs:
       # prose-check: the wreckage an edit leaves behind
       # content-inventory --check: quiz structure and control references
       - run: npm test
+
+  # The Python labs, each run in its quick mode from an empty directory. A
+  # separate job because it needs Python and PyTorch and nothing from node,
+  # and so that a broken lab and a broken chapter show up as two red marks.
+  labs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements.txt
+      # the CPU-only wheel: about 200 MB, where the default Linux wheel pulls
+      # in gigabytes of CUDA libraries that a runner without a GPU cannot use
+      - run: pip install numpy
+      - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: bash scripts/labs-check.sh

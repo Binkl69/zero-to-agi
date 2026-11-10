@@ -97,7 +97,7 @@ module.exports = function makeEnv(opts) {
   const rafQueue = [];
   const timers = [];
   const window = {
-    devicePixelRatio: 1, innerWidth: 1200, innerHeight: 800,
+    devicePixelRatio: 1, __ZTA_CANVAS_SCALE: 1, innerWidth: 1200, innerHeight: 800,
     addEventListener() {}, removeEventListener() {},
     requestAnimationFrame(fn) { rafQueue.push(fn); return rafQueue.length; },
     cancelAnimationFrame() {},

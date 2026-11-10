@@ -21,6 +21,21 @@
     part: 'I',
     title: 'What does it mean for a machine to learn?',
     tagline: 'Start by doing it yourself. Four dots, one ruler, three puzzles. The third one is impossible, and that fact shaped the next fifty years.',
+    minutes: 40,
+    objectives: [
+      'compute by hand whether a neuron fires, from its two weights, its bias and an input',
+      'explain why one neuron can separate some sets of dots and can never separate XOR',
+      'read the learning rule w ← w + η(y − ŷ)x and predict which numbers a given mistake changes',
+      'spot an accuracy figure that means little until you know what blind guessing scores',
+    ],
+    takeaways: [
+      '<b>One neuron is one straight line.</b> It multiplies each input by a weight, adds a bias, and says yes when the total clears zero: <code class="inline">w₁x₁ + w₂x₂ + b &gt; 0</code>.',
+      '<b>Weights turn the line; the bias slides it.</b> A weight is how much one input counts. The bias is where the neuron starts before it looks at anything.',
+      '<b>Learning is correction.</b> <code class="inline">w ← w + η(y − ŷ)x</code>: when the guess is right the bracket is zero and nothing moves; when it is wrong, each weight is nudged in proportion to its input.',
+      '<b>Some problems have no line.</b> XOR, and fraud that sits at both ends of the amount scale, cannot be split by one straight line however long you train.',
+      '<b>A hidden layer rearranges the problem.</b> Two neurons give every dot new coordinates, and in that new space one straight line is enough.',
+      '<b>Real data has a ceiling, and a baseline.</b> The best line on the spam data is 91.2%, not 100%; and 80.1% on fraud only means something next to the 58.8% you get by always guessing "genuine".',
+    ],
 
     render(root, ctx) {
       const h = ctx.h;
@@ -53,8 +68,31 @@
 
       /* ---------- maths beat 1: notation for the line they just dragged ---------- */
       root.append(ctx.section('What you have been doing, written down',
-        ctx.p(`You have now dragged a line perhaps thirty times. There is a standard way to write down what you were adjusting, and you have already built every piece of it by hand.`),
-        ctx.p(`Look at the panel on the right of the demo above, under <b>the line, as three numbers</b>. Those three numbers move as you drag. That is the whole formula, live.`),
+        ctx.p(`You have now dragged a line perhaps thirty times. There is a standard way to write down what you were adjusting, and you have already built every piece of it by hand. It takes two words, and an umbrella is the quickest way to both.`),
+        ctx.walkthrough([
+          { say: 'Forget the dots and the line for a moment, because you are deciding whether to take an umbrella.', note: 'You do this without thinking. We are going to write down what you did.' },
+          { say: 'You look at two things: <b>how dark the clouds are</b>, and <b>what day of the week it is</b>.' },
+          { ask: 'Which of those should count toward "take an umbrella"?',
+            options: ['Both equally', 'Cloud darkness a lot, the day not at all', 'The day of the week'], answer: 1,
+            explain: 'Obviously the clouds. And "irrelevant" is a number here, not a shrug — it is zero.' },
+          { say: 'So give each one a multiplier saying how much it counts. <b>That multiplier is the weight.</b>', math: 'clouds &times; 3 &nbsp;&nbsp;+&nbsp;&nbsp; day &times; 0' },
+          { say: 'Weight 3 means it matters a lot. Weight 0 means the model has learned to ignore it. A <i>negative</i> weight means it counts <b>against</b>.', note: 'Nobody sets these by hand. Training is the search for them, and the next demo down the page does that search in front of you.' },
+          { say: 'Now the second number. Two people look at the same slightly-grey sky. One takes an umbrella, one does not.', note: 'Same evidence. Different answer.' },
+          { ask: 'What is different between those two people?',
+            options: ['They weigh the clouds differently', 'How much they mind getting wet, before looking outside at all', 'One of them is simply wrong'], answer: 1,
+            explain: 'They start from different places. One is umbrella-inclined before any evidence arrives at all. That standing lean is the bias.' },
+          { say: '<b>That is the bias.</b> Where you start, before any evidence. And it is <b>added</b> at the end — never multiplied by anything.', math: 'clouds &times; 3 &nbsp;+&nbsp; day &times; 0 &nbsp;<b>+</b>&nbsp; 2' },
+          { say: 'Here is the proof that a bias has to exist: further down this chapter all three numbers sit on sliders, with the line they describe drawn beside them, and you can drag the <b>bias</b> to exactly 0.', note: 'The line jumps to the bottom-left corner and is stuck there. The weights can spin it, but nothing can move it off that corner until the bias is non-zero.' },
+          { say: 'With bias at zero the line can spin freely — but it is <b>stuck passing through the corner of the grid.</b> It can never move away from it.', note: 'The weights set the angle. The bias is the only thing that can slide the line across the page.' },
+          { ask: 'So what does the bias do, geometrically?',
+            options: ['Rotates the line', 'Slides the line away from the corner', 'Makes the line curve'], answer: 1,
+            explain: 'Weights turn it, the bias moves it. Without a bias, every decision boundary in every model would be pinned to the corner — and almost nothing useful lives there.' },
+          { say: 'These two words never change meaning again, in any chapter, at any size.', note: 'A frontier model holds somewhere between a few hundred billion and a few trillion of them — no frontier lab publishes the exact number any more. They are these ones, in unimaginable number, each still doing exactly this job.' },
+        ], {
+          title: 'Weight and bias, with an umbrella',
+          recap: 'a weight is how much one thing counts. A bias is where you start before anything counts. Weights are multiplied; the bias is added.',
+        }),
+        ctx.p(`Now back to the line. Look at the panel on the right of the demo above, under <b>the line, as three numbers</b>. Those three numbers move as you drag: two weights and a bias. That is the whole formula, live.`),
         ctx.decoder([
           { sym: 'w<sub>1</sub>', name: 'w one', says: 'How much the <b>first</b> thing counts toward a yes. Big number, it matters a lot; near zero, the model has decided it is irrelevant; negative, it counts <i>against</i>.', points: 'the w₁ readout above. Rotate the line and watch it move.' },
           { sym: 'x<sub>1</sub>', name: 'x one', says: 'The <b>first</b> measurement of the thing in front of you — how many links this particular email has.', points: 'the horizontal position of one dot.' },
@@ -70,34 +108,11 @@
           hint: 'Click any symbol. Every one of them is something you have already moved with your hands.',
           plain: '"Weigh up each thing by how much it matters, add a standing level of suspicion, and if the total clears zero, say yes."',
         }),
-        ctx.walkthrough([
-          { say: 'Forget neurons for a moment. You are deciding whether to take an umbrella.', note: 'You do this without thinking. We are going to write down what you did.' },
-          { say: 'You look at two things: <b>how dark the clouds are</b>, and <b>what day of the week it is</b>.' },
-          { ask: 'Which of those should count toward "take an umbrella"?',
-            options: ['Both equally', 'Cloud darkness a lot, the day not at all', 'The day of the week'], answer: 1,
-            explain: 'Obviously the clouds. And "irrelevant" is a number here, not a shrug — it is zero.' },
-          { say: 'So give each one a multiplier saying how much it counts. <b>That multiplier is the weight.</b>', math: 'clouds &times; 3 &nbsp;&nbsp;+&nbsp;&nbsp; day &times; 0' },
-          { say: 'Weight 3 means it matters a lot. Weight 0 means the model has learned to ignore it. A <i>negative</i> weight means it counts <b>against</b>.', note: 'Nobody sets these by hand. Training is the search for them — that is what you watched the trainer doing.' },
-          { say: 'Now the second number. Two people look at the same slightly-grey sky. One takes an umbrella, one does not.', note: 'Same evidence. Different answer.' },
-          { ask: 'What is different between those two people?',
-            options: ['They weigh the clouds differently', 'How much they mind getting wet, before looking outside at all', 'One of them is simply wrong'], answer: 1,
-            explain: 'They start from different places. One is umbrella-inclined before any evidence arrives at all. That standing lean is the bias.' },
-          { say: '<b>That is the bias.</b> Where you start, before any evidence. And it is <b>added</b> at the end — never multiplied by anything.', math: 'clouds &times; 3 &nbsp;+&nbsp; day &times; 0 &nbsp;<b>+</b>&nbsp; 2' },
-          { say: 'Here is the proof that a bias has to exist. Later in this chapter there is a neuron with all three numbers on sliders and the line they describe drawn beside them. Drag its <b>bias</b> to exactly 0.', note: 'The line jumps to the bottom-left corner and is stuck there. The weights can spin it, but nothing can move it off that corner until the bias is non-zero.' },
-          { say: 'With bias at zero the line can spin freely — but it is <b>stuck passing through the corner of the grid.</b> It can never move away from it.', note: 'The weights set the angle. The bias is the only thing that can slide the line across the page.' },
-          { ask: 'So what does the bias do, geometrically?',
-            options: ['Rotates the line', 'Slides the line away from the corner', 'Makes the line curve'], answer: 1,
-            explain: 'Weights turn it, the bias moves it. Without a bias, every decision boundary in every model would be pinned to the corner — and almost nothing useful lives there.' },
-          { say: 'These two words never change meaning again, in any chapter, at any size.', note: 'A frontier model holds somewhere between a few hundred billion and a few trillion of them — no frontier lab publishes the exact number any more. They are these ones, in unimaginable number, each still doing exactly this job.' },
-        ], {
-          title: 'Weight and bias, with an umbrella',
-          recap: 'a weight is how much one thing counts. A bias is where you start before anything counts. Weights are multiplied; the bias is added.',
-        }),
         ctx.callout('key', '🔑 "Is that really the whole field?"',
           `A fair question, and the honest answer is <b>yes — at the level of the mechanism.</b> Multiply each input by how much it counts, add them up, add a bias, compare to zero, and adjust when wrong. There is no secret extra ingredient waiting in chapter 12.<br>
            What is <i>not</i> simple is everything built on top: <b>how you wire billions of these together</b> (chapters 4–7), <b>what you feed them</b> (chapter 10), <b>what you point them at</b> (chapters 9 and 11), and <b>getting it to run at all</b> (chapter 12).<br>
            A brick is fired clay in a rectangle. That genuinely is the whole of a brick, and it tells you nothing whatever about how to build a cathedral.`),
-        ctx.p(`One thing worth noticing: writing two symbols side by side means multiply them, so the whole left-hand side is "multiply each measurement by its importance, then add everything up". You will meet that pattern so often it gets its own name in chapter 7 — the <em>dot product</em> — and it is already the single most common operation in all of AI.`),
+        ctx.p(`One thing worth noticing: writing two symbols side by side means multiply them, so the whole left-hand side is "multiply each measurement by its importance, then add everything up". You will meet that pattern so often it has its own name, the <em>dot product</em>, which Part II leans on constantly. It is already the single most common operation in all of AI.`),
       ));
 
       /* ---------- what just happened ---------- */
@@ -131,7 +146,7 @@
             explain: 'Zero. And here is the consequence: the whole correction gets multiplied by that zero, so NOTHING CHANGES. The machine only ever learns from mistakes.' },
           { say: 'When it <i>is</i> wrong, that bracket is +1 or &minus;1 — and the sign says which way the line needs to move.', note: '+1 means it said no and should have said yes. &minus;1 is the other way round.' },
           { say: 'So: take the weight you had, and move it a little in that direction.', math: 'w &nbsp;&larr;&nbsp; w &nbsp;+&nbsp; (a little, in that direction)' },
-          { say: 'How little? That is set by one number, <b>&eta;</b> — "eta", the <b>learning rate</b>. Here it is fixed at 0.12.', note: 'Too big and the line thrashes about. Too small and it crawls. Chapter 2 lets you push it until a model explodes; chapter 3 is about how to choose it.' },
+          { say: 'How little? That is set by one number, <b>&eta;</b> — "eta", the <b>learning rate</b>. Here it is fixed at 0.12.', note: 'Too big and the line thrashes about. Too small and it crawls. Chapter 2 lets you push it until the loss ricochets when it should fall; chapter 3 is about how to choose it.' },
           { say: 'One last piece. The correction is also multiplied by the input itself, <b>x</b>.', note: 'So an input that pushed hard toward the wrong answer gets corrected hard, and an input near zero barely moves. Blame, in proportion to who caused it.' },
           { say: 'Put the four pieces together and you have the entire learning algorithm.', math: 'w &nbsp;&larr;&nbsp; w &nbsp;+&nbsp; &eta; (y &minus; &#375;) x' },
           { ask: 'Run the trainer on puzzle 1 until it settles. From then on the readout shows <b>0 — no change</b> at every step and the three numbers freeze. Why?',
@@ -166,7 +181,7 @@
            The whole of modern AI is a more sophisticated answer to the question buried in that bracket: <b>how wrong were we, and which direction is less wrong?</b>`),
         ctx.p(`Three things in that rule carry forward without ever changing meaning, so they are worth naming now.`),
         ctx.ul([
-          `<b>η, the learning rate.</b> Fixed at 0.12 here, and the single most fiddly number in all of machine learning. Chapter 2 lets you set it too high and watch a model explode.`,
+          `<b>η, the learning rate.</b> Fixed at 0.12 here, and the single most fiddly number in all of machine learning. Chapter 2 lets you set it too high and watch a model overshoot the answer again and again.`,
           `<b>ŷ, the prediction.</b> The hat notation is universal. <em>y</em> is truth, <em>ŷ</em> is what the model said.`,
           `<b>(y − ŷ), the error.</b> Chapter 2 replaces this crude "am I wrong, yes or no" with a smooth number that says <i>how</i> wrong and <i>in which direction</i> — and that one upgrade is what makes it possible to train more than one layer.`,
         ]),
@@ -236,59 +251,59 @@
       /* ---------- quiz ---------- */
       root.append(ctx.quiz([
         {
-          q: 'Why could you not solve puzzle 3 by dragging the line more carefully?',
+          q: 'Which of these jobs can a single neuron — one straight line — <b>never</b> do, however long it trains?',
           options: [
-            'The handles were not sensitive enough',
-            'The two red dots sit in opposite corners, so no straight line can separate them from the blue ones',
-            'You needed to train it for more steps first',
-            'The puzzle had a bug in it',
+            'Flag an email when it has many links and a lot of capitals',
+            'Approve a loan when income is high or debt is low',
+            'Flag a tumour when size and edge irregularity are both large',
+            'Flag a payment when it is unusually small or unusually large, but not in between',
           ],
-          answer: 1,
-          explain: 'It is a geometric fact, not a matter of effort or precision. The brute-force demo tried thousands of lines and none of them worked.',
+          answer: 3,
+          explain: 'The first three put the yeses on one side of a line. The last one wants both ends of a stick and not the middle, which is XOR wearing a suit. No single line cuts that, and the brute-force demo showed it is impossible, not just hard.',
         },
         {
-          q: 'What does a single artificial neuron actually compute?',
+          q: 'A neuron has w₁ = 2, w₂ = −1 and b = −0.5. The input is x₁ = 1, x₂ = 1. Does it fire?',
           options: [
-            'It memorises every example it has seen',
-            'It multiplies each input by a weight, adds them up with a bias, and fires if the total clears zero',
-            'It compares the input to a database of known answers',
-            'It simulates the chemistry of a biological brain cell',
+            'Yes: the total is 0.5, which clears zero',
+            'No: the total is −0.5, which does not',
+            'No: a negative weight on any active input blocks it',
+            'Yes: the total is 3.5, which clears zero',
           ],
-          answer: 1,
-          explain: 'Multiply, add, compare to a threshold. That is the whole operation, and geometrically it draws one straight boundary.',
+          answer: 0,
+          explain: '(2 × 1) + (−1 × 1) + (−0.5) = 0.5, and 0.5 > 0, so it fires. A negative weight counts against; it does not veto. The bias is added once and is never multiplied by an input.',
         },
         {
-          q: 'In the demo, what fixed the impossible puzzle?',
+          q: 'The trainer (η = 0.12) says "no" to a dot at x₁ = 1, x₂ = 0 that should have been "yes". What happens to the two weights?',
           options: [
-            'A faster computer',
-            'More training steps',
-            'A second line, which needs a second neuron',
-            'Removing one of the dots',
+            'Both rise by 0.12',
+            'Neither moves; the rule only acts when the guess is right',
+            'w₁ rises by 0.12 and w₂ does not move',
+            'w₁ falls by 0.12 and w₂ rises by 0.12',
           ],
           answer: 2,
-          explain: 'Two lines fence off a stripe that one line cannot. Stacking neurons like this is what "deep" means.',
+          explain: 'y − ŷ = 1 − 0 = +1, so each weight changes by 0.12 × 1 × its own input. That is 0.12 × 1 for w₁ and 0.12 × 0 for w₂. An input of zero did none of the damage, so it gets none of the correction. (The bias rises by 0.12 as well.)',
         },
         {
-          q: 'When is writing rules by hand still the better choice?',
+          q: 'A bank says its fraud model is "right 96% of the time". Fraud is 3% of all payments. What is the first thing to ask?',
           options: [
-            'When you have millions of examples available',
-            'When you can state the rule precisely and need to explain every decision',
-            'Whenever the data contains numbers',
-            'It never is; learned models are always better',
+            'How many weights the model has',
+            'What always guessing "genuine" would score, which here is 97%',
+            'How many passes over the data it was trained for',
+            'Nothing: 96% is close enough to the ceiling',
           ],
           answer: 1,
-          explain: 'If you can articulate the rule, writing it is exact, cheap and auditable. Learning is for the cases where you recognise the answer but cannot describe the rule.',
+          explain: 'A model that never flags anything is right 97% of the time on this data, so 96% is worse than doing nothing. It is the same trap as the 80.1% against 58.8% you met on the fraud dots: a score means nothing until you know what blind guessing gets.',
         },
         {
-          q: 'Why did neural-network research stall for over a decade after 1969?',
+          q: 'In the third-line demo, two of the four dots ended up on the same spot. Why did that make the puzzle solvable?',
           options: [
-            'Computers became too expensive to run',
-            'A 1969 proof that a single-layer perceptron could not learn XOR, which drained confidence and funding',
-            'Researchers ran out of data to train on',
-            'A better technology replaced neural networks entirely',
+            'The hidden neurons gave each dot new coordinates, and in those coordinates red and blue sit on opposite sides of one line',
+            'Two dots on one spot count as a single example, and three examples are always separable',
+            'The third neuron is allowed to draw a curve where the first two could only draw lines',
+            'Folding the square brought the two blue dots together so one line could fence them off',
           ],
-          answer: 1,
-          explain: 'Minsky and Papert made the limitation rigorous. The multi-layer fix existed in principle, but nobody could train it yet, so the field stalled for over a decade.',
+          answer: 0,
+          explain: 'A hidden layer does not solve the problem. It rearranges it until a straight line can. The two dots that merged were the two <i>red</i> ones, which neurons A and B answered identically; the third neuron still draws a perfectly straight line.',
         },
       ]));
 
@@ -1090,7 +1105,7 @@
       });
       if (score === 4) {
         g.font = '700 14px Inter, system-ui, sans-serif'; g.fillStyle = C.green; g.textAlign = 'right';
-        g.fillText('found a line and stopped', b.W - 16, 18);
+        g.fillText('found a line — nothing left to correct', b.W - 16, 18);
       } else if (pass > 12) {
         g.font = '700 13px Inter, system-ui, sans-serif'; g.fillStyle = C.warn; g.textAlign = 'right';
         g.fillText('still going after ' + pass + ' passes…', b.W - 16, 18);
@@ -1123,7 +1138,7 @@
     });
 
     return ctx.figure(cv,
-      'The green ring shows which dot the machine is looking at right now. Every time it gets one wrong it nudges the line. On puzzles 1 and 2 the mistake bars hit zero and it stops. On puzzle 3 they never do.',
+      'The green ring shows which dot the machine is looking at right now. Every time it gets one wrong it nudges the line. On puzzles 1 and 2 the mistake bars hit zero and the line stops moving, though the machine goes on checking. On puzzle 3 they never do.',
       [sel, playBtn, ctx.button('One step', () => step()), ctx.button('Reset', () => reset()), speed],
       readout);
   }
@@ -1469,7 +1484,7 @@
       { r: 112, color: C.green, name: 'Machine learning', since: 'took hold from the 1980s',
         body: 'The subset that learns from examples instead of being told the rules. Includes plenty of methods with no neurons anywhere, like decision trees.' },
       { r: 62, color: C.pink, name: 'Deep learning', since: 'took over from 2012',
-        body: 'Machine learning using many stacked layers of neurons. This is the part that produced image recognition, translation, and the model you are talking to.' },
+        body: 'Machine learning using many stacked layers of neurons. This is the part that produced image recognition, translation, and the chatbots you talk to.' },
     ];
     let hover = 2;
     const info = ctx.h('div', { style: { minHeight: '74px' } });

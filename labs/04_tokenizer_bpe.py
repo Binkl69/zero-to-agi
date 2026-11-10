@@ -21,9 +21,10 @@ is Byte-Pair Encoding (BPE), and it is embarrassingly simple:
        Replace every occurrence of the pair with the new id.
     3. Repeat step 2 until the vocabulary is as big as you want.
 
-That is the whole training algorithm. "th" is learned first because it is
-everywhere, then "the", then " the" (note the leading space - GPT-style
-tokenizers glue the space onto the following word), then "ing", "ed", ...
+That is the whole training algorithm. The first things it learns are the
+commonest scraps of English: " t" and " a" (note the leading space - GPT-style
+tokenizers glue the space onto the FOLLOWING word), "he", "in", and by the
+seventh merge " the" as a single token. "ing", "ed" and " and" follow.
 After 50,000 merges (GPT-2) common words are single tokens and rare words
 are 2-4 pieces.
 
@@ -32,14 +33,19 @@ Decoding = look up each id's bytes, concatenate, decode as UTF-8.
 
 WHAT TO OBSERVE
 ---------------
-1. The first 20 merges. They are ALL boring English glue: "th", "e ", "in",
-   " the", "ing". The tokenizer has no idea what a word is; it just counts.
+1. The first 20 merges. They are ALL boring English glue: " t", " a", "he",
+   "in", "er", " the". The tokenizer has no idea what a word is; it just
+   counts.
 2. How "strawberry" and "unbelievably" get split. With our tiny vocabulary
-   they shatter into several pieces; with GPT-4's 100k vocabulary
-   "strawberry" is [" str", "aw", "berry"] - still not letters!
-3. The compression ratio: about 3-4 bytes per token on English. This is why
-   model context windows are quoted in tokens, and why a "128k context" is
-   roughly a 300-page book.
+   they shatter (st|r|aw|b|er|r|y is 7 pieces; un|believ|ab|ly is 4); with
+   GPT-4's 100k vocabulary " strawberry" is [" str", "aw", "berry"] - still
+   not letters! And "Strawberry" with a capital S splits differently again.
+3. The compression ratio: 2.64 bytes per token here, after only 256 merges
+   on 3 KB of text. Real tokenizers, with ~100,000 merges learned from
+   terabytes, reach about 4 on English. This is why model context windows
+   are quoted in tokens, and why a "128k context" is roughly a 300-page book.
+4. The last section ends with "yes - BPE is lossless": decoding the tokens
+   gives back the exact original text, emoji included.
 
 THE "HOW MANY R's IN STRAWBERRY" FAILURE
 ---------------------------------------
@@ -52,17 +58,30 @@ numbers (digits get grouped unpredictably: "1234567" -> "123","456","7"),
 and why the same word tokenises differently with/without a leading space or
 capital letter (" Hello" vs "Hello" vs "hello" are three unrelated ids).
 
-WHAT TO CHANGE (3 experiments)
-------------------------------
-A. --vocab-size 260 vs 400 vs 800. Watch the compression ratio and the token
-   pieces for "unbelievably". More merges = fewer tokens per word, but a
-   bigger embedding table for the model (Lab 05 counts that cost).
-B. Set PRETOKENIZE = False. Now merges may cross word boundaries and you get
-   tokens like "of the" or "s and". GPT-2 added the regex pre-split
-   precisely to stop this (and to keep punctuation separate from words).
-C. Train on a different text (paste anything into TRAINING_TEXT): code,
+WHAT TO CHANGE (4 experiments - predict the outcome BEFORE you run)
+-------------------------------------------------------------------
+A. --vocab-size 260, then 400, then 800. Watch two numbers. "unbelievably"
+   goes from 12 tokens (every letter separate) to 8 to 2 (unbeliev|ably),
+   and the compression ratio from 1.10 to 2.14 to 2.77 bytes per token.
+   More merges = fewer tokens per word, but a bigger embedding table for
+   the model (Lab 05 counts that cost). Notice 800 stops early, at a
+   vocabulary of 538: by then no pair of tokens occurs twice in our small
+   text, so there is nothing left worth merging.
+B. Set PRETOKENIZE = False. Now merges may cross word boundaries. The very
+   first merge becomes "e " (an e and the space AFTER it), and tokens like
+   " the " (spaces on both sides), ". The" and ", and " appear in the
+   vocabulary. GPT-2 added the regex pre-split precisely to stop this (and
+   to keep punctuation separate from words).
+C. --show "cafe" and then --show "café". Predict the token counts first.
+   The first is 4 tokens, one per letter. The second is 5, although it
+   is also four letters: é is not one byte but two, the tokenizer has
+   never seen either, and each prints as the "broken character" mark
+   because half a letter is not a letter. Non-English text costs more tokens for exactly
+   this reason.
+D. Train on a different text (paste anything into TRAINING_TEXT): code,
    French, a chat log. The merges adapt instantly - a tokenizer is a
-   compression codec fitted to its training data, nothing more.
+   compression codec fitted to its training data, nothing more. Expect
+   the first 20 merges to look nothing like the English ones.
 
 COMMON BUGS
 -----------
@@ -196,7 +215,7 @@ def decode(ids, vocab):
 
 
 def show_pieces(text, merges, vocab):
-    """Print how a string is chopped, e.g.  str|aw|berry  (5 tokens)."""
+    """Print how a string is chopped, e.g.  st|r|aw|b|er|r|y   (7 tokens)."""
     ids = encode(text, merges)
     pieces = [vocab[i].decode("utf-8", errors="replace") for i in ids]
     print(f"  {text!r:<45} -> {'|'.join(pieces)}   ({len(ids)} tokens, "
@@ -273,6 +292,8 @@ if __name__ == "__main__":
     print("=" * 72)
     merges, vocab = train(text, args.vocab_size)
     print(f"  learned {len(merges)} merges; vocab size = {len(vocab)}")
+    if len(vocab) < args.vocab_size:
+        print("  (stopped early: no pair of tokens occurs twice any more in this small text)")
     print()
 
     print("First 20 merges (the pair that was most frequent at that moment):")
@@ -313,3 +334,6 @@ if __name__ == "__main__":
     print("Why 'how many r's in strawberry' goes wrong: the model gets the ids for")
     print("the pieces above, never the letters. Counting letters means recalling the")
     print("spelling of each piece from memory - the id itself carries no spelling.")
+    print()
+    print("Now change something: the top of this file lists four experiments (A-D),")
+    print("each with the result you should get. Start with:  --vocab-size 260")

@@ -45,22 +45,39 @@ WHAT TO OBSERVE
    the future did not exist.
 2. Every shape is asserted. Read the reshapes in multi_head_attention slowly;
    they are where 90% of real transformer bugs live.
-3. The parameter count: 124,439,808 exactly, broken down by part. Notice that
-   the token embedding (38.6M) is a THIRD of the model, and the MLPs are
-   two thirds of each block. Attention itself is the small part.
+3. The sqrt(d) demo: with the scaling the biggest attention weight is
+   0.35; without it one key takes 0.98 and the rest get almost nothing.
+4. The parameter count: 124,439,808 exactly, broken down by part. Notice that
+   the token embedding (38.6M) is nearly a THIRD of the model (31%), and the
+   MLPs are two thirds of each block. Attention itself is the small part.
 
-WHAT TO CHANGE (3 experiments)
-------------------------------
-A. In `worked_example()` change the query of token 3 to point at token 1
-   (make it a copy of key_1) and watch the weights move. Then remove the
-   1/sqrt(d) scaling with d=64 random vectors: the softmax saturates to a
-   one-hot and gradients would vanish. That is why the sqrt(d) is there.
-B. gpt2_param_count(n_layer=24, d=1024, n_head=16) -> GPT-2 medium (~355M).
-   n_layer=48, d=1600, n_head=25 -> GPT-2 XL (~1.5B). Where did the
-   parameters go as the model grew? (Hint: the embedding share shrinks.)
-C. Set causal=False in gpt_forward. Attention now leaks the future: the
-   model would trivially "predict" the next token by looking at it. This is
-   the difference between GPT (decoder, causal) and BERT (encoder, not).
+WHAT TO CHANGE (4 experiments - predict the outcome BEFORE you run)
+-------------------------------------------------------------------
+A. In `worked_example()` change the last row of Q (what "sat" asks for)
+   from [0, 3, 1, 0] to [4, 0, 0, 0], which points straight at the key of
+   "the". Predict the last row of weights first. It flips from
+   the:0.14 cat:0.63 sat:0.23 to the:0.79 cat:0.11 sat:0.11, and the output
+   row becomes mostly the value of "the". A query is a pointer.
+B. In `scaling_demo()` change the default d from 64 to 4, then to 1024.
+   Without the scaling the biggest weight is 0.30 at d=4, 0.98 at d=64
+   and 1.00 at d=1024: the wider the model, the more the softmax
+   collapses onto a single key. With the scaling it stays modest
+   (0.20, 0.35, 0.48) whatever d is. That is the entire job of sqrt(d).
+C. Break causality: in the definition of `gpt_forward` change the default
+   `causal=True` to `causal=False`. The lab now stops with
+   "AssertionError: future leaked into the past!" - changing the LAST
+   token changed the predictions at EARLIER positions, so the model could
+   "predict" the next token by looking at it. This one flag is the
+   difference between GPT (decoder, causal) and BERT (encoder, not).
+D. Read the table of bigger GPT-2s at the very end. Where do the
+   parameters go as the model grows? The embedding share falls from 31%
+   (small) to 5% (XL), because the embedding grows like d while the blocks
+   grow like d squared times the number of layers. Now predict what
+   doubling the vocabulary does to GPT-2 small: near the bottom of the
+   file change `gpt2_param_count()` to `gpt2_param_count(vocab=100514)`.
+   The table shows the token embedding doubling and nothing else moving,
+   then the lab stops with "expected 124,439,808, got 163,037,184": one
+   more embedding table, and a model 31% bigger without a single new layer.
 
 COMMON BUGS
 -----------
@@ -245,8 +262,8 @@ def gpt_forward(tokens, params, n_head, causal=True):
 # ---------------------------------------------------------------------------
 def gpt2_param_count(n_layer=12, d=768, n_head=12, vocab=50257, ctx=1024):
     """Count parameters of a GPT-2-style model with tied embeddings.
-    Returns (total, breakdown dict). n_head does not change the count -
-    heads only split C, they do not add weights."""
+    Returns (total, whole-model breakdown, per-block breakdown). n_head does
+    not change the count - heads only split C, they do not add weights."""
     per_block = {
         "ln1 (gamma, beta)":        2 * d,
         "attn qkv  W + b":          d * 3 * d + 3 * d,
@@ -311,10 +328,28 @@ def worked_example():
     print()
 
 
+def scaling_demo(d=64, T=8, seed=0):
+    """Why the formula divides by sqrt(d): one query against T random keys."""
+    print("=" * 72)
+    print(f"Why divide by sqrt(d)?  One random query, {T} random keys, d = {d}")
+    print("=" * 72)
+    rng = np.random.default_rng(seed)
+    q, K = rng.normal(size=d), rng.normal(size=(T, d))
+    scores = K @ q                                      # (T,) raw dot products
+    with_scaling = softmax(scores / math.sqrt(d))
+    without = softmax(scores)
+    print(f"  with    /sqrt(d): biggest weight {with_scaling.max():.2f}   {with_scaling}")
+    print(f"  without /sqrt(d): biggest weight {without.max():.2f}   {without}")
+    print("  Unscaled, the scores are so spread out that softmax acts like argmax:")
+    print("  one key gets everything, and the gradient to all the others is ~0.")
+    print()
+
+
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     rng = np.random.default_rng(0)
     worked_example()
+    scaling_demo()
 
     # ---- full block + forward pass with random weights ---------------------
     print("=" * 72)
@@ -327,7 +362,8 @@ if __name__ == "__main__":
     print(f"  block input  {x.shape} -> output {y.shape}   (same shape: residual stream)")
     _, w = multi_head_attention(x, p, n_head, causal=True)
     print(f"  attention weights per head: {w.shape} = (batch, head, query, key)")
-    print(f"  head 0, sequence 0 (causal, so lower-triangular):")
+    print("  head 0, sequence 0 (causal, so lower-triangular; nearly uniform within")
+    print("  each row because small random weights have no preferences yet):")
     print(w[0, 0])
 
     params = {
@@ -371,9 +407,15 @@ if __name__ == "__main__":
     print("  Take-aways: attention is only ~1/3 of each block (the MLP is 2/3);")
     print("  the vocabulary embedding alone is 31% of GPT-2 small. Bigger models")
     print("  grow d and n_layer, so the block share dominates and the embedding")
-    print("  share shrinks. Try gpt2_param_count(n_layer=48, d=1600) for GPT-2 XL.")
-    for name, kw in [("GPT-2 medium", dict(n_layer=24, d=1024, n_head=16)),
+    print("  share shrinks:")
+    for name, kw in [("GPT-2 small", dict(n_layer=12, d=768, n_head=12)),
+                     ("GPT-2 medium", dict(n_layer=24, d=1024, n_head=16)),
                      ("GPT-2 large", dict(n_layer=36, d=1280, n_head=20)),
                      ("GPT-2 XL", dict(n_layer=48, d=1600, n_head=25))]:
-        t, _, _ = gpt2_param_count(**kw)
-        print(f"    {name:<13} {kw}: {t / 1e6:8.1f}M")
+        t, parts, _ = gpt2_param_count(**kw)
+        emb = parts["token embedding wte (vocab x d)"]
+        print(f"    {name:<13} n_layer={kw['n_layer']:<3} d={kw['d']:<5}: {t / 1e6:7.1f}M parameters, "
+              f"token embedding {100 * emb / t:4.1f}% of them")
+    print()
+    print("Now change something: the top of this file lists four experiments (A-D),")
+    print("each with the result you should get. Predict first, then run.")

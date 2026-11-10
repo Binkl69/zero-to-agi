@@ -52,9 +52,9 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
 .nav-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--muted); font-size: .9rem; }
 .nav-item:hover { background: var(--bg-3); color: var(--text); text-decoration: none; }
 .nav-item.active { background: var(--bg-3); color: #fff; }
-.nav-num { font-family: var(--mono); font-size: .75rem; color: var(--accent); width: 22px; flex: 0 0 auto; }
+.nav-num { font-family: var(--mono); font-size: .75rem; color: var(--accent); min-width: 22px; flex: 0 0 auto; white-space: nowrap; }
 .nav-item.done .nav-num { color: var(--accent-2); }
-.nav-item.done .nav-num::after { content: ' ✓'; }
+.nav-item.done .nav-num::after { content: '✓'; margin-left: 3px; }
 .sidebar-foot { margin-top: auto; font-size: .8rem; color: var(--muted); padding: 10px 8px 0; border-top: 1px solid var(--line); }
 #menu-btn { display: none; position: fixed; top: 12px; left: 12px; z-index: 30; background: var(--bg-3); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 1.2rem; cursor: pointer; }
 
@@ -289,4 +289,82 @@ table.tbl th { color: var(--muted); font-weight: 600; font-size: .8rem; text-tra
 .walk-recap {
   margin-top: 14px; padding-top: 11px; border-top: 1px dashed var(--line);
   font-size: .9rem; color: var(--muted);
+}
+
+/* ---------- the shell's additions around a chapter ---------- */
+#read-progress { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 40; pointer-events: none; }
+#read-progress > div { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+
+/* keyboard focus is always visible; mouse clicks do not leave a ring behind */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.quiz-opt:focus-visible, .btn:focus-visible, .walk-btn:focus-visible { outline-offset: 1px; }
+
+/* section list under the active chapter in the sidebar */
+.nav-toc { display: flex; flex-direction: column; margin: 2px 0 8px 31px; border-left: 1px solid var(--line); }
+.nav-toc-item { background: none; border: 0; border-left: 2px solid transparent; margin-left: -1px; text-align: left; color: var(--muted); font: inherit; font-size: .8rem; line-height: 1.35; padding: 4px 8px 4px 10px; cursor: pointer; }
+.nav-toc-item:hover { color: var(--text); }
+.nav-toc-item.on { color: var(--text); border-left-color: var(--accent-2); }
+.sidebar-foot a { white-space: nowrap; }
+
+/* what you will be able to do */
+.objectives { border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-2); padding: 12px 16px; margin: 0 0 1.6em; }
+.objectives summary { cursor: pointer; font-weight: 600; font-size: .92rem; color: var(--accent); }
+.objectives ul { margin: .7em 0 .2em; }
+.objectives li { font-size: .95rem; }
+
+/* recap */
+.takeaways { border: 1px solid rgba(56, 217, 169, .35); background: rgba(56, 217, 169, .05); border-radius: var(--radius); padding: 16px 20px; margin: 2.4em 0 1.2em; }
+.takeaways-title { font-weight: 700; font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--accent-2); margin-bottom: 8px; }
+.takeaways ul { margin: 0; }
+.takeaways li { margin: .45em 0; }
+
+/* jargon with a definition behind it */
+em.gterm { cursor: help; border-bottom: 1px dotted rgba(56, 217, 169, .7); }
+.gtip { position: fixed; z-index: 50; max-width: min(340px, calc(100vw - 20px)); background: #1b2740; border: 1px solid #3a4b6b; border-radius: 10px; padding: 10px 12px; font-size: .86rem; line-height: 1.5; color: var(--text); box-shadow: 0 10px 30px rgba(0, 0, 0, .5); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .12s; left: 0; top: 0; }
+.gtip.shown { opacity: 1; visibility: visible; }
+.gtip b { display: block; color: var(--accent-2); margin-bottom: 3px; }
+
+/* quiz score and the review page */
+.quiz-result { display: none; margin-top: 6px; padding: 12px 14px; border-radius: 8px; background: rgba(124, 156, 255, .1); border: 1px solid rgba(124, 156, 255, .35); font-size: .95rem; }
+.quiz-result.shown { display: block; }
+.review-card { margin-top: 1em; }
+.review-meta { font-family: var(--mono); font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.review-card .quiz-q .q { font-size: 1.05rem; }
+
+.toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 60; background: var(--accent-2); color: #06281f; font-weight: 600; font-size: .9rem; padding: 10px 16px; border-radius: 999px; box-shadow: 0 8px 24px rgba(0, 0, 0, .4); transition: opacity .5s; }
+.toast.gone { opacity: 0; }
+
+.hero-facts { color: var(--muted); font-size: .88rem; margin-top: 1em; }
+.card-meta { font-family: var(--mono); font-size: .74rem; color: var(--muted); margin-top: 8px; }
+.chapter-card.done .card-meta { color: var(--accent-2); }
+.linklike { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; }
+.rotate-hint .linklike { white-space: nowrap; }
+.rotate-hint { display: flex; gap: 12px; align-items: center; justify-content: space-between; background: var(--bg-3); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: .85rem; color: var(--muted); margin-bottom: 1.2em; }
+
+/* a figure the reader drags inside must not also scroll the page */
+.chapter-nav a, .btn { min-height: 40px; }
+
+@media (max-width: 900px) {
+  /* the drawer needs a way out for thumbs: dim the page behind it */
+  #sidebar.open { box-shadow: 0 0 0 100vmax rgba(0, 0, 0, .55); }
+  #sidebar .brand { padding-left: 48px; min-height: 34px; }
+}
+@media (max-width: 600px) {
+  h1 { font-size: 1.75rem; }
+  h2 { font-size: 1.3rem; }
+  /* figures run edge to edge: on a phone every pixel of width goes to the picture */
+  .chapter-body .figure { margin-left: -18px; margin-right: -18px; border-radius: 0; border-left: 0; border-right: 0; }
+  .quiz { padding: 14px; }
+  .quiz-opt { padding: 12px; }
+  .chapter-nav { flex-direction: column; }
+  .chapter-nav a, .chapter-nav .btn { justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fade-in { animation: none; }
+  * { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}
+@media print {
+  #sidebar, #menu-btn, #read-progress, .chapter-nav, .controls, .toast, .gtip { display: none !important; }
+  body, html { background: #fff; color: #000; }
+  #main { padding: 0; }
 }

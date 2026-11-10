@@ -11,6 +11,21 @@
     part: 'II',
     title: 'Creating: GANs, VAEs and diffusion',
     tagline: 'Three different tricks for the same magic act: learn a probability distribution well enough to draw brand-new samples from it.',
+    minutes: 40,
+    objectives: [
+      'explain why random pixels never produce a picture, using the size of the space and the idea of a distribution',
+      'compute a KL divergence between two simple distributions and say what the number measures',
+      'spot the signature failure of each family: dead latent space, mode collapse, too few denoising steps',
+      'predict what raising the guidance scale does to prompt adherence and to variety',
+    ],
+    takeaways: [
+      '<b>Pictures are a thin sliver.</b> Even an 8×8 image in 16 greys has about 10<sup>77</sup> possibilities, and almost all of them are static. A generative model is a machine for sampling from the sliver.',
+      '<b>A distribution is a list of outcomes with their chances; sampling is drawing one.</b> KL divergence, <code class="inline">Σ p·log(p/q)</code>, measures how far a model\'s distribution is from the real one, and is zero only when they match.',
+      '<b>VAE:</b> an autoencoder whose codes are pulled toward one shared standard normal by a KL term, so fresh randomness decodes to something sensible. Fast, smooth, a little blurry.',
+      '<b>GAN:</b> a generator trained against a discriminator. Sharp, but prone to <em>mode collapse</em>: one trick that fools the judge and no reason to look further.',
+      '<b>Diffusion:</b> noising is a fixed recipe; only the denoising is learned, by plain regression. Stable to train, paid for in many small steps.',
+      '<b>Guidance is a trade.</b> Turning it up buys prompt adherence with variety, and latent diffusion makes the whole thing cheap by denoising a 48× smaller grid.',
+    ],
     render(root, ctx) {
       const { h, p, section, sub, callout, ul, ol } = ctx;
       const C = ctx.colors;
@@ -115,7 +130,14 @@
         }
 
         function currentPoints() {
-          if (mode === 'reverse') return R.xr.map((p, i) => ({ x: p.x, y: p.y, part: data[i].part }));
+          /* A reverse point starts as fresh noise and has no "own" training point, so it
+             cannot inherit a colour by index: that painted the rebuilt face in confetti.
+             Colour it by the part of the face it is currently closest to. */
+          if (mode === 'reverse') return R.xr.map((p) => {
+            let best = 0, bd = Infinity;
+            for (let j = 0; j < data.length; j++) { const dx = p.x - data[j].x, dy = p.y - data[j].y, d = dx * dx + dy * dy; if (d < bd) { bd = d; best = j; } }
+            return { x: p.x, y: p.y, part: data[best].part };
+          });
           const t = manualT, ab = abar(t), sq = Math.sqrt(ab), so = Math.sqrt(Math.max(0, 1 - ab));
           return data.map((d, i) => ({ x: sq * d.x + so * epsFixed[i].x, y: sq * d.y + so * epsFixed[i].y, part: d.part }));
         }
@@ -173,7 +195,7 @@
           if (mode === 'reverse') initReverse();
         });
         return ctx.figure(cv,
-          `A ~300-point smiley, destroyed and rebuilt with the exact variance-preserving schedule DDPM uses. <b>Drag the t slider</b> to dissolve the shape into Gaussian noise. <b>Press ▶ Play reverse</b> to start from fresh noise and watch it denoise back into a face, one small step at a time. Each reverse step guesses the clean point behind the noise as the softmax-weighted average of all 300 training points under a Gaussian kernel (Tweedie's formula) — in a real model, a neural network replaces this kernel estimator, but the arithmetic it is trained to approximate is exactly this.`,
+          `A ~300-point smiley, destroyed and rebuilt with the exact variance-preserving schedule DDPM uses. <b>Drag the t slider</b> to dissolve the shape into Gaussian noise. <b>Press ▶ Play reverse</b> to start from fresh noise and watch it denoise back into a face, one small step at a time. Each reverse step guesses the clean point behind the noise as the softmax-weighted average of all 300 training points under a Gaussian kernel (Tweedie's formula) — in a real model, a neural network replaces this kernel estimator, but the arithmetic it is trained to approximate is exactly this. Colours mark outline, eyes and mouth; on the way back each point takes the colour of whichever part it is nearest.`,
           [tSlider, stepsSlider, playBtn, stepBtn, regenBtn], ro);
       }
 
@@ -204,6 +226,10 @@
 
         function defaults() { return { mu: 0.6, sigma: 1.3, collapse: false, playing: false, iter: 0, speed: 1, lastMu: 0.6, lastSigma: 1.3 }; }
         let G = defaults();
+        /* Reset the generator only. The play state, the speed and the collapse toggle belong
+           to the buttons and the slider, and wiping them here left a button reading "Pause"
+           over a generator that was not training. */
+        function resetGen() { const keep = { collapse: G.collapse, playing: G.playing, speed: G.speed }; G = Object.assign(defaults(), keep); }
 
         function objective(mu, sigma, zs) {
           let s = 0;
@@ -228,7 +254,7 @@
           const lrMu = 0.55, lrS = 0.22;
           let nmu = G.mu + lrMu * cgMu, nsig = G.sigma + lrS * cgS;
           nsig = ctx.clamp(nsig, 0.12, 3.2); nmu = ctx.clamp(nmu, -4.5, 4.5);
-          if (!isFinite(nmu) || !isFinite(nsig)) { G = defaults(); return; }
+          if (!isFinite(nmu) || !isFinite(nsig)) { resetGen(); return; }
           G.mu = nmu; G.sigma = nsig; G.iter++;
         }
 
@@ -278,7 +304,7 @@
         });
         const playBtn = ctx.button('▶ Train', () => { G.playing = !G.playing; playBtn.textContent = G.playing ? '⏸ Pause' : '▶ Train'; }, 'primary');
         const stepBtn = ctx.button('Step', () => updateGen());
-        const resetBtn = ctx.button('Reset generator', () => { const c = G.collapse; G = defaults(); G.collapse = c; });
+        const resetBtn = ctx.button('Reset generator', () => resetGen());
         const collapseBtn = ctx.button('Mode collapse: off', () => {
           G.collapse = !G.collapse; collapseBtn.textContent = 'Mode collapse: ' + (G.collapse ? 'ON' : 'off');
         });
@@ -420,14 +446,15 @@
         }
         /* three genuine little "photographs" for comparison */
         const REAL = {
+          /* a softly lit face in close-up. The shading matters: a flat disc on a flat
+             background is all hard edges, scored 62.5% and showed up RED on a bar whose
+             whole job is to say "this one is a picture". Lit like a photograph it scores
+             94 of 112 neighbour pairs = 83.9%, the number the maths beat below uses. */
           smiley: () => {
-            const gr = []; for (let r = 0; r < N; r++) { gr.push(new Array(N).fill(3)); }
-            for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
-              const d = Math.hypot(r - 3.5, c - 3.5);
-              gr[r][c] = d < 3.6 ? 12 : 3;
-            }
-            gr[2][2] = 1; gr[2][5] = 1;
-            gr[5][2] = 1; gr[5][3] = 1; gr[5][4] = 1; gr[5][5] = 1;
+            const gr = [];
+            for (let r = 0; r < N; r++) { gr.push([]); for (let c = 0; c < N; c++) gr[r].push(Math.round(14 - 1.1 * Math.hypot(r - 3.5, c - 3.5))); }
+            gr[2][2] = 3; gr[2][5] = 3;
+            gr[5][2] = 3; gr[5][3] = 3; gr[5][4] = 3; gr[5][5] = 3;
             return gr;
           },
           gradient: () => { const gr = []; for (let r = 0; r < N; r++) { gr.push([]); for (let c = 0; c < N; c++) gr[r].push(Math.round((r + c) / (2 * N - 2) * (LEVELS - 1))); } return gr; },
@@ -719,7 +746,9 @@
             ? 'At zero guidance the model ignores your prompt and simply makes something it could plausibly make.'
             : guide > 11
               ? 'Cranked up, every image obeys — and every image is nearly the same image. This is why over-guided generations look stiff and repetitive.'
-              : 'The usual working range. Most samples obey the prompt while the batch still contains genuinely different pictures.',
+              : onPrompt / n < 0.5
+                ? 'Light guidance. The batch has started to lean toward the prompt, but most samples still miss it.'
+                : 'The usual working range. Most samples obey the prompt while the batch still contains genuinely different pictures.',
             TX, 238, 250, 17);
           ro.set({ guidance: guide.toFixed(1), 'on prompt': ((onPrompt / n) * 100).toFixed(0) + '%', variety: (variety * 100).toFixed(0) + '%' });
         });
@@ -735,10 +764,56 @@
         callout('tryit', '🖐 Do this first — try to find a picture by guessing',
           `Below is an 8 × 8 image in 16 shades of grey. Tiny. There are only 10<sup>77</sup> of them.<br>
            <b>1.</b> Press <b>Draw random pixels</b> a few times. Then press <b>Keep trying</b> and let it run.<br>
-           <b>2.</b> Watch <b>best random draw</b>. It creeps up a few points and then stalls — and it stalls miles short of what a real picture scores. Give it a minute if you like.<br>
-           <b>3.</b> Press <b>Show me a real one</b> and look at the difference in the score bar.`),
+           <b>2.</b> Watch <b>best random draw</b>. It starts near 29%, creeps into the low forties and stalls there — miles short of what a real picture scores. Give it a minute if you like.<br>
+           <b>3.</b> Press <b>Show me a real one</b> and look at the difference in the score bar: about 84%. Then <b>…and another</b>: 100%.`),
         needleLab(),
-        p(`Random pixels are never a photograph. Not rarely — effectively never, at any size, for any amount of time you are willing to wait.`),
+        p(`Random pixels are never a photograph. Not rarely — effectively never, at any size, for any amount of time you are willing to wait. The numbers on that scoreboard say exactly why, and the arithmetic is short.`),
+
+        /* maths beat: distributions, sampling and KL, named after the reader has failed to
+           sample a picture. Every number is one the needle demo shows or is built from. */
+        ctx.walkthrough([
+          { say: 'Take one pixel: the random machine picks one of 16 shades, and every shade has the same chance.', math: '1 &divide; 16 = 0.0625',
+            note: 'A list of every outcome with its chance is a <b>probability distribution</b>. This one is flat, so it is called <em>uniform</em>.' },
+          { say: 'Pressing <b>Draw random pixels</b> pulled one outcome out of that distribution for each of the 64 pixels, and that act has a name: <b>sampling</b>.',
+            note: 'Every generator in this chapter ends with the same act. They differ only in <i>which</i> distribution they sample from.' },
+          { say: 'A whole image is 64 separate picks, so its chance is 1/16 multiplied by itself 64 times.', math: '(1/16)<sup>64</sup> &nbsp;&asymp;&nbsp; 1 in 10<sup>77</sup>',
+            note: 'That is the haystack number printed on the scoreboard.' },
+          { ask: 'Under the random-pixel machine, which is more likely to come up: the smiley, or one particular screen of static?',
+            options: ['The static', 'The smiley', 'Exactly equally likely'], answer: 2,
+            explain: 'Uniform means every single image has the same 1-in-10<sup>77</sup> chance. No one static image is common. Static as a <i>kind</i> is common, because almost all of the 10<sup>77</sup> images look like it.' },
+          { say: 'Now ask a yes/no question of two neighbouring pixels: are they within 2 shades of each other? For random pixels, 74 of the 256 possible pairs are.', math: '74 &divide; 256 = 0.29',
+            note: 'That is why the score hovered near 29% however long you let it run. It was estimating this number.' },
+          { say: 'In the real picture the same question came out "yes" far more often.', math: '94 of 112 neighbour pairs &nbsp;=&nbsp; 0.84',
+            note: 'Press <b>Show me a real one</b> and the bar reads 83.9%.' },
+          { say: 'So you have two distributions over one question: the real one, call it <b>P</b>, and the random machine\'s, call it <b>Q</b>.', math: 'P = (yes 0.84, no 0.16) &nbsp;&nbsp;&nbsp; Q = (yes 0.29, no 0.71)' },
+          { say: 'To put one number on how far apart they are, compare the two chances for each answer with chapter 3\'s log, and weight each by how often it really happens.',
+            math: '0.84 &times; log<sub>2</sub>(0.84 &divide; 0.29) &nbsp;+&nbsp; 0.16 &times; log<sub>2</sub>(0.16 &divide; 0.71)<br>= 0.84 &times; 1.53 &nbsp;+&nbsp; 0.16 &times; (&minus;2.15) &nbsp;=&nbsp; 1.29 &minus; 0.34 &nbsp;=&nbsp; 0.95 bits',
+            note: 'You do not need to work the logs out by hand. Read 1.53 as: a "yes" is 1.53 bits less surprising than Q said it would be.' },
+          { say: 'That number is the <b>KL divergence</b> between P and Q: the extra surprise, on average, of believing Q in a world that really runs on P.', math: 'KL(P &#8214; Q) &nbsp;=&nbsp; &Sigma; p &middot; log(p / q)',
+            note: '&Sigma; is chapter 4\'s "add up over every case". Here there were two cases, yes and no. For whole images there are 10<sup>77</sup>, and the sum is the same sum.' },
+          { ask: 'A model\'s distribution Q matches the real P exactly: yes 0.84, no 0.16. What is the KL divergence?',
+            options: ['1 bit', '0 bits', '0.84 bits'], answer: 1,
+            explain: 'Every ratio p &divide; q is 1, and log(1) = 0, so every term vanishes. KL is zero only when the two distributions agree, which is why "push the KL toward zero" is a training goal.' },
+          { say: 'So "learn the distribution" has a precise meaning: adjust the model until the KL between the real data and what it samples is as small as you can make it.',
+            note: 'You will meet this number again two sections down, as the second loss term of the VAE. Chapter 3\'s cross-entropy is this number plus a constant the model cannot change, so minimising one minimises the other.' },
+        ], {
+          title: 'From "never a picture" to KL divergence',
+          recap: 'a distribution lists the chances, sampling draws from it, and KL divergence measures how far the distribution you sample from is from the real one.',
+        }),
+        ctx.decoder([
+          { sym: 'KL(P &#8214; Q)', name: 'the K-L divergence between P and Q', says: 'One number for how badly Q stands in for P. Zero means identical. It is not symmetric: swap P and Q and you get a different number.', points: 'the 0.95 bits between the real picture\'s neighbours and random pixels.' },
+          '=',
+          { sym: '&Sigma;', name: 'sum over every outcome', says: 'Add up one term per possible answer.', points: 'two terms in the walkthrough, one for "yes" and one for "no".' },
+          { sym: 'p', name: 'the real chance', says: 'How often this outcome truly happens. It is the weight: outcomes that never happen cost nothing.', points: '0.84 for "the neighbours agree" in a real picture.' },
+          '&middot;',
+          { sym: 'log', name: 'log', says: 'Turns a ratio of chances into a difference in surprise, the same move as &minus;log p in chapter 3.', points: 'log<sub>2</sub>(0.84 &divide; 0.29) = 1.53 bits.' },
+          '(',
+          { sym: 'p / q', name: 'p over q', says: 'How many times more likely the outcome really is than the model believed.', points: '0.84 &divide; 0.29: real neighbours agree about three times as often as random ones.' },
+          ')',
+        ], {
+          title: 'KL(P ‖ Q)  =  Σ p · log(p / q)',
+          plain: 'for every possible outcome, take how wrong the model\'s odds were, weight it by how often the outcome really happens, and add it all up.',
+        }),
       );
 
       root.append(section('What generative modelling actually is',
@@ -761,7 +836,7 @@
            <b>2.</b> Drag the ring slowly between two coloured islands. Watch the output fall apart in the gap — the decoder was never asked to explain that region, so it has nothing sensible to say.<br>
            <b>3.</b> Switch to <b>variational autoencoder</b> and repeat step 1. The islands have merged into one blob and the dead space has all but closed — about one sample in twelve, against five in six.`),
         vaeLab(),
-        p(`Kingma and Welling's 2013 fix adds one idea. Encode each image not to one exact point but to a small Gaussian cloud — a mean and a spread — and train the decoder to work for a <i>sample</i> from that cloud, not its exact centre. A second loss term pulls every cloud toward a shared standard normal at the origin.`),
+        p(`Kingma and Welling's 2013 fix adds one idea. Encode each image not to one exact point but to a small Gaussian cloud — a mean and a spread — and train the decoder to work for a <i>sample</i> from that cloud, not its exact centre. A second loss term pulls every cloud toward a shared standard normal at the origin. That term is a KL divergence — the measure you computed at the top of the chapter, here taken between each image's cloud and the standard normal.`),
         p(`Two consequences follow. The latent space becomes <em>smooth</em>: nearby points decode to similar outputs, with no gaps. And because every cloud is pulled toward the same standard normal, at generation time you can sample fresh randomness from it directly, with no real image to start from.`),
         p(`VAEs are fast — one decoder pass — and give an honest, well-behaved latent space, which is why they still sit inside larger systems: Stable Diffusion runs its diffusion process inside a VAE's latent space rather than on raw pixels.`),
         p(`Their weakness is smoothness's flip side. Outputs are often a little blurry, because the loss rewards averaging several plausible answers rather than committing to one sharp one.`),
@@ -774,7 +849,7 @@
         callout('tryit', '🖐 Try this — watch a GAN fail in its signature way',
           `The target is a two-humped distribution. The generator is, by construction, a single Gaussian bump, so it <b>cannot</b> cover both humps at once. It has to choose how to lose.<br>
            <b>1.</b> Press <b>▶ Train</b> and watch it spread thin across both humps, fitting neither well.<br>
-           <b>2.</b> Now press <b>Mode collapse: off</b> to switch it on, then <b>Reset generator</b> and train again. It abandons one hump entirely and sits happily on the other.<br>
+           <b>2.</b> Now press <b>Mode collapse: off</b> to switch it on, then <b>Reset generator</b>. Training carries on from the fresh start, and this time it abandons one hump entirely and sits happily on the other.<br>
            <b>3.</b> That second behaviour is the failure with a name — and notice it is not stupidity. The generator found a trick that beats the current discriminator, and nothing rewards it for exploring further.`),
         ganDynamics(),
         p(`<em>Mode collapse</em> is the distinctive GAN failure: the generator finds one narrow trick that fools the current discriminator — say, always the same face — and has no reason to look further, since that trick is already winning. The discriminator eventually catches on, the generator lurches to a different trick, and the two chase each other in circles instead of covering the real distribution.`),
@@ -805,8 +880,8 @@
         p(`<em>Classifier-free guidance</em>: train the same network with the caption randomly blanked out sometimes. At generation time you run it twice per step — with and without the prompt — and push the prediction further in the direction the prompt adds. No separate classifier network is needed, hence the name.`),
         callout('tryit', '🖐 Try this — the dial you have already used without knowing',
           `<b>1.</b> Press <b>no guidance (0)</b>. The samples scatter across everything the model could make and mostly ignore the prompt.<br>
-           <b>2.</b> Press <b>typical (7.5)</b>. Most of the batch now lands on the prompt — press <b>New batch</b> a few times and the figure moves around, but it is always well short of everything — and the samples are still clearly spread out.<br>
-           <b>3.</b> Press <b>cranked (15)</b>. Read <i>both</i> bars. Prompt adherence goes up, <b>variety collapses</b> — which is exactly why an over-guided batch comes back looking like eight copies of one picture.`),
+           <b>2.</b> Press <b>typical (7.5)</b>. Around two-thirds to three-quarters of the batch now lands on the prompt — press <b>New batch</b> a few times and the figure moves around, but it is always well short of everything. The variety bar has already paid for it: down from 100% to about a quarter.<br>
+           <b>3.</b> Press <b>cranked (15)</b>. Read <i>both</i> bars. Prompt adherence hits 100%, <b>variety collapses</b> to about 5% — which is exactly why an over-guided batch comes back looking like eight copies of one picture.`),
         guidanceLab(),
         p(`The other 2022 breakthrough was <em>latent diffusion</em> (Rombach et al., the model behind Stable Diffusion): run the whole process on a VAE-compressed grid roughly 8× smaller per side. Stable Diffusion's version takes 512×512×3 = 786,432 numbers down to 64×64×4 = 16,384 — 48× fewer values to denoise at every one of the steps, which is the reason it fits on a consumer GPU.`),
         p(`DALL·E 2 arrived in April 2022, pairing a CLIP embedding with a diffusion decoder. Stable Diffusion followed four months later and released its weights publicly — a big reason diffusion, not GANs, became what the world built on.`),
@@ -845,11 +920,46 @@
 
       root.append(
         ctx.quiz([
-          { q: 'You drew thousands of random 8×8 images and never once got a picture. What does that demonstrate?', options: ['The random number generator was broken', 'Real images occupy a vanishingly tiny region of the space of all possible images, so you cannot reach them by chance', '8×8 is too small to show a picture', 'You needed more shades of grey'], answer: 1, explain: 'Even at 8×8 in 16 greys there are about 10⁷⁷ possibilities and essentially none are pictures. That is the whole problem a generative model solves: landing inside the cloud deliberately, on the first try.' },
-          { q: 'Why does a plain autoencoder make a bad generator, and what does the VAE add?', options: ['It is too slow; the VAE is faster', 'Nothing forces the space between training codes to mean anything, so fresh randomness lands in dead space; the VAE encodes to clouds and pulls them all toward one standard normal, closing the gaps', 'It has no decoder', 'The VAE adds a discriminator'], answer: 1, explain: 'You found the dead space by dragging between the islands. A generator must be fed fresh randomness, so the latent space has to be meaningful everywhere the randomness might land — not only at the points that happened to appear in training.' },
-          { q: 'What is mode collapse?', options: ['The discriminator stops learning', 'The generator finds one narrow output that fools the current discriminator and stops exploring, so it covers only part of the real distribution', 'The model runs out of memory', 'Training loss goes to zero'], answer: 1, explain: 'It is not stupidity — the trick is already winning, and nothing rewards the generator for covering the rest. This is the failure mode diffusion does not have, because its training is plain regression against a known target with no opponent to exploit.' },
-          { q: 'In diffusion, which direction involves learning?', options: ['Both directions equally', 'Only the forward noising process', 'Only the reverse: a network is trained to predict what noise was added, while the forward noising is a fixed recipe', 'Neither — diffusion is not learned'], answer: 2, explain: 'Adding noise is a known recipe requiring no training at all. The network learns only to undo one small step, which is ordinary regression with a squared-error loss — and that is exactly why diffusion training is so much more stable than a GAN\'s adversarial game.' },
-          { q: 'You turn the guidance scale from 7.5 up to 15. What do you gain and what do you lose?', options: ['Better quality at no cost', 'Stronger prompt adherence, but less variety — every sample is pushed toward the same region, so the batch looks repetitive', 'More variety and weaker prompts', 'Faster generation'], answer: 1, explain: 'You can read both bars moving in opposite directions in the guidance demo. It is a genuine trade rather than a quality dial, which is why over-guided generations come back looking stiff and near-identical.' },
+          { q: 'A friend says: "Run the random-pixel machine on a billion computers for a year and a photograph will turn up." Using the numbers from the first demo, what is wrong with that?',
+            options: [
+              'Nothing: a billion computers for a year is enough to work through the 8×8 images',
+              'Random pixels cannot produce a photograph even in principle, because the machine never outputs smooth images',
+              'It is possible in principle, but picture-like images are so thin a sliver of 10⁷⁷ that no feasible number of draws lands in it',
+              'The machine would need more than 16 shades of grey before photographs became reachable',
+            ], answer: 2,
+            explain: 'Every image, the smiley included, has the same 1-in-10⁷⁷ chance, so it is not impossible. A billion computers drawing a billion images a second for a year manage about 3 × 10²⁵ draws, which is nothing against 10⁷⁷. A generative model exists to sample from the sliver directly.' },
+          { q: 'You train a plain autoencoder on faces. Reconstructions of training faces are fine, but feeding the decoder random latent codes produces mush. What is the most likely cause, and the fix?',
+            options: [
+              'The random codes land in the gaps between where training codes sit; add a term that pulls every code toward one shared distribution you can sample from',
+              'The decoder is too small to cope with unfamiliar codes; add layers until random codes decode cleanly',
+              'The encoder has overfitted; train on fewer faces so the codes spread out and cover the space',
+              'Random codes are simply lower quality than real ones; add a discriminator to filter out the bad outputs',
+            ], answer: 0,
+            explain: 'This is the dead space you found by dragging between the islands. Nothing in a plain autoencoder\'s loss asks the gaps to mean anything. The VAE\'s KL term pulls every image\'s cloud toward one standard normal, so the place you sample from is a place the decoder was trained on.' },
+          { q: 'A GAN trained on handwritten digits 0–9 produces sharp, convincing 3s and 7s and never anything else. What has happened?',
+            options: [
+              'Underfitting: the generator simply needs more training steps before it reaches the other eight digits',
+              'Mode collapse: those outputs already fool the discriminator, so nothing pushes the generator to cover the rest',
+              'Dead latent space: most random inputs fall where the generator was never trained, as in a plain autoencoder',
+              'Blurry averaging: the loss rewards a blend of all ten digits, and 3 and 7 are closest to that blend',
+            ], answer: 1,
+            explain: 'It is the single red bump sitting on one hump of the two-humped target. The outputs are sharp, so this is not a quality failure. It is a coverage failure: the trick is winning, and the GAN objective contains no reward for variety.' },
+          { q: 'An image generator built on an ordinary (not distilled) diffusion model has a "steps" setting. You drop it from 50 to 4. What should you expect?',
+            options: [
+              'The same picture, produced faster: the number of steps only changes how long you wait',
+              'A sharper picture, because fewer steps means less noise is added along the way',
+              'An error, because the forward noising process was defined with a fixed number of steps',
+              'A faster but rougher picture: each reverse step is one small denoising guess, and four big jumps cannot do the work of fifty small ones',
+            ], answer: 3,
+            explain: 'You saw it on the smiley: 10 reverse steps left a smudge, 150 drew a clean face. The forward process needs no steps at generation time at all. Getting good results in one to four steps takes a model specially distilled for it.' },
+          { q: 'You ask for eight variations of "a cat in sunglasses" and get eight nearly identical cats. Which setting most likely explains it, and which way should it move?',
+            options: [
+              'Too few sampling steps; raise them so the images have time to diverge from each other',
+              'Guidance scale too low; raise it so each image follows the prompt in its own way',
+              'Guidance scale too high; lower it, giving up some prompt adherence to get variety back',
+              'The latent grid is too small; switch to a model that denoises raw pixels instead',
+            ], answer: 2,
+            explain: 'Guidance pushes every sample toward the same region, so adherence and variety move in opposite directions: at 15 in the demo the batch was 100% on prompt with about 5% of its variety left. It is a trade, not a quality dial.' },
         ]),
 
         section('Go deeper',
