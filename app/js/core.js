@@ -231,7 +231,7 @@
       decoder: (parts, opts) => {
         const o = opts || {};
         const box = h('div', { class: 'decoder' });
-        if (o.title) box.append(h('div', { class: 'decoder-title' }, o.title));
+        if (o.title) box.append(h('div', { class: 'decoder-title', html: o.title }));
         const row = h('div', { class: 'decoder-formula' });
         const panel = h('div', { class: 'decoder-panel' });
         const rest = () => {
@@ -270,7 +270,7 @@
         let i = 0;
         const box = h('div', { class: 'walk' });
         const head = h('div', { class: 'walk-head' },
-          h('div', { class: 'walk-title' }, o.title || 'One step at a time'),
+          h('div', { class: 'walk-title', html: o.title || 'One step at a time' }),
           h('div', { class: 'walk-count' }));
         const dots = h('div', { class: 'walk-dots' });
         const stage = h('div', { class: 'walk-stage' });
