@@ -164,7 +164,7 @@
     else if (doneN) cta = h('a', { class: 'btn primary', href: '#/review' }, 'All chapters done. Review →');
     else cta = h('a', { class: 'btn primary', href: '#/ch/' + (ZTA.chapters[0] || {}).id }, 'Start at chapter 1 →');
     const mins = totalMinutes();
-    const facts = [ZTA.chapters.length + ' chapters', mins ? 'about ' + Math.round(mins / 60) + ' hours of reading and playing' : null, 'a hundred things to poke at', '8 Python labs', 'no maths beyond school'].filter(Boolean);
+    const facts = [ZTA.chapters.length + ' chapters', mins ? 'about ' + Math.round(mins / 60) + ' hours of reading and playing' : null, 'a hundred things to poke at', '12 Python labs', 'no maths beyond school'].filter(Boolean);
     wrap.append(
       h('div', { class: 'hero' },
         h('h1', {}, 'Zero → AGI'),
@@ -192,7 +192,7 @@
       block.append(grid);
       wrap.append(block);
     }
-    wrap.append(h('hr'), h('p', { class: 'muted', html: 'Companion Python labs live in the <code class="inline">labs/</code> folder of this repository: build autograd, a neural net, a tokenizer, attention and a tiny GPT from scratch. <a href="#/ch/13-build-it-yourself">Chapter 13</a> walks you through them.' }));
+    wrap.append(h('hr'), h('p', { class: 'muted', html: 'Companion Python labs live in the <code class="inline">labs/</code> folder of this repository: build autograd, a neural net, a tokenizer, attention and a tiny GPT from scratch, then fine-tune it, add retrieval, build an agent and evaluate the lot. <a href="#/ch/13-build-it-yourself">Chapter 13</a> walks you through them.' }));
     return wrap;
   }
 
@@ -203,6 +203,8 @@
     { id: 'm4', title: 'Run labs 04–06: tokenizer → attention → tiny GPT', desc: 'Train a character-level GPT on Shakespeare on your own machine and watch the samples go from noise to English-ish.' },
     { id: 'm5', title: 'Finish Part III (How We Teach Models)', desc: 'You can draw the pretraining → SFT → RLHF/RL pipeline on a whiteboard and explain what each stage changes about the model.' },
     { id: 'm6', title: 'Run labs 07–08: RL and toy RLHF', desc: 'A Q-learning agent, then a reward model trained on preferences steering a policy. Same ideas as the real thing, 10,000× smaller.' },
+    { id: 'm6b', title: 'Finish Part VI (From Understanding to Practice)', desc: 'You can grow a decision tree by hand, say when a neural network is the wrong tool, find a leak in a dataset, put an honest interval on an eval score, and explain why a canary release exists.' },
+    { id: 'm6c', title: 'Run labs 09–12: fine-tune, retrieve, act, evaluate', desc: 'LoRA on your own tiny GPT, retrieval over real documents, an agent loop with tools, and an evaluation harness with confidence intervals. These four are the working parts of most LLM products.' },
     { id: 'm7', title: 'Read three foundational papers', desc: '"Attention Is All You Need" (2017), "Language Models are Few-Shot Learners" (GPT-3, 2020), "Training language models to follow instructions with human feedback" (InstructGPT, 2022). Chapter 15 has a full reading list.' },
     { id: 'm8', title: 'Reproduce a result', desc: 'Train nanoGPT (Karpathy) to GPT-2-small quality on OpenWebText, or fine-tune an open model (Llama / Qwen / Gemma) on a dataset you built. Cloud GPUs cost a few dollars an hour.' },
     { id: 'm9', title: 'Pick a frontier problem and go deep', desc: 'Interpretability, long-horizon agents, continual learning, evals, alignment, efficient training. Chapter 15 lists the open problems. Ship something public: a repo, a write-up, a benchmark.' },
@@ -431,6 +433,9 @@
     else page = home();
     main.append(page);
     renderNav(currentId());
+    /* with twenty chapters the active one can sit below the sidebar's fold */
+    const activeNav = nav.querySelector('.nav-item.active');
+    if (activeNav && activeNav.scrollIntoView) activeNav.scrollIntoView({ block: 'nearest' });
     window.scrollTo(0, restoreY);
     document.title = (page.querySelector('h1') ? page.querySelector('h1').textContent + ' · ' : '') + 'Zero → AGI';
   }

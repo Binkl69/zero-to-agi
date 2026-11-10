@@ -11,6 +11,7 @@
     { id: 'III', title: 'How We Teach Models',    desc: 'The full pipeline that turns a pile of text and GPUs into an assistant like Claude.' },
     { id: 'IV',  title: 'Build It Yourself',      desc: 'Train models in your browser and in Python, from a single neuron to a tiny GPT.' },
     { id: 'V',   title: 'The Frontier',           desc: 'The 80-year timeline, what today\'s models still can\'t do, and the road to AGI.' },
+    { id: 'VI',  title: 'From Understanding to Practice', desc: 'The machine learning that runs most of industry, and what it takes to ship a model: data, evaluation, deployment.' },
   ];
 
   ZTA.registerChapter = function (ch) {

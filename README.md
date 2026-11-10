@@ -48,6 +48,7 @@ your browser's local storage.
 | **III · How We Teach Models** | 10 Pretraining · 11 Post-training (SFT, RLHF, DPO, Constitutional AI, reasoning RL) · 12 Inference, tools & agents | draw the whole pipeline from raw web text to an assistant like Claude |
 | **IV · Build It Yourself** | 13 From one neuron to a tiny GPT (+ the Python labs) | train real models on your own machine |
 | **V · The Frontier** | 14 80 years of AI in one timeline · 15 What separates us from AGI, and how you could help build it | judge the AGI debate on the merits and have a concrete personal roadmap |
+| **VI · From Understanding to Practice** | 16 Learning without neural networks · 17 Choosing the right tool · 18 Data: where it comes from and how it goes wrong · 19 Evaluation you can trust · 20 Deployment and life after launch | pick the right kind of model for a job, catch a leaky dataset, put an honest interval on a score, and say what it takes to keep a model working after launch |
 
 Plus a searchable **glossary** of every term used, and a **learning path** page with milestones you
 can tick off.
@@ -66,6 +67,10 @@ Reading is not enough. The labs build the real thing, small:
 | `06_tiny_gpt.py` | a character-level GPT trained on Shakespeare | PyTorch |
 | `07_q_learning.py` | a Q-learning agent in a gridworld, plus reward hacking | Python only |
 | `08_toy_rlhf.py` | a reward model trained from preferences and a policy optimised against it (RLHF, then DPO) | numpy |
+| `09_lora_finetune.py` | LoRA adapters on the lab 06 GPT, against full fine-tuning | PyTorch |
+| `10_rag.py` | retrieval over real documents with hand-built TF-IDF, and where it fails | numpy |
+| `11_agent_tools.py` | an agent loop with tools, retries, compounding error and prompt injection | Python only |
+| `12_eval_harness.py` | an evaluation harness: confidence intervals, paired comparison, a biased judge | numpy |
 
 ```bash
 python -m venv .venv
