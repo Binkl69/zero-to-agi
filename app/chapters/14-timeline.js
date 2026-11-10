@@ -20,7 +20,7 @@
   /* t: decimal year for placement. scale: parameter count. flop: training compute (FLOP). est: flagged as estimate. */
   const ENTRIES = [
     { t: 1943.9, year: '1943', tag: 'theory', title: 'McCulloch and Pitts describe the first artificial neuron',
-      desc: 'A neurophysiologist and a homeless teenage logician in Chicago showed that a simple unit which sums its inputs and fires when the sum crosses a threshold can compute any logical function. Their paper, <i>A Logical Calculus of the Ideas Immanent in Nervous Activity</i>, was almost unreadable and enormously influential: it gave von Neumann the vocabulary for the stored-program computer and gave everyone after them the idea that thinking might be arithmetic.' },
+      desc: 'A neurophysiologist and a self-taught logician barely out of his teens, who had arrived in Chicago as a homeless runaway, showed that networks of simple units, each summing its inputs and firing when the sum crosses a threshold, can compute any logical function. Their paper, <i>A Logical Calculus of the Ideas Immanent in Nervous Activity</i>, was almost unreadable and enormously influential: it gave von Neumann the vocabulary for the stored-program computer and gave everyone after them the idea that thinking might be arithmetic.' },
     { t: 1950.75, year: '1950', tag: 'theory', title: 'Turing asks "Can machines think?" and proposes the imitation game',
       desc: 'In <i>Computing Machinery and Intelligence</i>, Alan Turing replaced an unanswerable question with a test: if a machine, conversing by text, cannot be told apart from a person, it is thinking for every practical purpose. He predicted machines would pass it by around 2000, discussed how a "child machine" might be educated rather than programmed, and anticipated most of the objections still argued about today. He died four years later.' },
     { t: 1956.5, year: '1956', tag: 'milestone', title: 'The Dartmouth workshop coins "artificial intelligence"',
@@ -58,19 +58,19 @@
     { t: 2013.1, year: '2013', tag: 'theory', title: 'word2vec: meaning as geometry',
       desc: 'Tomas Mikolov and colleagues at Google trained a tiny network to predict neighbouring words and found the learned vectors encoded meaning: king − man + woman ≈ queen. Embeddings, the idea that a concept can be a point in space and similarity can be a distance, became the foundation of every language model since.' },
     { t: 2013.95, year: '2013', tag: 'milestone', title: 'DQN: one network learns to play Atari from pixels',
-      desc: 'DeepMind, a small London start-up, combined Q-learning (lab 07) with a convolutional network and trained it to play dozens of Atari games from raw screen pixels and the score alone, several at superhuman level. Google bought the company weeks later for around $500 million. Deep reinforcement learning was born.' },
+      desc: 'DeepMind, a small London start-up, combined Q-learning (lab 07) with a convolutional network and trained it to play seven Atari games from raw screen pixels and the score alone, beating a human expert at three of them. By 2015 the same recipe played 49. Google bought the company weeks later for around $500 million. Deep reinforcement learning was born.' },
     { t: 2014.45, year: '2014', tag: 'architecture', title: 'GANs: two networks in a forgery contest',
       desc: 'Ian Goodfellow\'s generative adversarial network pitted a generator that makes fake images against a discriminator that spots them. The idea reportedly came to him in a Montreal pub and he coded it that night. GANs produced the first convincing synthetic faces and dominated image generation until diffusion models overtook them around 2021.' },
     { t: 2014.7, year: '2014', tag: 'architecture', title: 'Sequence-to-sequence learning, and the first attention',
       desc: 'Sutskever, Vinyals and Le showed that one LSTM could read a sentence into a vector and another could write out its translation. Bahdanau, Cho and Bengio then let the decoder look back at every input word and weight them, the first attention mechanism, and translation quality jumped. Google Translate switched to neural networks in 2016. Attention was about to eat everything else.' },
     { t: 2015.9, year: '2015', tag: 'architecture', title: 'ResNet: 152 layers deep, with skip connections', scale: 6e7,
-      desc: 'Kaiming He and colleagues at Microsoft Research Asia found that adding a shortcut around every pair of layers, so each block learns only a correction to its input, made networks of a hundred-plus layers trainable. ResNet won ImageNet with better-than-human accuracy. The same year gave us batch normalisation and the Adam optimiser; the residual connection lives inside every transformer.' },
+      desc: 'Kaiming He and colleagues at Microsoft Research Asia found that adding a shortcut around every two or three layers, so each block learns only a correction to its input, made networks of a hundred-plus layers trainable. ResNet won ImageNet with better-than-human accuracy. The same year gave us batch normalisation and the Adam optimiser; the residual connection lives inside every transformer.' },
     { t: 2016.2, year: '2016', tag: 'milestone', title: 'AlphaGo beats Lee Sedol 4–1',
       desc: 'Go was supposed to be a decade away: its board has more positions than atoms in the universe, and intuition seemed essential. DeepMind\'s AlphaGo combined deep networks trained on human games with reinforcement learning and tree search. Move 37 of game two, a play no professional would have made, was the first time a machine showed something that looked like taste. Two hundred million people watched.' },
     { t: 2017.37, year: '2017', tag: 'hardware', title: 'Google\'s TPU v2: chips designed only for neural networks',
       desc: 'Google revealed it had been running its own tensor processing units in production since 2015 and announced the second generation, which could train as well as run models, connected in "pods" of hundreds of chips. For the first time an AI lab owned its silicon end to end. NVIDIA\'s data-centre GPUs and Google\'s TPUs have alternated at the frontier of training hardware ever since.' },
     { t: 2017.45, year: '2017', tag: 'architecture', title: '"Attention Is All You Need": the Transformer', scale: 2.13e8, flop: 2.3e19, est: true,
-      desc: 'Eight researchers at Google Brain threw away recurrence entirely and built a translation model from stacked self-attention and small feed-forward layers. It trained in a fraction of the time because every position could be processed in parallel, which meant it could use GPUs fully, which meant it could scale. Every frontier language model, and most image, audio and protein models, is a descendant of this eleven-page paper.' },
+      desc: 'Eight researchers at Google threw away recurrence entirely and built a translation model from stacked self-attention and small feed-forward layers. It trained in a fraction of the time because every position could be processed in parallel, which meant it could use GPUs fully, which meant it could scale. Every frontier language model, and most image, audio and protein models, is a descendant of this eleven-page paper.' },
     { t: 2018.45, year: '2018', tag: 'milestone', title: 'GPT-1: pretrain on text, then fine-tune', scale: 1.17e8,
       desc: 'OpenAI\'s Alec Radford trained a 117-million-parameter transformer decoder to predict the next word on 7,000 unpublished books, then fine-tuned it on each benchmark and beat specialised systems on most of them. The paper was modest; the recipe was the one still used today: generative pretraining, then adaptation.' },
     { t: 2018.78, year: '2018', tag: 'milestone', title: 'BERT: bidirectional pretraining sweeps the benchmarks', scale: 3.4e8,
@@ -90,7 +90,7 @@
     { t: 2021.5, year: '2021', tag: 'product', title: 'Codex and GitHub Copilot: AI writes code',
       desc: 'A GPT-3 descendant fine-tuned on public code became Copilot, an autocomplete that wrote whole functions from a comment. It was the first AI tool that millions of professionals used daily and paid for, and the first hint that programming would be the field where language models had their deepest impact.' },
     { t: 2021.55, year: '2021', tag: 'milestone', title: 'AlphaFold 2 solves protein structure prediction',
-      desc: 'DeepMind\'s system predicted the three-dimensional shape of proteins from their amino-acid sequence to near-experimental accuracy, a fifty-year-old grand challenge of biology. Its attention-based architecture and the release of predicted structures for essentially every known protein earned Demis Hassabis and John Jumper the 2024 Nobel Prize in Chemistry.' },
+      desc: 'DeepMind\'s system predicted the three-dimensional shape of proteins from their amino-acid sequence to near-experimental accuracy, a fifty-year-old grand challenge of biology. Its attention-based architecture and the release of predicted structures for essentially every known protein earned Demis Hassabis and John Jumper a share of the 2024 Nobel Prize in Chemistry.' },
     { t: 2022.07, year: '2022', tag: 'theory', title: 'InstructGPT: RLHF turns a text predictor into an assistant',
       desc: 'OpenAI fine-tuned GPT-3 on human demonstrations, trained a reward model on human preferences between outputs, and optimised the model against that reward. Human raters preferred a 1.3-billion-parameter InstructGPT to the 175-billion-parameter original. The paper is the recipe for ChatGPT, published ten months before ChatGPT (chapter 11 and lab 08).' },
     { t: 2022.22, year: '2022', tag: 'hardware', title: 'NVIDIA H100',
@@ -120,7 +120,7 @@
     { t: 2024.22, year: '2024', tag: 'hardware', title: 'NVIDIA Blackwell',
       desc: 'Announced with 208 billion transistors across two dies, 4-bit precision support and rack-scale NVL72 systems that connect 72 GPUs as one, Blackwell was ordered by the hundreds of thousands before it shipped. NVIDIA briefly became the most valuable company in the world; GPUs had become the strategic resource of the decade.' },
     { t: 2024.56, year: '2024', tag: 'data', title: 'Llama 3.1 405B: open weights at the frontier, 15 trillion tokens', scale: 4.05e11, flop: 3.8e25,
-      desc: 'Meta\'s Llama 3 arrived on 18 April 2024 at 8B and 70B; the 405-billion-parameter Llama 3.1 followed on 23 July. All of them were trained on 15 trillion tokens, about 40 times the Chinchilla-optimal amount for the 8B model, because a smaller model trained longer is cheaper to serve. The 405-billion-parameter version, trained on 16,000 H100s, was the first open-weights model at the frontier, and its 92-page report is the most detailed public account of how a frontier model is built.' },
+      desc: 'Meta\'s Llama 3 arrived on 18 April 2024 at 8B and 70B; the 405-billion-parameter Llama 3.1 followed on 23 July. All of them were trained on 15 trillion tokens, nearly a hundred times the Chinchilla-optimal amount for the 8B model, because a smaller model trained longer is cheaper to serve. The 405-billion-parameter version, trained on 16,000 H100s, was the first open-weights model at the frontier, and its 92-page report is the most detailed public account of how a frontier model is built.' },
     { t: 2024.7, year: '2024', tag: 'milestone', title: 'o1: reasoning models think before they answer',
       desc: 'OpenAI\'s o1 (September preview) was trained with reinforcement learning to produce a long hidden chain of thought before responding, and its accuracy on maths and coding scaled with how long it was allowed to think. Test-time compute became a second scaling axis alongside training compute. Within months every lab had a reasoning model.' },
     { t: 2024.9, year: '2024', tag: 'product', title: 'MCP: a standard way to plug tools into models',
@@ -140,7 +140,7 @@
     { t: 2025.88, year: '2025', tag: 'product', title: 'Claude Opus 4.5 and Gemini 3 (November)',
       desc: 'Two frontier releases within a week of each other closed 2025. Anthropic\'s Opus 4.5 pushed agentic coding and long-horizon task reliability further; Google\'s Gemini 3 led on many reasoning and multimodal benchmarks. The pattern of the year: several labs at roughly the same frontier, leapfrogging every few months.' },
     { t: 2026.5, year: '2026', tag: 'product', title: 'The Claude 5 family, and a tier above Opus',
-      desc: 'Anthropic\'s fifth generation arrived through 2026: Claude Fable 5 and Claude Mythos 5 in June — the same model at two levels of safeguard, sitting above the Opus class — then Sonnet 5 on 30 June, Opus 5 on 24 July, and Fable 5.1 and Mythos 5.1 on 1 September. Because this course is written in the middle of the year, this entry is deliberately brief: benchmark numbers date instantly and marketing claims are not history. Chapter 15 discusses what these models can and cannot do at the time of writing.' },
+      desc: 'Anthropic\'s fifth generation arrived through 2026: Claude Fable 5 and Claude Mythos 5 on 9 June — the same model at two levels of safeguard, sitting above the Opus class — then Sonnet 5 on 30 June, Opus 5 on 24 July, and Fable 5.1 and Mythos 5.1 on 1 September. Because this course was written while these were still arriving, this entry is deliberately brief: benchmark numbers date instantly and marketing claims are not history. Chapter 15 discusses what these models can and cannot do at the time of writing.' },
   ];
   /* extra points for the scale curve (not entries): today's estimated frontier */
   const EXTRA_POINTS = [
@@ -585,8 +585,8 @@
       {
         claim: 'The perceptron "will be able to walk, talk, see, write, reproduce itself and be conscious of its existence."',
         who: 'The New York Times, reporting the US Navy, July 1958',
-        predicted: 1970, actual: null,
-        note: 'Rosenblatt\'s machine could draw one straight line. Chapter 1 had you fail at XOR with it. The gap between the press release and the device is the oldest story in this field.',
+        predicted: 1960, actual: null,
+        note: 'The Navy expected the first reading-and-writing machine within about a year. Rosenblatt\'s machine could draw one straight line. Chapter 1 had you fail at XOR with it. The gap between the press release and the device is the oldest story in this field.',
       },
       {
         claim: '"Solving Go is at least ten years away."',
@@ -598,7 +598,7 @@
         claim: '"A self-driving car will be commercially available by 2020."',
         who: 'Widely repeated industry guidance, around 2015',
         predicted: 2020, actual: null,
-        note: 'Limited robotaxi services run in a handful of mapped cities. General self-driving remains unsolved, more than a decade after it was called nearly done.',
+        note: 'Robotaxi services run in carefully mapped cities. General self-driving remains unsolved, more than a decade after it was called nearly done.',
       },
     ];
     let idx = 0, guess = 2000, revealed = false;
@@ -687,7 +687,7 @@
     });
 
     return ctx.figure(cv,
-      'Every claim here was made by someone with full command of the state of the art. Two were decades late, one was eight years early, and two have not happened at all. This is the single most useful thing history offers about the present: the field has a very long record of being confidently wrong about timing in both directions, which is worth remembering next time you read a forecast — including the ones in chapter 15.',
+      'Every claim here was made by someone with full command of the state of the art. One came true thirty years late, one came true eight years early, and three have not happened at all. This is the single most useful thing history offers about the present: the field has a very long record of being confidently wrong about timing in both directions, which is worth remembering next time you read a forecast — including the ones in chapter 15.',
       [gSl, revBtn, nextBtn], ro);
   }
 
@@ -782,9 +782,11 @@
     const FONT = '13px Inter, system-ui, sans-serif';
     const MONO = '12px "JetBrains Mono", ui-monospace, monospace';
     let year = 2019;
-    /* Cost to reach GPT-2 (1.5B) quality, roughly, on the hardware and software of each year.
-       Order-of-magnitude only — the point is the slope, not any single figure. */
-    const POINTS = [[2019, 50000], [2020, 20000], [2021, 6000], [2022, 2000], [2023, 700], [2024, 200], [2025, 60], [2026, 30]];
+    /* Cost to reach GPT-2 (1.5B) quality. Three figures are published: ~$43,000 for OpenAI's 2019
+       run (32 TPU v3 for a week, Karpathy's estimate), ~$670 for llm.c on 8×H100 in 2024, and ~$73
+       for nanochat in January 2026. The years between are interpolated on the log axis. */
+    const BASE = 43000;
+    const POINTS = [[2019, BASE], [2020, 18900], [2021, 8300], [2022, 3600], [2023, 1600], [2024, 670], [2025, 220], [2026, 73]];
     const costAt = (y) => {
       for (let i = 0; i < POINTS.length - 1; i++) {
         const [y0, c0] = POINTS[i], [y1, c1] = POINTS[i + 1];
@@ -836,7 +838,7 @@
       g.font = 'bold 30px Inter, system-ui, sans-serif'; g.fillStyle = C.green;
       g.fillText('$' + Math.round(c0).toLocaleString(), TX, 106);
       g.font = MONO; g.fillStyle = C.muted;
-      g.fillText('down ' + Math.round(50000 / c0) + '× since 2019', TX, 130);
+      g.fillText('down ' + Math.round(BASE / c0) + '× since 2019', TX, 130);
       g.font = FONT; g.fillStyle = C.muted;
       wrapText(g, 'Same capability. Better hardware, better kernels, better recipes, and a far better understanding of how much data to use.', TX, 156, 180, 16);
       /* two columns under the chart, with a gutter wide enough that the bold
@@ -845,12 +847,12 @@
       wrapLines(g, 'in 2019 this was the most capable language model on Earth.', 200)
         .forEach((ln, i) => g.fillText(ln, 34, 292 + i * 18));
       g.font = FONT; g.fillStyle = C.muted;
-      wrapText(g, 'Order-of-magnitude figures only. The slope is the point: a capability that is a research milestone one year is a hobby project a few years later, and that is the clearest reason to be careful about calling anything permanently out of reach.', 262, 292, 420, 16);
-      ro.set({ year: year.toFixed(2).replace(/\.00$/, ''), cost: '$' + Math.round(c0).toLocaleString(), 'cheaper than 2019': Math.round(50000 / c0) + '×' });
+      wrapText(g, 'Three published figures, joined up. The slope is the point: a capability that is a research milestone one year is a hobby project a few years later, and that is the clearest reason to be careful about calling anything permanently out of reach.', 262, 292, 420, 16);
+      ro.set({ year: year.toFixed(2).replace(/\.00$/, ''), cost: '$' + Math.round(c0).toLocaleString(), 'cheaper than 2019': Math.round(BASE / c0) + '×' });
     });
 
     return ctx.figure(cv,
-      'GPT-2 was the most capable language model in the world in 2019 and its staged release was a public argument about AI risk. Today the same capability is reproducible for the price of a dinner — Karpathy\'s llm.c reproduces GPT-2 on eight A100s for about twenty dollars of rented time. These are order-of-magnitude figures, and the slope is what matters: capability gets dramatically cheaper even when nothing new is invented.',
+      'GPT-2 was the most capable language model in the world in 2019 and its staged release was a public argument about AI risk. Three points on this curve are published figures: about $43,000 for OpenAI\'s original run on 32 TPUs for a week, about $670 for Karpathy\'s llm.c reproduction on eight H100s in 2024, and about $73 for his nanochat in January 2026. The years between are joined by a straight line on the log axis. The slope is what matters: roughly 2.5× cheaper every year, a 600-fold fall, with nothing fundamentally new invented.',
       [ySl], ro);
   }
 
@@ -860,6 +862,21 @@
     part: 'V',
     title: '80 years in one scroll: the history of AI',
     tagline: 'From a 1943 paper about neurons to models that write code for hours: sixty moments, two winters, and the five things that had to arrive at once.',
+    minutes: 40,
+    objectives: [
+      'place the perceptron, backpropagation, AlexNet, the transformer and ChatGPT in order, and say what each one unlocked',
+      'explain why the 2012 breakthrough needed algorithms, data, compute, money and open publishing to arrive together',
+      'read a log-axis chart: turn a doubling time into a growth factor, and a growth factor back into a doubling time',
+      'spot the pattern behind both AI winters, and judge a confident forecast against the field\'s record',
+    ],
+    takeaways: [
+      '<b>The ideas are old; the scale is new.</b> The neuron is from 1943, the perceptron 1958, backprop 1986, convnets 1989. Almost everything you use was built on them after 2012.',
+      '<b>Five ingredients had to meet.</b> Algorithms, data, compute, money and an open publishing culture. Take one away and the story stalls, which is why backprop waited twenty-six years for AlexNet.',
+      '<b>Winters come from the gap between promise and delivery.</b> Twice the field over-promised, failed on real problems, and lost its funding and its name for a decade.',
+      '<b>Experts miss the timing in both directions.</b> Chess came thirty years late and Go eight years early. Treat every forecast, including this course\'s, accordingly.',
+      '<b>Steady doubling is a straight line on a log axis.</b> growth = 2<sup>t/d</sup>. Ten doublings is about a thousandfold. The record training runs since 2012 imply a doubling roughly every six months.',
+      '<b>A fixed capability gets cheap.</b> Training a GPT-2-class model fell from about $43,000 in 2019 to under $100 in 2026, with nothing fundamentally new invented.',
+    ],
     render(root, ctx) {
       const h = ctx.h;
       const legend = h('div', { style: { display: 'flex', gap: '14px', flexWrap: 'wrap', margin: '0 0 1em', fontSize: '.85rem' } },
@@ -872,9 +889,9 @@
 
       root.append(
         ctx.callout('tryit', '🖐 Do this first — scroll eighty years in ten seconds',
-          '<b>1.</b> Start zoomed out and look at the green curve. It is <b>flat for fifty years</b>, then climbs ten orders of magnitude in fourteen.<br>' +
+          '<b>1.</b> Start zoomed out and look at the green curve, the size of the largest model. It needs <b>fifty-four years</b> to climb its first five orders of magnitude, from the perceptron to AlexNet, and <b>fourteen</b> for the next four.<br>' +
           '<b>2.</b> Find the two gaps where almost nothing happens. Those are the AI winters, and the field ran out of money and credibility in both.<br>' +
-          '<b>3.</b> Now zoom into 2012-2026 and watch the same curve turn near-vertical.<br>' +
+          '<b>3.</b> Press <b>2010–2027</b> and switch the curve to <b>training compute</b>: nearly nine orders of magnitude in fourteen years, a new record almost every year.<br>' +
           '<b>4.</b> Click any entry to read what actually happened.'),
         buildTimeline(ctx),
         ctx.p('Almost everything you use was built in the last sliver on the right. Almost every idea it rests on is decades older.'),
@@ -890,22 +907,54 @@
         ),
 
         ctx.section('The exponential, made visceral',
-          ctx.p('The green curve deserves a second look. Rosenblatt\'s perceptron had a few hundred adjustable weights. LeNet-5 had sixty thousand. AlexNet, sixty million. GPT-3, 175 billion. The largest models of 2026 are estimated at around a trillion. That is ten orders of magnitude: not "a lot bigger" but bigger in the way a galaxy is bigger than a grain of sand. And the curve of training <em>compute</em>, the number of arithmetic operations spent on a single training run, is steeper still, because compute grows with both model size and data.'),
-          ctx.p('In 2018 OpenAI measured that the compute used in the largest training runs had doubled every 3.4 months between AlexNet (2012) and AlphaGo Zero (2017), a 300,000-fold increase in six years, '),
+          ctx.p('The green curve deserves a second look. Rosenblatt\'s perceptron had a few hundred adjustable weights. LeNet-5 had sixty thousand. AlexNet, sixty million. GPT-3, 175 billion. The largest models of 2026 are estimated at around a trillion. That is nearly ten orders of magnitude: not "a lot bigger" but bigger in the way three centuries are longer than one second. And the curve of training <em>compute</em>, the number of arithmetic operations spent on a single training run, is steeper still, because compute grows with both model size and data.'),
+          ctx.p('In 2018 OpenAI measured that the compute used in the largest training runs had doubled every 3.4 months between AlexNet (2012) and AlphaGo Zero (2017), a 300,000-fold increase in six years.'),
           ctx.p('That was far faster than Moore\'s law, because it was driven by spending and parallelism rather than by transistor density. Epoch AI\'s more recent estimates put frontier training compute growth at roughly four to five times per year since 2010, a doubling every six months or so. Both are approximate; neither has clearly stopped. The explorer below lets you feel what those numbers mean.'),
-          ctx.callout('tryit', 'Try it', 'Leave the start at 2012 and set the doubling time to 3.4 months: read off the multiplier at "today". Now set it to 24 months (Moore\'s law). The gap between the two lines at 2026 is the difference between a computer that is a few hundred times faster and one that is a hundred billion times more compute-hungry. Then move the start to 2020 and ask: how many doublings since GPT-3?'),
+          ctx.callout('tryit', 'Try it', '<b>1.</b> Leave the start at 2012 and set the doubling time to 3.4 months. Read "your multiplier": about 4×10^15, four thousand trillion.<br><b>2.</b> Now set it to 24 months, Moore\'s law: about 160. Same fourteen years. That gap is why chips alone do not explain this.<br><b>3.</b> Slide the blue line until it lies along the pink dots, the real record runs, and read the doubling time you landed on. The readout\'s "records imply" is the same answer worked out for you.<br><b>4.</b> Move the start to 2020 and ask: how many doublings since GPT-3?'),
           buildDoubling(ctx),
+          ctx.walkthrough([
+            { say: 'Take the green rule on the chart: the biggest training run doubles every six months.', math: '2012: 1 &nbsp;&rarr;&nbsp; six months on: 2 &nbsp;&rarr;&nbsp; a year on: 4' },
+            { say: 'Five years is ten doublings, and ten doublings multiply by about a thousand.', math: '2 &times; 2 &times; &hellip; (ten times) = 1,024', note: 'Worth keeping: ten doublings is roughly &times;1,000.' },
+            { ask: 'Ten years is twenty doublings. Roughly how much growth is that?',
+              options: ['About 2,000&times;', 'About 20,000&times;', 'About a million&times;'], answer: 2,
+              explain: 'Ten doublings is &times;1,000, and the next ten multiply that by 1,000 again: 1,048,576. Doublings multiply; they do not add.' },
+            { say: 'Compare a steady rule that <i>adds</i> one unit every six months instead.', math: 'adding: 1 &rarr; 21 after ten years &nbsp;&nbsp;&middot;&nbsp;&nbsp; doubling: 1 &rarr; 1,048,576' },
+            { say: 'No ordinary axis can show that: put the million at the top and every earlier year is squashed onto the floor.', note: 'This is why exponential curves seem to "do nothing, then explode". The early part was never flat. It was too small to see.' },
+            { say: 'So the chart above uses a <b>log axis</b>: each gridline up is a multiplication by 100, not an addition of 100.', math: '1 &rarr; 100 &rarr; 10,000 &rarr; 1,000,000 &nbsp; are equal steps' },
+            { say: 'On that axis steady doubling is a straight line, and a shorter doubling time is a steeper one.', note: 'The yellow 3.4-month line is steeper than the green 6-month line. Moore\'s law, the grey one, is nearly flat by comparison.' },
+            { ask: 'The pink dots, the real record runs, lie close to a straight line on this log axis. What does that tell you?',
+              options: ['Compute grew by about the same <i>amount</i> each year', 'Compute was multiplied by about the same <i>factor</i> each year', 'The growth is slowing down'], answer: 1,
+              explain: 'Straight on a log axis means a constant multiplier. The same amount each year would curve over and flatten. A steeper line would mean a bigger multiplier.' },
+            { say: 'In symbols: the growth is 2 raised to the number of doublings that fit in the time.', math: 'growth = 2<sup>t &divide; d</sup> &nbsp;&nbsp; e.g. &nbsp; 2<sup>176 &divide; 6</sup> = 2<sup>29.4</sup> &asymp; 7.1 &times; 10<sup>8</sup>', note: '176 months is 2012 to today. That is the readout\'s "at 6 mo" figure.' },
+            { say: 'Run it backwards on the real records: AlexNet\'s 4.7&times;10<sup>17</sup> FLOP to an estimated 3&times;10<sup>26</sup> is about 640 million-fold, which is 29 doublings.', math: '165 months &divide; 29.2 doublings &asymp; 5.6 months each', note: 'That is the "records imply" number in the readout. Every tenfold is 3.3 doublings, because 2<sup>3.3</sup> &asymp; 10.' },
+          ], {
+            title: 'Doubling, and how to read it off a log axis',
+            recap: 'count how many doubling times fit in the gap, raise 2 to that number, and remember that on a log axis this is a straight line whose steepness is the doubling time.',
+          }),
+          ctx.decoder([
+            { sym: 'growth', name: 'the growth factor', says: 'How many times bigger the quantity is at the end than at the start. A pure multiplier, with no units.', points: '"your multiplier" in the readout under the chart.' },
+            '=',
+            { sym: '2', name: 'two', says: 'Because we are counting doublings. Count triplings instead and this would be a 3.', points: 'the step from 1 to 2 to 4 at the start of the walk-through.' },
+            '^ (',
+            { sym: 't', name: 'the time that has passed', says: 'The gap between the start and now, in the same units as the doubling time.', points: 'the start-year slider: 2012 to today is about 176 months.' },
+            '&divide;',
+            { sym: 'd', name: 'the doubling time', says: 'How long one doubling takes. Small d means fast growth and a steep line on the log axis.', points: 'the doubling-time slider: 3.4, 6 or 24 months.' },
+            ')',
+          ], {
+            title: 'growth = 2^(t ÷ d)',
+            plain: 'Work out how many doubling times fit into the time that has passed, then double that many times. It tells you where a trend goes if it continues. It does not tell you whether it will.',
+          }),
         ),
 
         ctx.section('Winters and springs',
           ctx.callout('tryit', '🖐 Try this — guess when the experts were right',
             '<b>1.</b> Read each prediction, drag the slider to when you think it actually happened, then press <b>Reveal</b>.<br>' +
-            '<b>2.</b> Two were decades late, one was eight years early, and two have still not happened.<br>' +
+            '<b>2.</b> One was thirty years late, one was eight years early, and three have still not happened.<br>' +
             '<b>3.</b> Every one was made by a leading expert with full knowledge of the state of the art. <b>That is the point.</b>'),
           buildPredictionGame(ctx),
 
           ctx.p('Twice, the field has run out of money and reputation at the same time. '),
-          ctx.p('The first winter (roughly 1974 to 1980) followed a decade of promises: machine translation that would be solved in a few years, programs that would be world chess champions by 1968, "general problem solvers". The programs worked on toy problems and fell apart on real ones, because the number of possibilities to search explodes with problem size and nobody had the data or compute to learn instead of search. Governments in the UK and US read damning reports and cut funding. Researchers renamed their work.'),
+          ctx.p('The first winter (roughly 1974 to 1980) followed a decade of promises: machine translation that would be solved in a few years, programs that would be world chess champions by 1967, "general problem solvers". The programs worked on toy problems and fell apart on real ones, because the number of possibilities to search explodes with problem size and nobody had the data or compute to learn instead of search. Governments in the UK and US read damning reports and cut funding. Researchers renamed their work.'),
           ctx.p('The second winter (roughly 1987 to 1993) followed the expert-systems boom. Rule-based systems had genuinely saved companies money, but every rule had to be typed by a human, the systems could not learn, and they broke at the edges of what their authors had anticipated. When cheaper hardware killed the specialised Lisp machines the industry ran on, and Japan\'s Fifth Generation project ended without its goals, "AI" became a word that made investors leave the room. That is when "machine learning" became the polite term.'),
           ctx.p('What is different this time? The honest answer has three parts. First, the current systems make money: coding assistants, search, customer service, image generation are products with revenue, not demos. '),
           ctx.p('Second, the core method, learning from data, does not have the brittleness that killed expert systems; it degrades gracefully instead of falling off a cliff. '),
@@ -918,11 +967,11 @@
           ctx.callout('tryit', '🖐 Try this',
             '<b>1.</b> Press <b>1998</b>. Five separate research fields, five separate sets of techniques, five separate decade-long roadmaps.<br>' +
             '<b>2.</b> Step through <b>2014</b>, <b>2020</b>, <b>2025</b> and watch them collapse into one architecture.<br>' +
-            '<b>3.</b> Note how recent the last column is. Most of it is inside the last four years.'),
+            '<b>3.</b> At 2025, read the dates down the right-hand side. Four of the five say 2021 or later.'),
           buildStateOfArt(ctx),
           ctx.p('And capability does not only arrive — it gets cheap, fast, often without anything new being invented.'),
           ctx.callout('tryit', '🖐 Try this',
-            'Drag the year and watch what it costs to train a GPT-2-class model. In 2019 this was the most capable language model on Earth and its release was a public argument about AI risk. Today it is a weekend project.'),
+            'Drag the year and watch what it costs to train a GPT-2-class model. In 2019 this was the most capable language model on Earth and its release was a public argument about AI risk. Today it is an afternoon and the price of a dinner for two.'),
           buildCapabilityPrice(ctx),
         ),
 
@@ -946,21 +995,21 @@
         ),
 
         ctx.quiz([
-          { q: 'Put these in chronological order: the Transformer paper, backpropagation popularised, the Perceptron, AlexNet.', options: ['Perceptron → backprop → AlexNet → Transformer', 'Backprop → Perceptron → Transformer → AlexNet', 'Perceptron → AlexNet → backprop → Transformer', 'AlexNet → Perceptron → backprop → Transformer'], answer: 0, explain: 'Perceptron 1958, backprop popularised 1986, AlexNet 2012, Transformer 2017. Twenty-six years passed between backprop and the deep-learning breakthrough, waiting for data and compute.' },
-          { q: 'What combination made AlexNet\'s 2012 result possible?', options: ['A new learning algorithm nobody had seen', 'A large labelled dataset (ImageNet), gaming GPUs made programmable by CUDA, and a deep convolutional network', 'Google\'s TPUs', 'The transformer architecture'], answer: 1, explain: 'The algorithm (convolutions + backprop) was from 1989. ImageNet (2009) and CUDA-programmable GPUs (2007) were the new ingredients; two GTX 580 cards trained it in about a week.' },
-          { q: 'What did the two AI winters have in common?', options: ['A shortage of researchers', 'Promises that outran what the systems could deliver on real problems, followed by funding cuts', 'Government bans on AI', 'A lack of interest from the military'], answer: 1, explain: 'Both winters followed periods of over-promising: search-based programs that failed to scale (1970s) and expert systems that were brittle and costly to maintain (late 1980s). Money and reputation left together.' },
-          { q: 'Which is the correct pairing?', options: ['2017 — GPT-3; 2020 — Transformer', '2017 — Transformer; 2020 — GPT-3 and scaling laws', '2012 — Transformer; 2017 — AlexNet', '2022 — GPT-3; 2017 — ChatGPT'], answer: 1, explain: '"Attention Is All You Need" is June 2017; GPT-3 and Kaplan\'s scaling-laws paper are both 2020; ChatGPT launched 30 November 2022.' },
-          { q: 'Roughly how fast has compute for the largest training runs grown since 2012?', options: ['Doubling every two years, like Moore\'s law', 'Doubling every few months: about 3.4 months in 2012–2018 per OpenAI, ~6 months since per Epoch AI', 'It has stayed flat', 'Doubling every ten years'], answer: 1, explain: 'Training compute grew far faster than chip density because it is driven by spending and parallelism, not just transistors. Both figures are approximate estimates from published analyses.' },
+          { q: 'Suppose the compute used by the largest training run doubles every six months. Roughly how much does it grow in five years?', options: ['About 10×', 'About 32×', 'About 1,000×', 'About 1,000,000×'], answer: 2, explain: 'Five years is ten six-month periods, so ten doublings: 2 to the power 10 is 1,024. A million-fold takes twenty doublings, which is ten years. 32× is what you get from doubling once a year.' },
+          { q: 'On a chart with a logarithmic y-axis, a quantity traces a straight rising line. What is it doing?', options: ['Multiplying by the same factor every year', 'Adding the same amount every year', 'Growing faster and faster every year', 'Levelling off towards a ceiling'], answer: 0, explain: 'Equal steps up a log axis are equal multiplications, so a straight line means a constant doubling time. Adding the same amount each year would bend over and flatten on this axis; a shrinking doubling time would bend upward.' },
+          { q: 'Backpropagation was published in 1986 and convolutional networks read digits by 1989, yet the breakthrough came in 2012. Which explanation fits this chapter?', options: ['Researchers had not yet found the right learning algorithm', 'Nobody thought to try neural networks on images before 2012', 'Funding bodies had banned neural-network research in between', 'The method was waiting for a big labelled dataset and cheap programmable GPUs'], answer: 3, explain: 'AlexNet\'s algorithm was essentially 1989\'s. What was new was ImageNet (2009) and gaming GPUs made programmable by CUDA (2007). A working method is one ingredient of five, and the others arrive on their own schedules.' },
+          { q: 'A company announces that its system "will do any office job within three years". Which response does this chapter\'s history support?', options: ['Dismiss it: such forecasts have always proved too optimistic', 'Treat the timing as unknown: experts have missed by decades both ways', 'Accept it: leading experts have usually been close on timing', 'Expect a winter: every boom so far has ended within three years'], answer: 1, explain: 'Chess arrived thirty years late and Go eight years early, and several confident promises have never arrived. The record does not say optimists are always wrong. It says nobody, expert or not, has been reliably right about when.' },
+          { q: 'Which present-day situation most resembles what caused both AI winters?', options: ['A leading lab starts publishing fewer of its results', 'GPU prices rise sharply for a year or two', 'A product is sold on promises that fail on real workloads', 'A new architecture displaces the transformer'], answer: 2, explain: 'Both winters followed the same sequence: confident promises, systems that worked on demonstrations and broke on real problems, then the money and the credibility leaving together. A gap between promise and delivery is the mechanism; the technology involved was different each time.' },
         ]),
 
         ctx.section('Go deeper',
           ctx.ul([
-            '<a href="https://openai.com/index/ai-and-compute/" target="_blank">OpenAI — AI and Compute (2018)</a>: the 3.4-month doubling analysis, with the chart that started the conversation.',
-            '<a href="https://epoch.ai/trends" target="_blank">Epoch AI — Trends</a>: continually updated data on training compute, model sizes, hardware and data across the whole history of ML.',
-            '<a href="https://academic.oup.com/mind/article/LIX/236/433/986238" target="_blank">Turing (1950) — Computing Machinery and Intelligence</a>: still the best essay on the subject; read the objections section.',
-            '<a href="https://www.nature.com/articles/nature14539" target="_blank">LeCun, Bengio, Hinton (2015) — Deep Learning (Nature review)</a>: the three pioneers summarise the field at the moment it took off.',
-            '<a href="https://karpathy.medium.com/software-2-0-a64152b37c35" target="_blank">Karpathy — Software 2.0 (2017)</a>: an argument that learned programs are a new kind of software, written just before the transformer era.',
-            '<a href="https://en.wikipedia.org/wiki/History_of_artificial_intelligence" target="_blank">Wikipedia — History of artificial intelligence</a>: thorough, well-sourced, and good on the winters.',
+            '<a href="https://openai.com/index/ai-and-compute/" target="_blank" rel="noopener">OpenAI — AI and Compute (2018)</a>: the 3.4-month doubling analysis, with the chart that started the conversation.',
+            '<a href="https://epoch.ai/trends" target="_blank" rel="noopener">Epoch AI — Trends</a>: continually updated data on training compute, model sizes, hardware and data across the whole history of ML.',
+            '<a href="https://academic.oup.com/mind/article/LIX/236/433/986238" target="_blank" rel="noopener">Turing (1950) — Computing Machinery and Intelligence</a>: still the best essay on the subject; read the objections section.',
+            '<a href="https://www.nature.com/articles/nature14539" target="_blank" rel="noopener">LeCun, Bengio, Hinton (2015) — Deep Learning (Nature review)</a>: the three pioneers summarise the field at the moment it took off.',
+            '<a href="https://karpathy.medium.com/software-2-0-a64152b37c35" target="_blank" rel="noopener">Karpathy — Software 2.0 (2017)</a>: an argument that learned programs are a new kind of software, written just before the transformer era.',
+            '<a href="https://en.wikipedia.org/wiki/History_of_artificial_intelligence" target="_blank" rel="noopener">Wikipedia — History of artificial intelligence</a>: thorough, well-sourced, and good on the winters.',
           ]),
         ),
 

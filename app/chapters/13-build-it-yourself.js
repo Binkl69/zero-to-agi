@@ -124,22 +124,22 @@ for i in range(10):
     w = w / w.sum(-1, keepdims=True)        # softmax over keys — each row sums to 1
     return w @ v                            # each output = weighted mix of the values`;
 
-  const LOOP_CODE = `model = GPT(vocab_size=65, n_layer=4, n_head=4, n_embd=128, block_size=128)
+  const LOOP_CODE = `# the heart of labs/06_tiny_gpt.py, condensed (the lab adds a learning-rate schedule and checkpoints)
+model = GPT(vocab_size=65, ctx=128, d=128, n_head=4, n_layer=4, dropout=0.1)
 opt = torch.optim.AdamW(model.parameters(), lr=1e-3, betas=(0.9, 0.95), weight_decay=0.1)
 
-for step in range(max_steps):
-    xb, yb = get_batch('train')             # (B, T) ints; yb[t] is xb[t+1] — the next token
-    logits = model(xb)                      # (B, T, vocab)
-    loss = F.cross_entropy(logits.view(-1, logits.size(-1)), yb.view(-1))
+for step in range(5000):
+    xb, yb = get_batch(train_data, 32, 128) # (B, T) ints; yb is xb shifted one place — the next character
+    logits, loss = model(xb, yb)            # logits (B, T, vocab); the loss is cross-entropy on the flattened pair
     opt.zero_grad(set_to_none=True)         # forget last step's gradients
     loss.backward()                         # autograd does what lab 02 does, at scale
     torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
     opt.step()                              # move every weight a little downhill
 
-    if step % 200 == 0:
-        print(step, loss.item(), estimate_val_loss())
-        start = torch.zeros((1, 1), dtype=torch.long)   # the newline token
-        print(decode(model.generate(start, 200)[0].tolist()))`;
+    if step % 100 == 0:
+        print(step, estimate_loss(model, train_data, 32, 128), estimate_loss(model, val_data, 32, 128))
+    if step % 500 == 0:
+        print(sample_text(model, tok, device, 200))   # 200 characters, so you can watch it learn`;
 
   /* =====================================================================
      Interactive (a): in-browser character-level neural language model
@@ -687,8 +687,8 @@ for step in range(max_steps):
       {
         name: 'flat as a board',
         curve: (t) => LN_V - 0.02 * t + 0.03 * Math.sin(t * 9),
-        causes: ['learning rate far too low, or the optimizer never sees the gradients', 'learning rate far too high', 'not enough training data', 'the model is too small'],
-        answer: 0,
+        causes: ['learning rate far too high', 'not enough training data', 'learning rate far too low, or the optimizer never sees the gradients', 'the model is too small'],
+        answer: 2,
         why: 'A loss pinned at ln(V) means the weights are barely moving. The classic causes are a forgotten <code>optimizer.step()</code>, a missing <code>loss.backward()</code>, parameters never passed to the optimizer, or a learning rate some orders of magnitude too small. Check the gradient norms: if they are zero, it is wiring, not tuning.',
       },
       {
@@ -701,16 +701,16 @@ for step in range(max_steps):
       {
         name: 'starts far too high',
         curve: (t) => 9.4 - 5.0 * t * t,
-        causes: ['the data is shuffled wrong', 'the final layer is initialised too confidently', 'the batch size is too small', 'the model needs more layers'],
-        answer: 1,
+        causes: ['the final layer is initialised too confidently', 'the data is shuffled wrong', 'the batch size is too small', 'the model needs more layers'],
+        answer: 0,
         why: 'At step 0 a healthy model should sit at about ln(V) = ' + LN_V.toFixed(2) + ' for ' + V + ' classes, because it should be maximally unsure. Starting at 9 means the output layer is making confident wrong predictions at random initialisation. Scale its weights down — this is exactly what the initialisation checker below measures.',
       },
       {
         name: 'train falls, validation rises',
         curve: (t) => LN_V - 3.3 * Math.pow(t, 0.55),
         curve2: (t) => LN_V - 2.6 * Math.pow(t, 0.5) + Math.max(0, (t - 0.42)) * 4.2,
-        causes: ['the learning rate is too high', 'overfitting — stop early, add data, or regularise', 'the gradients are vanishing', 'the tokenizer is broken'],
-        answer: 1,
+        causes: ['the learning rate is too high', 'the gradients are vanishing', 'the tokenizer is broken', 'overfitting — stop early, add data, or regularise'],
+        answer: 3,
         why: 'Textbook overfitting, and exactly the curve you watched in chapter 3. The model is memorising the training set. Stop at the validation minimum, add more data, add weight decay or dropout, or make the model smaller.',
       },
       {
@@ -853,7 +853,7 @@ for step in range(max_steps):
     });
 
     return ctx.figure(cv,
-      'The single most common thing that stops a from-scratch transformer from running is a shape mismatch, and the single most common mismatch is a width that is not divisible by the number of heads. Drag <b>width d</b> to 100 with 8 heads and watch the row go red. The last row is the other classic: cross-entropy wants the logits flattened to (B·T, V) against targets of shape (B·T,), and forgetting that reshape produces an error message that tells you almost nothing useful.',
+      'The single most common thing that stops a from-scratch transformer from running is a shape mismatch, and the single most common mismatch is a width that is not divisible by the number of heads. Set heads to 8, drag <b>width d</b> to 100, and watch the row go red. The last row is the other classic: cross-entropy wants the logits flattened to (B·T, V) against targets of shape (B·T,), and forgetting that reshape produces an error message that tells you almost nothing useful.',
       [bSl, tSl, dSl, hSl], ro);
   }
 
@@ -863,6 +863,21 @@ for step in range(max_steps):
     part: 'IV',
     title: 'Build it yourself: from one neuron to a tiny GPT',
     tagline: 'Eight short programs, each a working model you wrote by hand. The last one writes Shakespeare-ish, and you will understand every line.',
+    minutes: 50,
+    objectives: [
+      'run the eight labs in order and say what single idea each one isolates',
+      'compute the loss a freshly initialised model should print, ln(V), and spot a run that starts wrong',
+      'read a loss curve and name the bug behind it: nothing updating, overshooting, a hot last layer, overfitting, or broken wiring',
+      'predict the tensor shape at every step of a GPT forward pass, including the two mismatches that crash first',
+    ],
+    takeaways: [
+      '<b>The whole recipe fits in a browser tab.</b> Look up embeddings, one hidden layer, softmax, cross-entropy, backprop, SGD. A GPT changes the middle and the scale, not the recipe.',
+      '<b>Autograd is the chain rule with bookkeeping.</b> Each value remembers how it was made; <code class="inline">backward()</code> walks the graph in reverse and multiplies by one local slope per edge. Gradients accumulate with <code class="inline">+=</code>.',
+      '<b>A model that knows nothing scores ln(V).</b> 4.17 for 65 characters, 10.82 for GPT-2\'s vocabulary. If your first printed loss is far above that, the last layer is initialised too hot.',
+      '<b>Overfit one batch first.</b> A correct pipeline can memorise 32 examples. If it cannot, the bug is wiring (shifted targets, a mask, a detached tensor), and no tuning will fix it.',
+      '<b>Most crashes are shapes.</b> Width must divide by the number of heads, and cross-entropy wants logits flattened to (B·T, V).',
+      '<b>A fixed capability gets cheap fast.</b> GPT-2 cost about $43,000 to train in 2019 and under $100 in 2026. Fine-tuning an open model, building an eval and writing an agent harness are all within one person\'s reach.',
+    ],
     render(root, ctx) {
       const h = ctx.h;
       const lab = (f) => '<code class="inline">labs/' + f + '</code>';
@@ -878,12 +893,13 @@ for step in range(max_steps):
 
         ctx.p('You have spent twelve chapters watching models learn. Sliders moved, loss curves fell, decision boundaries bent. But every one of those demos was written by someone else. There is a particular moment, and most people who work on AI remember theirs, when you type a training loop yourself, run it, and watch numbers you fully understand turn into behaviour you never explicitly programmed. After that moment the whole field looks different: less like magic, more like plumbing you could fix.'),
         ctx.p('Richard Feynman left a line on his blackboard: <em>"What I cannot create, I do not understand."</em> Andrej Karpathy adopted it as the motto for his from-scratch tutorials, and it is the motto of this chapter. The question we answer is practical. What is the shortest sequence of programs, each small enough to read in one sitting, that takes you from a single artificial neuron to a working GPT, and what do you do after that?'),
-        ctx.p('The answer is a ladder of eight labs in the <code class="inline">labs/</code> folder of this repository. Every rung is a complete, runnable model. Together they are about 2,900 lines, a third of which is comments and blank space. Read them, break them, fix them. But before you open a terminal, train a language model right here, in the next section, and watch it learn to spell.'),
+        ctx.p('The answer is a ladder of eight labs in the <code class="inline">labs/</code> folder of this repository. Every rung is a complete, runnable model. Together they are about 3,000 lines, a good third of which is explanation. Read them, break them, fix them. But before you open a terminal, look again at the model you just watched learn to spell. The next section takes it apart.'),
 
-        ctx.section('First, watch a language model learn to spell',
-          ctx.p('The model below is the smallest thing that deserves the name <em>neural language model</em>. It is the architecture Yoshua Bengio\'s group proposed in 2003, and the one Karpathy uses in his "makemore" series. It reads the previous three characters and predicts the next one. That is the entire task, and it is the same task GPT does, with two differences: GPT reads thousands of tokens instead of three characters, and it uses a transformer instead of one hidden layer.'),
+        ctx.section('What you just watched',
+          ctx.p('The model at the top of this page is the smallest thing that deserves the name <em>neural language model</em>. It is the architecture Yoshua Bengio\'s group proposed in 2003, and the one Karpathy uses in his "makemore" series. It reads the previous three characters and predicts the next one. That is the entire task, and it is the same task GPT does, with two differences: GPT reads thousands of tokens instead of three characters, and it uses a transformer instead of one hidden layer.'),
           ctx.p('Here is the whole forward pass. Each of the three context characters is looked up in an <em>embedding table</em> and becomes a vector of 8 numbers. The three vectors are glued into one vector of 24. A layer of 48 <em>tanh</em> neurons squashes that into 48 numbers. A final layer turns those into one score per character in the vocabulary, and a <em>softmax</em> turns the scores into probabilities. The loss is <em>cross-entropy</em>: minus the log of the probability the model gave to the character that actually came next. Backpropagation computes how every weight should move to raise that probability, and SGD moves it.'),
-          ctx.p('Count the parameters for a text with 30 distinct characters: 30 × 8 in the embedding table, 24 × 48 + 48 in the hidden layer, 48 × 30 + 30 in the output layer. That is 2,910 numbers. GPT-3 has 175 billion. The recipe is identical; only the numbers are bigger.'),
+          ctx.p('Count the parameters. The default text has 27 distinct characters, so: 27 × 8 = 216 in the embedding table, 24 × 48 + 48 = 1,200 in the hidden layer, 48 × 27 + 27 = 1,323 in the output layer. That is 2,739 numbers, the figure in the readout. GPT-3 has 175 billion. The recipe is identical; only the numbers are bigger.'),
+          ctx.p('One caution about that falling curve. The default text is a single page, and the model sees it hundreds of times, so part of a loss below 1 is plain memorising. Lab 06 holds back a tenth of its text as a validation set for exactly this reason: it is the only way to tell learning from remembering.'),
           ctx.callout('key', 'What you just saw is the whole field', 'Loss starts at ln(V) because the model starts ignorant. It falls fast as it learns which characters are common, then slowly as it learns which character follows which. It never reaches zero, because English is not fully predictable from three characters. Everything in the rest of this course, from transformers to RLHF, is about making that curve go lower, on more data, with more context. The mechanics you can now see are not a simplification; they are the thing itself.'),
         ),
 
@@ -892,9 +908,9 @@ for step in range(max_steps):
           ctx.code(`python -m venv .venv
 # Windows:            .venv\\Scripts\\activate
 # macOS / Linux:      source .venv/bin/activate
-pip install -r requirements.txt          # numpy, torch (CPU build is fine), matplotlib
+pip install -r requirements.txt          # numpy and torch (the CPU build is fine)
 python labs/01_perceptron.py             # each lab is one file; run it, then read it`, 'bash'),
-          ctx.p('The CPU build of PyTorch is enough. If you have an NVIDIA GPU, install the CUDA build from pytorch.org and lab 06 will pick it up automatically; on Apple silicon the <code class="inline">mps</code> backend works too. Details, expected outputs and the exact commands are in <code class="inline">labs/README.md</code>.'),
+          ctx.p('Labs 01 to 04 and 07 are pure Python and run with nothing installed; 05 and 08 need numpy; only 06 needs PyTorch, and the CPU build is enough. If you have an NVIDIA GPU, install the CUDA build from pytorch.org and lab 06 will pick it up automatically; on Apple silicon the <code class="inline">mps</code> backend works too. Details, expected outputs and the exact commands are in <code class="inline">labs/README.md</code>.'),
         ),
 
         ctx.section('The ladder: eight labs, eight ideas',
@@ -904,17 +920,17 @@ python labs/01_perceptron.py             # each lab is one file; run it, then re
             ctx.p('Rosenblatt\'s 1958 machine in forty lines: a weighted sum, a threshold, and an update rule that nudges the weights toward every example it gets wrong. This is the ancestor of every neuron in every model that follows.'),
             ctx.ul([
               '<b>Read:</b> the update rule. It is one line: <code class="inline">w += lr * (y - y_hat) * x</code>. Everything else is bookkeeping.',
-              '<b>Change:</b> the learning rate (it barely matters here, which is itself a lesson) and the dataset. Then try to make it learn XOR.',
-              '<b>Observe:</b> on linearly separable data it converges in a handful of passes. On XOR it never settles. This is the problem Minsky and Papert used to sink the field in 1969 (chapter 14).',
+              '<b>Change:</b> <code class="inline">LEARNING_RATE</code> and the starting weights (neither changes whether it converges, which is itself a lesson). Then try to set the weights by hand so one perceptron solves XOR.',
+              '<b>Observe:</b> on the AND gate and the OR gate it converges in a handful of passes. On XOR it never settles, until the lab hand-wires a second layer. This is the problem Minsky and Papert used to sink the field in 1969 (chapter 14).',
               '<b>Common bug:</b> forgetting the bias term, or mixing 0/1 labels with a −1/+1 update rule.',
             ])),
 
           ctx.sub('02 · An autograd engine — ' + lab('02_autograd.py'),
-            ctx.p('This is the lab that turns backpropagation from a formula into a tool. A <code class="inline">Value</code> class wraps a number and remembers which two values made it and how. Calling <code class="inline">backward()</code> on the final loss walks that graph in reverse and fills in every gradient. It is a hundred lines, and it is <b>exactly</b> what PyTorch does when you call <code class="inline">loss.backward()</code>, minus the tensors and the C++.'),
+            ctx.p('This is the lab that turns backpropagation from a formula into a tool. A <code class="inline">Value</code> class wraps a number and remembers which two values made it and how. Calling <code class="inline">backward()</code> on the final loss walks that graph in reverse and fills in every gradient. It is about 150 lines, and it is <b>exactly</b> what PyTorch does when you call <code class="inline">loss.backward()</code>, minus the tensors and the C++.'),
             ctx.code(VALUE_CODE, 'python'),
             ctx.ul([
               '<b>Read:</b> <code class="inline">__mul__</code> and <code class="inline">backward()</code>. Notice the closure: each op stores a tiny function that knows the local derivative. Notice the topological sort: a node\'s gradient is only complete after all its consumers have reported in.',
-              '<b>Change:</b> add <code class="inline">tanh</code>, <code class="inline">exp</code> and <code class="inline">__pow__</code>. Then build a single neuron, then a layer, then check your gradients against finite differences: nudge one input by 1e-6 and compare the change in output with what backward() claims.',
+              '<b>Change:</b> first predict the gradients of the worked example on paper, then run it. Break <code class="inline">__mul__</code> by dropping the <code class="inline">* out.grad</code> and watch the built-in finite-difference check fail: it nudges each input by 1e-6 and compares the change in output with what backward() claims. Then add a <code class="inline">sigmoid</code> op and verify it with the same checker.',
               '<b>Observe:</b> gradients <i>accumulate</i> with <code class="inline">+=</code>. A value used twice gets two contributions. If you write <code class="inline">=</code> instead, the second path silently overwrites the first.',
               '<b>Common bug:</b> not zeroing the gradients between training steps, so each step adds to the last. Loss goes up and you have no idea why.',
             ]),
@@ -922,11 +938,11 @@ python labs/01_perceptron.py             # each lab is one file; run it, then re
             buildAutograd(ctx)),
 
           ctx.sub('03 · A multilayer perceptron trained with your own engine — ' + lab('03_mlp.py'),
-            ctx.p('Stack the neurons from lab 02 into layers, feed them 2-D points from two interleaved moons, and train with the loop you will use for the rest of your life: forward, loss, zero the grads, backward, update.'),
+            ctx.p('Stack the neurons from lab 02 into layers, teach them XOR, then feed them 2-D points from two interleaved moons, and train with the loop you will use for the rest of your life: forward, loss, zero the grads, backward, update.'),
             ctx.ul([
               '<b>Read:</b> the training loop. It is five lines and it never changes shape again, all the way to GPT.',
-              '<b>Change:</b> hidden width (4 → 16 → 64), learning rate (0.01 → 0.1 → 1.0), the dataset (moons → circles → XOR).',
-              '<b>Observe:</b> the decision boundary bending around the moons; the loss curve going ragged when the learning rate is too high; a width-2 network failing where width-16 succeeds.',
+              '<b>Change:</b> <code class="inline">--hidden</code> (1 → 8 → 32), <code class="inline">--lr</code> (0.01 → 0.2 → 3 → 10), and <code class="inline">--activation relu</code>.',
+              '<b>Observe:</b> the decision boundary, drawn in ASCII, bending around the moons; the loss bouncing at a learning rate of 3 and freezing solid at 10; one hidden unit stalling near 90% where eight succeed. It takes most of a minute to run, because every number is its own Python object. That slowness is why tensors exist.',
               '<b>Common bug:</b> the sign of the update. <code class="inline">w += lr * w.grad</code> climbs the loss. It is astonishing how often this one happens.',
             ])),
 
@@ -934,18 +950,19 @@ python labs/01_perceptron.py             # each lab is one file; run it, then re
             ctx.p('Before a language model sees text, the text is chopped into tokens. Byte-pair encoding does this by repeatedly merging the most frequent adjacent pair. The algorithm is a loop of ten lines. Its consequences (why models are bad at counting letters, why code costs more tokens than prose) are felt in every product you use.'),
             ctx.ul([
               '<b>Read:</b> the merge loop: count adjacent pairs, merge the most frequent, record the merge, repeat.',
-              '<b>Change:</b> <code class="inline">--vocab-size</code>, which sets 256 byte tokens plus N merges — so 300 buys 44 merges, not 300. Train on prose, then on Python.',
-              '<b>Observe:</b> "the " becoming a single token early; numbers being split into odd pieces; the tokens-per-character ratio falling as the vocabulary grows.',
+              '<b>Change:</b> <code class="inline">--vocab-size</code>, which sets 256 byte tokens plus N merges — so 300 buys 44 merges, not 300. Then paste different text into <code class="inline">TRAINING_TEXT</code>: prose, then Python.',
+              '<b>Observe:</b> " the", leading space included, becoming a single token within the first ten merges; "strawberry" shattering into pieces that are not letters; the bytes packed into each token rising as the vocabulary grows.',
               '<b>Common bug:</b> encoding new text with the merges applied in a different order than they were learned. Order is the tokenizer.',
             ])),
 
           ctx.sub('05 · Attention in NumPy — ' + lab('05_attention.py'),
             ctx.p('One function, and it is the heart of the transformer. Every token asks a question (its <em>query</em>), every token advertises what it holds (its <em>key</em>), and each token\'s output is a weighted average of everyone\'s <em>values</em>, weighted by how well query matches key. The causal mask stops a token from peeking at the future.'),
             ctx.code(ATTN_CODE, 'python'),
+            ctx.p('That is one attention head, condensed. The lab builds the same thing in steps, then adds multiple heads, LayerNorm and the MLP to make a full transformer block, and counts GPT-2\'s 124 million parameters to the last one.'),
             ctx.ul([
               '<b>Read:</b> the mask line and the softmax axis. Both are one-liners and both are where bugs live.',
-              '<b>Change:</b> delete the mask (the model can now read the answer during training). Remove the 1/√d scaling (the softmax saturates and gradients vanish). Split into several heads.',
-              '<b>Observe:</b> the T×T weight matrix plotted as a heatmap: lower-triangular <i>including</i> the diagonal — a token always attends to itself — with every row summing to one.',
+              '<b>Change:</b> point one token\'s query at another token\'s key and watch the weights move. Remove the 1/√d scaling (the softmax saturates and gradients would vanish). Set <code class="inline">causal=False</code>: a model trained this way could read the answer.',
+              '<b>Observe:</b> the T×T weight matrix printed for a three-token example: lower-triangular <i>including</i> the diagonal — a token always attends to itself — with every row summing to one.',
               '<b>Common bug:</b> masking with 0 instead of −∞ (a zero score still gets probability), or softmax over the wrong axis.',
             ])),
 
@@ -958,9 +975,9 @@ python labs/01_perceptron.py             # each lab is one file; run it, then re
             ctx.p(' Under about 0.9 on this much text you are no longer learning English, you are memorising Shakespeare.'),
             ctx.p('Time: <code class="inline">--quick</code> (two layers, 64 dimensions, 300 steps) finishes in a minute or two on a laptop CPU and is enough to watch the loss fall off the ln(65) line. The default run takes ten to fifteen minutes on that same CPU and about two minutes on a GPU. The six-layer version really wants a GPU: roughly three minutes there, several hours on CPU. Run that one overnight, or rent a card for an hour.'),
             ctx.ul([
-              '<b>Read:</b> the <code class="inline">Block</code> class, then <code class="inline">generate()</code>: the model is called once per new character, with the context cropped to the last <code class="inline">block_size</code> tokens.',
-              '<b>Change:</b> <code class="inline">n_layer</code>, <code class="inline">n_embd</code>, <code class="inline">block_size</code>, learning rate, dropout. Train on a different text: your favourite novel, your own chat logs, a code base.',
-              '<b>Observe:</b> train loss vs. validation loss drifting apart as the model starts memorising; samples at temperature 0.5 vs. 1.5; how much worse context 8 is than context 64.',
+              '<b>Read:</b> the <code class="inline">Block</code> class, then <code class="inline">generate()</code>: the model is called once per new character, with the context cropped to the last <code class="inline">ctx</code> tokens.',
+              '<b>Change:</b> <code class="inline">--n-layer</code>, <code class="inline">--d</code>, <code class="inline">--ctx</code>, <code class="inline">--lr</code>, <code class="inline">--dropout</code>. Then point <code class="inline">DATA_PATH</code> at a different text: your favourite novel, your own chat logs, a code base.',
+              '<b>Observe:</b> train loss vs. validation loss drifting apart as the model starts memorising; samples at <code class="inline">--temperature</code> 0.3 vs. 1.5; how <code class="inline">--ctx 8</code> wrecks long-range structure while the loss barely moves.',
               '<b>Common bug:</b> targets not shifted by one position; the causal mask missing (training loss drops to nearly zero because the model reads the answer); forgetting <code class="inline">torch.no_grad()</code> when sampling (slow and memory-hungry, not wrong).',
             ])),
 
@@ -968,25 +985,25 @@ python labs/01_perceptron.py             # each lab is one file; run it, then re
             ctx.p('A tabular agent in a grid world. No neural network yet; a table of numbers, one per (state, action), updated by the Bellman rule until the numbers point the way to the goal. This is the algorithm behind DQN, which is the algorithm behind Atari. The RL that trains reasoning models is a different branch of the same family — policy gradients, from REINFORCE through PPO to GRPO — but the loop is the one you build here: act, observe a reward, update.'),
             ctx.ul([
               '<b>Read:</b> the update: <code class="inline">Q[s,a] += alpha * (r + gamma * max(Q[s2]) - Q[s,a])</code>. The bracket is the <em>temporal-difference error</em>: what you got versus what you expected.',
-              '<b>Change:</b> ε (exploration), γ (how much the future matters), α (learning rate), and the reward for stepping (try a small negative one).',
-              '<b>Observe:</b> the Q-table printed as arrows: it becomes a gradient flowing toward the goal. With ε too small the agent commits early to a mediocre route.',
-              '<b>Common bug:</b> bootstrapping from the terminal state (its future value must be zero), and never decaying ε so the agent wanders forever.',
+              '<b>Change:</b> <code class="inline">--epsilon</code> (exploration), <code class="inline">--gamma</code> (how much the future matters), <code class="inline">--alpha</code> (learning rate). Then <code class="inline">--coin</code>, which adds a coin that respawns next to the start.',
+              '<b>Observe:</b> the Q-table printed as arrows that flow toward the goal and away from the pit. With ε at zero the agent can commit early to a mediocre route. With the coin it never reaches the goal at all: it farms the coin forever. That is reward hacking in twenty lines.',
+              '<b>Common bug:</b> bootstrapping from the terminal state (its future value must be zero), and using the action you will actually take instead of the best one, which quietly turns Q-learning into a different algorithm (SARSA).',
             ])),
 
           ctx.sub('08 · Toy RLHF — ' + lab('08_toy_rlhf.py'),
-            ctx.p('The whole post-training pipeline from chapter 11 at toy scale: a small policy model, a reward model trained on pairs of outputs where one was preferred, and a policy-gradient step that raises the reward while a KL penalty keeps the policy near its starting point.'),
+            ctx.p('The whole post-training pipeline from chapter 11 at toy scale. The "policy" is a probability distribution over eight hand-written replies to one prompt. Simulated labellers compare pairs of replies, a reward model is fitted to their choices, and the policy is pushed toward high reward while a KL penalty keeps it near its starting point. Everything except the size is the real algorithm.'),
             ctx.ul([
-              '<b>Read:</b> the three stages in order: supervised fine-tune, reward model on preferences (the Bradley–Terry loss), policy update with a KL term.',
-              '<b>Change:</b> the KL coefficient β. Set it to zero and watch <em>reward hacking</em>: the policy finds a degenerate output the reward model adores and the text becomes garbage. Set it high and the policy barely moves.',
-              '<b>Observe:</b> reward going up while sample quality goes down is the single most important phenomenon in alignment; you can produce it on a laptop.',
-              '<b>Common bug:</b> forgetting to freeze the reference model, so the KL penalty is measured against a moving target and does nothing.',
+              '<b>Read:</b> the stages in order: the starting policy, the noisy labellers, the reward model (the Bradley–Terry loss), the policy update with a KL term, and DPO, which skips the reward model.',
+              '<b>Change:</b> nothing at first: the lab sweeps the KL coefficient β for you. At β = 0 you get <em>reward hacking</em>: the policy collapses onto the one reply that is polite, confident and wrong, because the reward model cannot see correctness. Then add <code class="inline">"correct"</code> to <code class="inline">RM_FEATURES</code> and the failure disappears.',
+              '<b>Observe:</b> the reward model\'s score keeps rising as β falls, while the true reward rises, peaks, and falls off a cliff. The chance of a correct reply drops from 50% to under 1%. A proxy going up while the real thing goes down is the central problem of alignment, and you can produce it on a laptop.',
+              '<b>Common bug:</b> the KL the wrong way round. It must be KL(policy ‖ reference), which punishes the policy for piling probability where the reference had little. Also a missing minus sign in the Bradley–Terry loss, which learns the exact opposite of the labellers.',
             ])),
         ),
 
         ctx.section('The bug that stops every from-scratch transformer',
           ctx.p('Before the debugging ritual, the failure that comes first: the model will not even run. In a from-scratch transformer that is almost always a tensor shape.'),
           ctx.callout('tryit', '🖐 Try this',
-            '<b>1.</b> Drag <b>width d</b> to 100 while <b>heads</b> is 8. The split-into-heads row turns red — d must divide evenly by the number of heads, and this is the crash almost everyone hits first.<br>' +
+            '<b>1.</b> Set <b>heads</b> to 8, then drag <b>width d</b> to 100. The split-into-heads row turns red — d must divide evenly by the number of heads, and this is the crash almost everyone hits first.<br>' +
             '<b>2.</b> Now drag <b>context T</b> from 8 to 64 and watch the attention-matrix count. It grows with T², which is why context is the first thing to shrink when you run out of memory.<br>' +
             '<b>3.</b> Read the last row. Cross-entropy wants the logits flattened to (B·T, V); forgetting that reshape gives an error message that tells you almost nothing.'),
           buildShapeFlow(ctx),
@@ -1004,29 +1021,46 @@ python labs/01_perceptron.py             # each lab is one file; run it, then re
             '<b>Check the loss at initialisation.</b> With V classes and a humble model it should be ≈ ln(V). If it is much higher, your last layer is too confident at random; scale its weights down. The interactive below shows why.',
             '<b>Overfit a single batch.</b> Take one batch of 32 examples and train on only that. The loss must go essentially to zero. If it cannot memorise 32 examples, something is wired wrong: shifted targets, a mask, a broken gradient.',
             '<b>Grad-check with finite differences.</b> For a few parameters, compute (loss(w+ε) − loss(w−ε)) / 2ε with ε = 1e-5 and compare with the gradient backprop reports. Agreement to four or five digits means the backward pass is right.',
-            '<b>Sweep the learning rate.</b> Try 1e-4, 3e-4, 1e-3, 3e-3, 1e-2 for a few hundred steps each and plot. The best one is usually a factor of three below where the loss explodes. AdamW wants roughly 3e-4 for a large transformer and about 1e-3 for a small one like lab 06; plain SGD wants a hundred times more than either.',
+            '<b>Sweep the learning rate.</b> Try 1e-4, 3e-4, 1e-3, 3e-3, 1e-2 for a few hundred steps each and plot. The best one is usually a factor of three below where the loss explodes. AdamW wants roughly 3e-4 for a large transformer and about 1e-3 for a small one like lab 06; plain SGD wants ten to a hundred times more, which is why the browser model at the top runs happily at 0.1.',
             '<b>Look at the data.</b> Decode a batch and print it. Half of all bugs are a shuffled label, a tokenizer mismatch, or validation data leaking into training.',
             '<b>Fix the seed.</b> <code class="inline">torch.manual_seed(1337)</code>. If two runs of the same code differ, the difference is not your change.',
           ]),
           ctx.callout('tryit', 'Try it', 'Press <b>chars (65)</b> and set σ to 0.1: the loss sits on the yellow line at 4.18 ≈ ln(65). Healthy. Now drag σ up to about 3 and the loss roughly doubles, to around 8, even though the model has learned precisely nothing — it is confidently wrong. Push σ to 10 and it passes 20. Now press <b>GPT-2 BPE</b>: ln(V) jumps to 10.82, and <b>Llama 3</b> takes it to 11.76. When the first line of a real GPT-2 training run prints a loss near 10.9, you now know that is the number it is supposed to print, not a bug — and that a first line reading 15 means the last layer is initialised far too hot.'),
           buildInitChecker(ctx),
+          ctx.walkthrough([
+            { say: 'A model that knows nothing should spread its bets evenly: with 65 possible characters, each one gets a 1-in-65 chance.', math: 'p = 1 &divide; 65 = 0.0154' },
+            { say: 'The loss for one prediction is minus the log of the probability it gave the right answer (chapter 3).', math: 'loss = &minus;ln(p)' },
+            { say: 'Put the even bet in, and whichever character turns out to be right, the loss is the same number.', math: '&minus;ln(1/65) = ln(65) = 4.17', note: 'That is the yellow line in the checker above, and the line the trainer at the top of the page starts on.' },
+            { ask: 'GPT-2 chooses among 50,257 tokens. What should its very first printed loss be?',
+              options: ['About 4.17, the same as before', 'About 10.8', 'About 50,257'], answer: 1,
+              explain: 'ln(50,257) = 10.82. A bigger vocabulary means more ways to be wrong, so the honest starting loss is higher. Press the GPT-2 button above and read it off.' },
+            { say: 'Run it backwards and a loss turns into something you can picture: <b>e to the power of the loss</b> is how many equally likely options the model is still hesitating between.', math: 'e<sup>4.17</sup> = 65' },
+            { say: 'So when lab 06 reaches a loss of 1.7, the model has narrowed 65 choices down to about five and a half for each next character.', math: 'e<sup>1.7</sup> = 5.5', note: 'That number has a name, <em>perplexity</em>, and it is the form in which language-model losses are often reported.' },
+            { ask: 'Your character model, 65 symbols, prints a loss of <b>8.2</b> at step 0. What does that mean?',
+              options: ['It is hesitating between about 3,600 options when only 65 exist, so it is confidently wrong', 'It has already learned a little', 'The vocabulary must be larger than 65'], answer: 0,
+              explain: 'e<sup>8.2</sup> is about 3,600. You cannot be more unsure than "any of the 65", so a loss above ln(65) means the model is sure of wrong answers. That is the red zone of the checker: shrink the last layer.' },
+            { say: 'In symbols, for a vocabulary of <b>V</b> tokens. The first number any training run prints should be close to this.', math: 'starting loss &nbsp;=&nbsp; &minus;ln(1/V) &nbsp;=&nbsp; ln(V)' },
+          ], {
+            title: 'Why an honest "I have no idea" costs exactly ln(V)',
+            recap: 'bet evenly across V options, take minus the log of 1/V, and you get ln(V); raise e to any loss and you get the number of options the model is still torn between.',
+          }),
           ctx.callout('example', 'What this looks like in a real run', 'The first three lines of a healthy nanoGPT run on Shakespeare read something like <code class="inline">step 0: train loss 4.2825, val loss 4.2822</code>, then <code class="inline">step 250: train loss 2.4914</code>, then <code class="inline">step 500: train loss 2.1240</code>. Three numbers, and an experienced person has already checked three things: the first is a whisker above ln(65) = 4.17, which is what a sane init gives; train and val agree so nothing has leaked; and the drop is fast but not instant, so the targets are shifted correctly. When someone glances at a log and says "that looks wrong", this is what they are doing.'),
         ),
 
         ctx.section('Scaling the ladder',
           ctx.p('The eight labs end at a model with a few million parameters. Frontier models have a few trillion. The ladder continues; it just leaves your laptop.'),
           ctx.sub('Reproduce GPT-2',
-            ctx.p('Karpathy\'s <a href="https://github.com/karpathy/nanoGPT" target="_blank">nanoGPT</a> is lab 06 grown up: the same GPT class, plus data loading, mixed precision and multi-GPU support. Point it at a web-text dataset (OpenWebText, or FineWeb) and it reproduces the 124-million-parameter GPT-2 on a rented cloud machine.'),
-            ctx.p(' In <a href="https://github.com/karpathy/llm.c" target="_blank">llm.c</a>, his C/CUDA rewrite, the same reproduction on 10 billion tokens takes about an hour and a half on eight A100s and costs on the order of twenty dollars; the 1.5-billion-parameter GPT-2 XL takes about a day on eight H100s and a few hundred dollars.'),
-            ctx.p(' In 2019 GPT-2 was the most capable language model on Earth, and OpenAI trained it on 32 TPU v3 chips for a week — about $43,000 of compute. By 2026 Karpathy\'s nanochat reaches the same capability in three hours on one eight-GPU node, for roughly $73. He puts that at a 600× fall in seven years: the price of a fixed capability is dropping about 2.5× a year, and has not stopped.'),
+            ctx.p('Karpathy\'s <a href="https://github.com/karpathy/nanoGPT" target="_blank" rel="noopener">nanoGPT</a> is lab 06 grown up: the same GPT class, plus data loading, mixed precision and multi-GPU support. Point it at a web-text dataset (OpenWebText, or FineWeb) and it reproduces the 124-million-parameter GPT-2 on a rented cloud machine.'),
+            ctx.p(' In <a href="https://github.com/karpathy/llm.c" target="_blank" rel="noopener">llm.c</a>, his C/CUDA rewrite, the same reproduction on 10 billion tokens takes about an hour and a half on eight A100s and costs on the order of twenty dollars; the 1.5-billion-parameter GPT-2 XL takes about a day on eight H100s and roughly $670.'),
+            ctx.p(' In 2019 GPT-2 was the most capable language model on Earth, and OpenAI trained it on 32 TPU v3 chips for a week — about $43,000 of compute. In January 2026 Karpathy\'s nanochat reached the same capability in three hours on one eight-GPU node, for roughly $73. That is a 600× fall in seven years: the price of a fixed capability dropping about 2.5× a year. It has not stopped. By March the same run took under two hours.'),
           ),
           ctx.sub('Fine-tune an open model',
             ctx.p('Pretraining from scratch is the expensive part; you almost never need to. Open-weight models (Llama, Qwen, Gemma, Mistral, DeepSeek) are pretrained on trillions of tokens and released for free.'),
             ctx.p(' <em>LoRA</em> (low-rank adaptation) freezes the base model and trains small adapter matrices, about 1% of the parameters, so a 7B model fine-tunes on a single consumer GPU. <em>QLoRA</em> quantises the frozen base to 4 bits so a 70B model fits on one 48 GB card.'),
-            ctx.p(' Hugging Face\'s <a href="https://github.com/huggingface/trl" target="_blank">TRL</a> library gives you SFT, reward modelling, DPO and GRPO trainers that are lab 08 at production quality; <a href="https://github.com/unslothai/unsloth" target="_blank">Unsloth</a> makes the same runs two to five times faster on modest hardware. A weekend and fifty dollars gets you a model that beats any frontier model at one narrow task you define, because you have data they do not.'),
+            ctx.p(' Hugging Face\'s <a href="https://github.com/huggingface/trl" target="_blank" rel="noopener">TRL</a> library gives you SFT, reward modelling, DPO and GRPO trainers that are lab 08 at production quality; <a href="https://github.com/unslothai/unsloth" target="_blank" rel="noopener">Unsloth</a> makes the same runs two to five times faster on modest hardware. A weekend and fifty dollars can get you a model that beats a frontier model at one narrow task you define, because you have data they do not.'),
           ),
           ctx.sub('Build an eval',
-            ctx.p('The most underrated project. Write two hundred questions with verifiable answers in a domain you know, run every model you can reach against them with a script, and publish the table. <a href="https://github.com/EleutherAI/lm-evaluation-harness" target="_blank">lm-evaluation-harness</a> gives you the plumbing. A good eval is more valuable to the field than a mediocre model, and it teaches you where models actually fail rather than where Twitter says they do.'),
+            ctx.p('The most underrated project. Write two hundred questions with verifiable answers in a domain you know, run every model you can reach against them with a script, and publish the table. <a href="https://github.com/EleutherAI/lm-evaluation-harness" target="_blank" rel="noopener">lm-evaluation-harness</a> gives you the plumbing. A good eval is more valuable to the field than a mediocre model, and it teaches you where models actually fail rather than where Twitter says they do.'),
           ),
           ctx.sub('Build an agent harness',
             ctx.p('Take a frontier model through its API (Claude or OpenAI), give it tools (a shell, a file system, a browser), and write the loop from chapter 12: model proposes an action, your code executes it, the result goes back in the context, repeat. The loop is thirty lines. The hard part, and the part that will teach you the most about what models can and cannot do, is the harness around it: sandboxing, timeouts, retries, deciding when to stop, and measuring success on a task suite you build yourself.'),
@@ -1042,21 +1076,21 @@ python labs/01_perceptron.py             # each lab is one file; run it, then re
         ),
 
         ctx.quiz([
-          { q: 'A character-level model with 65 distinct characters prints a loss of 4.2 on its first step. What does that tell you?', options: ['The learning rate is too high', 'Something is wrong: the loss should start near zero', 'It is healthy: ln(65) ≈ 4.17, the loss of uniform guessing', 'The model is overfitting'], answer: 2, explain: 'A model that knows nothing should spread its probability evenly, giving loss = ln(V). A much higher initial loss means the model is confidently wrong at random, usually because the last layer\'s weights are too large.' },
-          { q: 'In the Value class, why do the backward functions use += rather than = when writing gradients?', options: ['It is faster', 'A value used in several places receives a gradient contribution from each place, and they must add up', 'To avoid dividing by zero', 'Because gradients are always positive'], answer: 1, explain: 'If a is used twice (say L = a*a), the total derivative is the sum of the two paths. Overwriting with = keeps only one and silently produces a wrong gradient.' },
-          { q: 'You delete the causal mask from your GPT and the training loss immediately drops to nearly zero. What happened?', options: ['The model got smarter', 'Each position can now see the token it is supposed to predict, so it copies the answer', 'The learning rate is too low', 'The tokenizer broke'], answer: 1, explain: 'Without the mask, position t attends to position t+1, which is exactly its target. The model "predicts" by looking. Suspiciously good training loss is a bug until proven otherwise.' },
-          { q: 'What is the point of "overfit a single batch" as a debugging step?', options: ['It makes the final model better', 'A correct pipeline must be able to memorise 32 examples; if it cannot, the bug is in the wiring, not the data or the scale', 'It measures generalisation', 'It is a way to choose the batch size'], answer: 1, explain: 'It isolates the machinery. Memorising one batch is trivially possible for any working model, so failure to do so pinpoints a structural bug before you spend hours on a full run.' },
-          { q: 'What does LoRA do?', options: ['Trains every weight of a large model with a lower learning rate', 'Freezes the base model and trains small low-rank adapter matrices, so fine-tuning fits on modest hardware', 'Compresses the model after training', 'Replaces attention with a cheaper operation'], answer: 1, explain: 'LoRA adds a small trainable low-rank update to chosen weight matrices while the original weights stay frozen. Roughly 1% of the parameters train, memory drops dramatically, and quality is close to full fine-tuning.' },
+          { q: 'You train a small GPT on a subword vocabulary of 1,000 tokens. The first line of the log reads "step 0: loss 6.91". What do you do?', options: ['Lower the learning rate: the loss is far too high', 'Shrink the last layer: it is confidently wrong', 'Check for a data leak: the loss is too low', 'Nothing: ln(1,000) = 6.91, a healthy start'], answer: 3, explain: 'A model that knows nothing spreads its bets evenly and scores ln(V). For V = 1,000 that is 6.91. Much higher would mean a last layer that is confidently wrong at random; much lower at step 0 would mean the targets are leaking.' },
+          { q: 'In the autograd demo you compute L = a × a with a = 3, using a backward function that writes gradients with = instead of +=. What does it report for dL/da, and what is the truth?', options: ['It reports 3; the true answer is 6', 'It reports 6; the true answer is 3', 'It reports 9; the true answer is 6', 'It reports 0; the true answer is 3'], answer: 0, explain: 'a feeds the multiplication twice, and each path contributes 3. With += they add to 2a = 6. With = the second write overwrites the first and you get 3: a wrong gradient, no error message.' },
+          { q: 'Your GPT\'s training loss falls to 0.02 within 200 steps and its samples are gibberish. Which bug fits?', options: ['The learning rate is too high, so it is overshooting', 'The causal mask is missing, or the targets are not shifted', 'The last layer was initialised with weights that are too large', 'The model is too small for the dataset'], answer: 1, explain: 'A loss that good, that fast, means the model can see the answer: position t is attending to t+1, or y is a copy of x. It "predicts" by looking, then has nothing to look at when it generates. A loss too good to be true is a leak until proven otherwise.' },
+          { q: 'A run on one fixed batch of 32 examples plateaus at a loss of 2.9 after thousands of steps. What is the right next move?', options: ['Train for longer on the full dataset', 'Sweep the learning rate and the batch size', 'Hunt for a wiring bug before anything else', 'Make the model larger'], answer: 2, explain: 'Memorising 32 examples takes no cleverness: any working pipeline drives that loss to nearly zero. If it cannot, something structural is broken (shifted targets, a mask hiding the input, a tensor cut off from the graph), and more data, more steps or more tuning will not touch it.' },
+          { q: 'You set d = 96 and 5 heads in your config and the model crashes before the first step. Why, and what is the smallest fix?', options: ['The context is too long; halve it', 'Cross-entropy needs d to be a power of two; use 128', '96 ÷ 5 is not a whole number; use 4 or 6 heads', 'Five heads need five layers; add a layer'], answer: 2, explain: 'Each head gets d ÷ heads dimensions, and 96 ÷ 5 = 19.2 cannot be a tensor shape. 96 ÷ 4 = 24 and 96 ÷ 6 = 16 both work. This is the row that turned red in the shape-flow demo.' },
         ]),
 
         ctx.section('Go deeper',
           ctx.ul([
-            '<a href="https://www.youtube.com/watch?v=VMj-3S1tku0" target="_blank">Karpathy — The spelled-out intro to neural networks and backpropagation (micrograd)</a>: lab 02, narrated, in 2.5 hours.',
-            '<a href="https://www.youtube.com/watch?v=kCc8FmEb1nY" target="_blank">Karpathy — Let\'s build GPT: from scratch, in code, spelled out</a>: lab 06, line by line.',
-            '<a href="http://karpathy.github.io/2019/04/25/recipe/" target="_blank">A Recipe for Training Neural Networks</a>: the debugging ritual this chapter borrows from.',
-            '<a href="https://github.com/karpathy/nanoGPT" target="_blank">nanoGPT</a> and <a href="https://github.com/karpathy/llm.c" target="_blank">llm.c</a>: reproduce GPT-2 for tens of dollars.',
-            '<a href="https://github.com/huggingface/trl" target="_blank">Hugging Face TRL</a>, <a href="https://github.com/unslothai/unsloth" target="_blank">Unsloth</a> and <a href="https://github.com/EleutherAI/lm-evaluation-harness" target="_blank">lm-evaluation-harness</a>: fine-tune and evaluate open models.',
-            '<a href="https://www.jmlr.org/papers/volume3/bengio03a/bengio03a.pdf" target="_blank">Bengio et al. 2003 — A Neural Probabilistic Language Model</a>: the paper behind the model you trained in your browser.',
+            '<a href="https://www.youtube.com/watch?v=VMj-3S1tku0" target="_blank" rel="noopener">Karpathy — The spelled-out intro to neural networks and backpropagation (micrograd)</a>: lab 02, narrated, in 2.5 hours.',
+            '<a href="https://www.youtube.com/watch?v=kCc8FmEb1nY" target="_blank" rel="noopener">Karpathy — Let\'s build GPT: from scratch, in code, spelled out</a>: lab 06, line by line.',
+            '<a href="http://karpathy.github.io/2019/04/25/recipe/" target="_blank" rel="noopener">A Recipe for Training Neural Networks</a>: the debugging ritual this chapter borrows from.',
+            '<a href="https://github.com/karpathy/nanoGPT" target="_blank" rel="noopener">nanoGPT</a> and <a href="https://github.com/karpathy/llm.c" target="_blank" rel="noopener">llm.c</a>: reproduce GPT-2 for tens of dollars.',
+            '<a href="https://github.com/huggingface/trl" target="_blank" rel="noopener">Hugging Face TRL</a>, <a href="https://github.com/unslothai/unsloth" target="_blank" rel="noopener">Unsloth</a> and <a href="https://github.com/EleutherAI/lm-evaluation-harness" target="_blank" rel="noopener">lm-evaluation-harness</a>: fine-tune and evaluate open models.',
+            '<a href="https://www.jmlr.org/papers/volume3/bengio03a/bengio03a.pdf" target="_blank" rel="noopener">Bengio et al. 2003 — A Neural Probabilistic Language Model</a>: the paper behind the model you trained in your browser.',
           ]),
         ),
       );
