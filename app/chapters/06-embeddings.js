@@ -142,6 +142,21 @@
     part: 'II',
     title: 'Meaning as geometry: embeddings',
     tagline: 'Score two words three ways, watch the obvious approaches fail, then see why turning meaning into geometry is the most reusable idea in modern AI.',
+    minutes: 45,
+    objectives: [
+      'explain why numbering words and one-hot encoding both fail, and what learning the numbers fixes',
+      'compute a dot product, a vector length and a cosine similarity by hand',
+      'predict where a new word lands in an embedding space from the sentences it appears in',
+      'spot when one fixed vector per word is the wrong tool, and when an embedding is carrying the bias of its corpus',
+    ],
+    takeaways: [
+      '<b>Do not choose the numbers, learn them.</b> A number per word invents similarities from spelling; one-hot removes them and leaves every pair equally unrelated. An embedding is a short list of numbers per word that training arranges.',
+      '<b>You shall know a word by the company it keeps.</b> Words used in the same contexts must end up near each other, because that is what makes the context predictable. Nobody defines anything.',
+      '<b>Similar means pointing the same way.</b> Cosine similarity is the dot product divided by both lengths, <code class="inline">a·b / (|a||b|)</code>: +1 same direction, 0 unrelated, −1 opposite, and length does not count.',
+      '<b>Directions carry meaning.</b> king − man + woman lands near queen because the difference between the pairs is stored as a direction. The directions are real; "the arithmetic always works" is not.',
+      '<b>A language model is bracketed by embeddings:</b> a row lookup on the way in, a comparison against a vocabulary table on the way out. Attention then moves each vector by its context, which is how "bank" becomes two meanings.',
+      '<b>An embedding is a measurement of its corpus.</b> It records the text\'s prejudices with the same mechanism that records its analogies, and removing one direction does not remove them.',
+    ],
 
     render(root, ctx) {
       const h = ctx.h, C = ctx.colors;
@@ -152,7 +167,7 @@
         callout('tryit', '🖐 Do this first — measure how alike two words are, three different ways',
           `A computer cannot store the word "cat". It stores numbers. Below are the three ways of choosing those numbers, scored side by side.<br>
            <b>1.</b> Press <b>cat vs catalogue</b>. The numbering scheme calls them <b>almost identical</b>. They share four letters and nothing else.<br>
-           <b>2.</b> Press <b>cat vs dog</b>: the numbering scores 0.91. Now press <b>cat vs democracy</b>: <b>0.93</b>. By this scheme a cat is more like democracy than it is like a dog, because the only thing the number measures is alphabetical distance. Meanwhile one-hot calls both pairs exactly as unrelated as each other.<br>
+           <b>2.</b> Press <b>cat vs dog</b>: the numbering scores 0.91. Now press <b>cat vs democracy</b>: <b>0.94</b>. By this scheme a cat is more like democracy than it is like a dog, because the only thing the number measures is alphabetical distance. Meanwhile one-hot calls both pairs exactly as unrelated as each other.<br>
            <b>3.</b> Work down the preset buttons and watch only the bottom row ever agree with your own judgement.`),
         buildThreeWays(ctx),
         p(`Two different failures there, and they fail in opposite directions.`),
@@ -204,18 +219,63 @@
 
       root.append(section('Measuring "near"',
         p(`"Near each other" needs a definition. The one nearly everyone uses is <em>cosine similarity</em>: the cosine of the angle between two vectors. It ignores length entirely and asks only whether two vectors point the same way.`),
-        p(`That matters because in text a common word gets a long vector and a rare word a short one, and we do not want frequency masquerading as meaning.`),
+        p(`That matters because in a trained space a vector's length mostly reflects how often and how consistently a word was used, not what it means, and we do not want frequency masquerading as meaning.`),
         callout('tryit', '🖐 Try this',
-          `Drag either arrowhead. The cosine depends only on the <b>angle</b>: press <b>Halve a's length</b> as many times as you like and the number does not move at all.<br>
-           Then set them 90° apart and note the score of exactly zero. That is what "unrelated" means numerically.`),
+          `Drag either arrowhead. The cosine depends only on the <b>angle</b>: press <b>Halve a's length</b> three or four times and the number does not move at all.<br>
+           Then press <b>Make them perpendicular</b> and note the score of exactly zero. That is what "unrelated" means numerically.<br>
+           <b>Reset arrows</b> puts back the two arrows the page opened with, which are the ones the arithmetic below uses.`),
         buildCosine(ctx),
+
+        /* maths beat: vector, dot product, norm, cosine — computed on the two arrows the
+           demo opens with, so every number below is printed in its top-left panel. */
+        ctx.walkthrough([
+          { say: 'Each arrow is nothing but two numbers: how far right, and how far up.', math: 'a = [1.6, 0.9] &nbsp;&nbsp;&nbsp; b = [1.9, &minus;0.4]',
+            note: 'A list of numbers like that is a <b>vector</b>. The words on the map had ten numbers each and a real model uses hundreds, but every step below works the same way.' },
+          { say: 'To compare two vectors, multiply them slot by slot and add up the results.', math: '1.6 &times; 1.9 &nbsp;+&nbsp; 0.9 &times; (&minus;0.4) &nbsp;=&nbsp; 3.04 &minus; 0.36 &nbsp;=&nbsp; 2.68',
+            note: 'That sum is the <b>dot product</b>, written a&middot;b. The panel prints it as a&middot;b = 2.680.' },
+          { ask: 'Double both of b\'s numbers, to [3.8, &minus;0.8]. The arrow points exactly the same way. What happens to the dot product?',
+            options: ['It stays at 2.68', 'It doubles, to 5.36', 'It drops to zero'], answer: 1,
+            explain: '1.6 &times; 3.8 + 0.9 &times; (&minus;0.8) = 6.08 &minus; 0.72 = 5.36. Same direction, twice the score. The dot product mixes up "points the same way" with "is long", and that is the problem to fix.' },
+          { say: 'So measure the lengths, using Pythagoras: square each number, add, take the square root.', math: '&radic;(1.6&sup2; + 0.9&sup2;) &nbsp;=&nbsp; &radic;(2.56 + 0.81) &nbsp;=&nbsp; &radic;3.37 &nbsp;=&nbsp; 1.836',
+            note: 'A vector\'s length is called its <b>norm</b> and written |a|. The panel rounds it to 1.84.' },
+          { say: 'Do the same for b.', math: '|b| &nbsp;=&nbsp; &radic;(1.9&sup2; + 0.4&sup2;) &nbsp;=&nbsp; &radic;3.77 &nbsp;=&nbsp; 1.942' },
+          { say: 'Now divide the dot product by both lengths, which cancels the lengths out.', math: '2.68 &divide; (1.836 &times; 1.942) &nbsp;=&nbsp; 2.68 &divide; 3.565 &nbsp;=&nbsp; 0.752',
+            note: 'The yellow line in the panel: cos = 0.752.' },
+          { ask: 'You pressed <b>Halve a\'s length</b>, so a became [0.8, 0.45]. What does that same division give now?',
+            options: ['0.376, half as much', '0.752, unchanged', '1.504, twice as much'], answer: 1,
+            explain: 'The dot product halves to 1.34, and |a| halves to 0.918, so the halving cancels: 1.34 &divide; (0.918 &times; 1.942) = 0.752. That is why the number never moved when you pressed the button.' },
+          { say: 'That number is the <b>cosine similarity</b>, named because it equals the cosine of the angle between the two arrows.', math: 'cos(41.2&deg;) &nbsp;=&nbsp; 0.752',
+            note: 'You never need the angle itself. The division gives you the answer directly, in two dimensions or two thousand.' },
+          { say: 'You have met this number before under another name: subtract each list\'s average first, and this exact formula is the correlation coefficient <i>r</i>.',
+            note: 'So read it the way you read <i>r</i>: +1 moves together perfectly, 0 no relationship, &minus;1 perfectly opposed.' },
+          { ask: 'One-hot "cat" is a 1 in slot 3312 and zeros elsewhere; "dog" is a 1 in a different slot. What is their dot product?',
+            options: ['1', '0', 'It depends on how far apart the slots are'], answer: 1,
+            explain: 'In every slot at least one of the two numbers is zero, so every product is zero and so is the sum. Cosine 0, for every pair of different words. That is why the middle bar in the very first demo never moved.' },
+          { say: 'Written once with symbols, it is the whole of "how alike are these two?" for the rest of the course.', math: 'cos(a, b) &nbsp;=&nbsp; a&middot;b &nbsp;/&nbsp; ( |a| |b| )' },
+        ], {
+          title: 'From two arrows to cosine similarity',
+          recap: 'multiply slot by slot and add, then divide by both lengths, and what is left measures direction alone.',
+        }),
+        ctx.decoder([
+          { sym: 'cos(a, b)', name: 'the cosine similarity of a and b', says: 'How much two vectors point the same way, from +1 through 0 to &minus;1. Length plays no part.', points: 'the yellow "cos =" line in the panel, and the readout under the arrows.' },
+          '=',
+          { sym: 'a&middot;b', name: 'a dot b', says: 'The dot product: multiply the two lists slot by slot and add everything up.', points: 'the "a&middot;b =" line, 2.680 for the opening arrows.' },
+          '/',
+          '(',
+          { sym: '|a|', name: 'the norm of a', says: 'The length of the arrow: square each number, add, square-root.', points: 'the "|a| =" figure, which is what <b>Halve a\'s length</b> changes.' },
+          { sym: '|b|', name: 'the norm of b', says: 'The same, for the other arrow. Dividing by both lengths is what makes the score ignore them.', points: 'the "|b| =" figure on the second line.' },
+          ')',
+        ], {
+          title: 'cos(a, b)  =  a·b / ( |a| |b| )',
+          plain: 'the dot product of two vectors, divided by the length of each, so only the direction they point in is left.',
+        }),
         p(`The scale runs from <b>+1</b> (same direction, same meaning) through <b>0</b> (perpendicular, unrelated) to <b>−1</b> (opposite). In a real embedding space "cat" and "dog" sit around 0.8, "cat" and "democracy" around 0.05.`),
       ));
 
       root.append(section('Now let a model find the numbers itself',
         p(`Everything so far used vectors written by hand. Below is a real <em>skip-gram</em> model — the word2vec training task — running in your browser. It takes a centre word, tries to predict the words around it, and adjusts that word's numbers by gradient descent when it is wrong. Each word actually gets two vectors of two numbers — one for when it is the centre word, one for when it is a neighbour, which is why the readout says 104 parameters for 26 words and not 52. The map plots the first of the two.`),
         callout('tryit', '🖐 Try this',
-          `<b>1.</b> Press <b>Train</b>. The words start scattered at random. Within a few thousand steps the fruits pull together, the animals pull together, the vehicles pull together.<br>
+          `<b>1.</b> Press <b>Train</b>. The words start scattered at random. It runs about 24,000 steps a second, and within a second or two the fruits pull together, the animals pull together, the vehicles pull together.<br>
            <b>2.</b> Push the learning rate up and watch the points thrash and overshoot; drop it low and watch progress crawl. Those are chapter 3's failures, in a real training run.<br>
            <b>3.</b> Press <b>Reset</b> and run again. The clusters re-form, <b>but in different positions and orientations</b> — the absolute coordinates mean nothing, only the relative geometry does.`),
         buildWord2Vec(ctx),
@@ -228,7 +288,7 @@
         callout('tryit', '🖐 Try this',
           `<b>1.</b> The defaults are GPT-2 small: 50,257 tokens × 768 numbers. Read the total — about <b>38.6 million</b> parameters spent purely on "what does each token mean <i>before</i> we look at context?"<br>
            <b>2.</b> Drag the dimension up to 4,096 and the vocabulary to 128,000 — the shape of an open 8B model. The table alone passes half a billion, before a single transformer layer exists.<br>
-           <b>3.</b> Toggle <b>tie input and output</b> and watch the total halve. That is a real trick used in real models.`),
+           <b>3.</b> The table opens <em>tied</em>, as GPT-2's is. Press <b>untie input and output</b> and watch the total double; press again and it halves. Tying is a real trick used in real models.`),
         buildEmbedTable(ctx),
         p(`At the other end the model must turn its final vector back into a word. It compares that vector against every row of a vocabulary matrix, producing one score per token, and softmax turns the scores into probabilities. Many models <em>tie</em> that matrix to the input table, reusing the same weights.`),
         p(`So a language model is bracketed by embeddings: a lookup on the way in, a comparison against the same table on the way out.`),
@@ -272,11 +332,46 @@
       ));
 
       root.append(ctx.quiz([
-        { q: 'Why is numbering words alphabetically (cat = 3312, catalogue = 3313) worse than useless?', options: ['It uses too much memory', 'It asserts a similarity structure the model has no choice but to believe — cat ends up adjacent to catalogue purely because of spelling', 'Numbers cannot represent words', 'It only works for English'], answer: 1, explain: 'You saw it in the opening demo: the numbering scheme confidently reports cat and catalogue as near-identical. One-hot encoding fixes that by making every pair equally distant — which removes the false information and leaves none at all.' },
-        { q: 'What is the distributional hypothesis?', options: ['Words are distributed evenly through a document', 'Words appearing in similar contexts have similar meanings', 'Every word needs its own dimension', 'Meaning is stored in a dictionary the model memorises'], answer: 1, explain: 'It is what let you work out "tesgüino" from five sentences without a definition. It also turns a philosophical question into an engineering one: give a model a context-prediction task, force it through a narrow layer, and similar words must end up near each other.' },
-        { q: 'Cosine similarity divides by both vectors\' lengths, so length cannot affect the score. Why is that the behaviour you want for text?', options: ['Lengths are too expensive to compute', 'Because a common word gets a long vector and a rare one a short vector, and frequency should not masquerade as meaning', 'Because all embeddings already have length 1', 'It is not what you want — length carries meaning'], answer: 1, explain: 'Cosine asks only whether two vectors point the same way. You can verify it on the arrows: double one arrow\'s length and the score does not move.' },
-        { q: 'In the contextual-embedding demo, why do the two "bank" dots sit exactly on top of each other at layer 0?', options: ['A bug in the visualisation', 'At layer 0 the word is just a row lookup from the embedding table — nothing has looked at the sentence yet, so both copies are identical', 'Because the two sentences are the same length', 'Because bank has only one meaning'], answer: 1, explain: 'That is the whole limitation of word2vec: one row per word, so one meaning per word. Attention is what moves each token\'s vector based on its neighbours, which is why the dots separate as you climb the layers.' },
-        { q: 'word2vec trained on news text produced "man is to computer programmer as woman is to homemaker". What does that tell you?', options: ['The algorithm has a bug that debiasing fixes completely', 'The algorithm faithfully recorded a statistical regularity in how people write — an embedding is a measurement of its corpus', 'Embeddings should not be used for search', 'The training ran for too long'], answer: 1, explain: 'It is the same mechanism that produces king − man + woman = queen, so you cannot keep one and drop the other by changing the algorithm. Debiasing methods project out an identified direction and none fully work. A model\'s values are downstream of its data.' },
+        { q: 'A colleague feeds a model product IDs as plain numbers: kettle = 4,017, toaster = 4,018, lawnmower = 9,530. What has the model been told, whether they meant it or not?',
+          options: [
+            'Nothing: an ID is a label, and a model treats a number it is given as an arbitrary name',
+            'That all three products are equally unrelated, because no two of the IDs are equal',
+            'That kettle and toaster are near-twins and lawnmower is far from both, purely from where they sit in the list',
+            'That the products need sorting by ID before training can begin',
+          ], answer: 2,
+          explain: 'A number is not a name to a model: it is a position on a line, and near positions get treated alike. It is the cat-and-catalogue failure from the opening demo. "Equally unrelated" is what one-hot would say, which removes the false information and puts none in its place.' },
+        { q: 'A new slang word, "glorp", turns up only in sentences like "I\'ll have a glorp with extra cheese", "we ordered two glorps for delivery" and "the glorp was cold when it arrived". Where does a skip-gram model put it?',
+          options: [
+            'Near pizza and other takeaway food, because it has to predict the same neighbouring words they do',
+            'Near other short words beginning with g, because spelling is the only thing the model can see',
+            'Nowhere useful until someone supplies a definition for it to learn from',
+            'At the centre of the space, since a new word starts as the average of all the others',
+          ], answer: 0,
+          explain: 'This is tesgüino again. The model never sees spelling or definitions, only which words occur near which. A word that keeps the company of "cheese", "ordered" and "delivery" is pushed to wherever the other words keeping that company already sit.' },
+        { q: 'a = [3, 4] and b = [6, 8]. What is their cosine similarity?',
+          options: [
+            '0.5, because a is half as long as b',
+            '50, which is 3×6 + 4×8',
+            '0, because the two lists share no numbers',
+            '1, because b is a pointing the same way at twice the length',
+          ], answer: 3,
+          explain: 'The dot product is 18 + 32 = 50. The lengths are √25 = 5 and √100 = 10. So 50 ÷ (5 × 10) = 1. The 50 on its own is the dot product, which is inflated by length; dividing by both lengths leaves direction alone, and these two point in exactly the same direction.' },
+        { q: 'A search system uses one fixed word2vec vector per word. A user searches "bank erosion after flooding" and gets pages about mortgage rates. What is the root cause?',
+          options: [
+            'Cosine similarity is too strict a measure, so the system should rank by raw dot product instead',
+            '"bank" has a single vector that blends the river and money senses, and nothing moves it using the words around it',
+            'The vocabulary is too small, so "erosion" and "flooding" were dropped before the search ran',
+            'The vectors have too few dimensions to hold both senses, so doubling the dimension would fix it',
+          ], answer: 1,
+          explain: 'One row in the table means one meaning per word, however many dimensions the row has. That is the two "bank" dots sitting on top of each other at layer 0. Contextual embeddings fix it: attention updates each token\'s vector from its neighbours, so "erosion" and "flooding" pull this "bank" toward the river.' },
+        { q: 'A company ranks CVs by cosine similarity to the embedding of "excellent engineer", using vectors trained on decades of news text. What should you expect?',
+          options: [
+            'The ranking will reproduce associations in that text, such as which names and genders appeared near "engineer"',
+            'A fair ranking, because cosine similarity is pure geometry and holds no opinions about people',
+            'A biased ranking at first, which removing the gender direction from the vectors then fixes completely',
+            'A meaningless ranking, because an embedding can compare words but not whole documents',
+          ], answer: 0,
+          explain: 'An embedding is a measurement of its corpus. The geometry is neutral; what it measured is not. And projecting out a gender direction does not finish the job: Gonen and Goldberg showed the words still cluster by gender afterwards, because the information lives in who sits near whom.' },
       ]));
 
       root.append(section('Go deeper',
@@ -447,7 +542,6 @@
         const pc = toScreen(result.c.px, result.c.py);
         const pr = toScreen(result.px, result.py);
         // stage 1: a -> (a-b)   stage 2: -> (a-b+c)
-        const mid = { x: pa.x + (pb.x - pa.x) * 0 + (pa.x - pb.x) * 0, y: 0 };
         // draw as: from A, subtract B's offset, then add C's offset
         const origin = toScreen(0, 0);
         const stepB = { x: pa.x - (pb.x - origin.x), y: pa.y - (pb.y - origin.y) };
@@ -630,7 +724,8 @@
     const W = 720, H = 320;
     const [cv, g] = ctx.canvas(W, H);
     const cx = W / 2, cy = H / 2, unit = 90;
-    let a = { x: 1.6, y: 0.9 }, b = { x: 1.9, y: -0.4 };
+    const A0 = { x: 1.6, y: 0.9 }, B0 = { x: 1.9, y: -0.4 };
+    let a = { x: A0.x, y: A0.y }, b = { x: B0.x, y: B0.y };
     let drag = null;
     const readout = ctx.readout();
 
@@ -720,10 +815,13 @@
 
     return ctx.figure(cv,
       'Drag either arrowhead. Cosine similarity depends only on the angle between the vectors, never on their lengths, which is exactly why it is the standard measure for embeddings.',
-      [ctx.button('Halve a\'s length', () => { a = { x: a.x / 2, y: a.y / 2 }; }),
+      /* halving stops at the same floor dragging does: thirty presses used to shrink a to
+         nothing, at which point the cosine fell to 0 and contradicted the lesson */
+      [ctx.button('Halve a\'s length', () => { if (Math.hypot(a.x, a.y) / 2 >= 0.15) a = { x: a.x / 2, y: a.y / 2 }; }),
        ctx.button('Make them identical', () => { b = { x: a.x, y: a.y }; }),
        ctx.button('Make them perpendicular', () => { b = { x: -a.y, y: a.x }; }),
-       ctx.button('Make them opposite', () => { b = { x: -a.x, y: -a.y }; })],
+       ctx.button('Make them opposite', () => { b = { x: -a.x, y: -a.y }; }),
+       ctx.button('Reset arrows', () => { a = { x: A0.x, y: A0.y }; b = { x: B0.x, y: B0.y }; })],
       readout);
   }
 
@@ -784,6 +882,7 @@
     }
     let lossEMA = null;
     const curve = [];
+    function logCurve() { curve.push(lossEMA || 0); if (curve.length > 240) curve.shift(); }
     reset();
 
     let running = false;
@@ -820,7 +919,9 @@
     }
 
     function draw() {
-      if (running) { for (let i = 0; i < 400; i++) trainStep(); if (step % 400 === 0) { curve.push(lossEMA || 0); if (curve.length > 240) curve.shift(); } }
+      /* one curve sample per trained frame. This used to be gated on step % 400 === 0,
+         which an odd number of "1000 steps" presses knocked out of phase for good. */
+      if (running) { for (let i = 0; i < 400; i++) trainStep(); logCurve(); }
 
       g.clearRect(0, 0, W, H);
       g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
@@ -907,7 +1008,7 @@
       'A real skip-gram model with 2-dimensional embeddings, trained live by stochastic gradient descent on the template corpus. Only the coloured words belong to the three semantic groups; the model is never told that. Because the whole space is free to rotate and translate, each run settles into a different arrangement, and only the relative positions carry meaning.',
       [playBtn,
        ctx.button('Reset', () => { reset(); }),
-       ctx.button('1000 steps', () => { for (let i = 0; i < 1000; i++) trainStep(); }),
+       ctx.button('1000 steps', () => { for (let i = 0; i < 1000; i++) trainStep(); logCurve(); }),
        lrS],
       readout);
   }
@@ -975,7 +1076,7 @@
           name: 'a number per word',
           detail: a + ' = ' + ia + ', ' + b + ' = ' + ib + '  →  ' + idGap + ' apart in the sorted list',
           v: idScore, col: C.danger,
-          verdict: idGap <= 2 ? 'calls them nearly the same word' : 'calls them unrelated',
+          verdict: idGap <= 2 ? 'calls them nearly the same word' : idScore >= 0.8 ? 'calls them close relatives' : idScore >= 0.5 ? 'calls them loosely related' : 'calls them unrelated',
         },
         {
           name: 'one-hot (its own axis each)',

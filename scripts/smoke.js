@@ -94,6 +94,10 @@ for (const f of files) {
     const problems = [];
     if (errors.length) problems.push(errors.length + ' runtime error(s): ' + errors[0].split('\n').slice(0, 3).join(' | '));
     if (!quiz) problems.push('no quiz');
+    /* the shell renders these around every chapter (see CHAPTER_CONTRACT.md) */
+    if (!(Number.isInteger(ch.minutes) && ch.minutes >= 10 && ch.minutes <= 120)) problems.push('minutes missing or implausible');
+    if (!(Array.isArray(ch.objectives) && ch.objectives.length >= 3 && ch.objectives.length <= 4)) problems.push('needs 3-4 objectives');
+    if (!(Array.isArray(ch.takeaways) && ch.takeaways.length >= 4 && ch.takeaways.length <= 6)) problems.push('needs 4-6 takeaways');
     if (!canvases) problems.push('no canvas');
     if (words < 900) problems.push('thin prose (' + words + ' words rendered)');
     if (!STRUCTURE_ONLY_OK.has(id)) {

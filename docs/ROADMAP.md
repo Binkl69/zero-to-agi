@@ -22,7 +22,7 @@ Level 4 with a wall, or end at Level 4 with a clearly marked road to 6. This is 
 | | Workstream | Status |
 |---|---|---|
 | A | Chapter 1 enrichment — real decisions, not only toy switches | done |
-| B | Maths spine woven through all existing chapters | ch 1–2 done, 3–15 to do |
+| B | Maths spine woven through all existing chapters | done (every chapter has its beat) |
 | C | Classical ML (2 chapters) | to do |
 | D | Production reality (3 chapters) | to do |
 | E | More labs — fine-tuning, RAG, agents, eval harness | to do |
