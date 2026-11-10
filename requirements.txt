@@ -1,9 +1,9 @@
 # Zero -> AGI : Python labs
 #
-# Labs 01, 02, 03, 04, 07 are PURE PYTHON and need nothing from this file.
-# Labs 05 and 08 need numpy.
-# Lab 06 (the tiny GPT) is the only one that needs PyTorch, and the CPU-only
-# build is completely fine.
+# Labs 01, 02, 03, 04, 07 and 11 are PURE PYTHON and need nothing from this file.
+# Labs 05, 08, 10 and 12 need numpy.
+# Labs 06 (the tiny GPT) and 09 (LoRA fine-tuning of it) are the only ones that
+# need PyTorch, and the CPU-only build is completely fine.
 #
 # On Windows and macOS `pip install -r requirements.txt` gets a sensible
 # PyTorch. On Linux it downloads several gigabytes of GPU libraries you do not

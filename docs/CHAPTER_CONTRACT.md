@@ -11,7 +11,7 @@ no external libraries, no build step. The app must work from `file://` and from 
   ZTA.registerChapter({
     id: '02-neural-networks',        // must equal the filename without .js
     num: 2,
-    part: 'I',                        // 'I' | 'II' | 'III' | 'IV' | 'V'
+    part: 'I',                        // 'I' | 'II' | 'III' | 'IV' | 'V' | 'VI'
     title: 'Neural networks & backpropagation',
     tagline: 'One sentence a curious adult would find intriguing.',
     minutes: 40,                      // honest time to read AND play

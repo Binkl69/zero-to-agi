@@ -8,8 +8,8 @@
 # two. A lab that exits 0 can still be wrong, so each one is also checked for
 # the sentence that carries its lesson.
 #
-#   bash scripts/labs-check.sh              all eight labs (needs numpy + torch)
-#   LABS_SKIP_TORCH=1 bash scripts/labs-check.sh    skip lab 06, loudly
+#   bash scripts/labs-check.sh              all twelve labs (needs numpy + torch)
+#   LABS_SKIP_TORCH=1 bash scripts/labs-check.sh    skip labs 06 and 09, loudly
 #   PYTHON=python3.12 bash scripts/labs-check.sh    pick the interpreter
 #
 # Every lab is started from an empty temp directory, not the repo root, so a
@@ -114,6 +114,43 @@ run "08 toy rlhf" "$W" "08_toy_rlhf.py" \
   "WORSE than where we started" \
   "The same curve as Step 4" "WHAT THIS LAB SHOWS"
 
+# Labs 10-12 print measured rates. The patterns pin the conclusion (who wins,
+# what is detected) and leave room in the digits, which are seeded but may
+# move in the last place between numpy versions.
+run "10 rag" "$W" "10_rag.py" \
+  "~questions in the handbook's own words +1[5-7] of 20" \
+  "~questions in a visitor's own words +0 of 12" \
+  "Words they share: none" "~Cutting by section: (6[5-9]|7[0-9])%" \
+  "There is no language model in this lab" "~when it was not +0 of 16"
+
+run "10 rag --by-section --expand (retrieval solved, answer step is not)" "$W" "10_rag.py --by-section --expand" \
+  "~all +32 of 32" "~extracted sentence contains the answer +2[0-9] of 32"
+
+run "10 rag --chunk-words 8 (answers cut in two)" "$W" "10_rag.py --chunk-words 8" \
+  "the evidence is CUT IN TWO by a chunk boundary" "~questions in the handbook's own words +[5-9] of 20"
+
+# 300 simulated runs per number instead of 2,000: enough to tell 8% from 60%
+run "11 agent tools (--trials 300)" "$W" "11_agent_tools.py --trials 300" \
+  "DONE in 5 model calls and 4 tool calls." "ANSWER The total is 124.20" \
+  "8 of 9 replies refused with a reason" "Retrying (1 of 3)" \
+  "~^ +50 +7\.7% +1?[0-9]\.[0-9]% +(9[5-9]|100)\.[0-9]%" \
+  "INJECTION SUCCEEDED. The user asked for a quote" "INJECTION IGNORED." "!Traceback"
+
+run "11 agent tools --guard gate (fooled, but blocked)" "$W" "11_agent_tools.py --guard gate --trials 20" \
+  "BLOCKED: this task is not permitted to use email_note" "INJECTION BLOCKED BY THE GATE."
+
+run "11 agent tools --budget 4 (runs out of steps)" "$W" "11_agent_tools.py --budget 4 --trials 20" \
+  "STOPPED: step budget exhausted after 4 model calls."
+
+run "12 eval harness" "$W" "12_eval_harness.py" \
+  "~^ +20 +5[0-9]\.[0-9]% +1[0-9]\.[0-9]% +(2[0-9]|3[0-5])\.[0-9]%" \
+  "~^ +1000 +9[7-9]\.[0-9]% " "~The paired interval is [12][0-9]% narrower" \
+  "REGRESSION SUITE: FAIL - units got worse" "POSITION BIAS DETECTED" "LENGTH BIAS DETECTED" \
+  "C is better  <- wrong" "WHAT THIS LAB SHOWS"
+
+run "12 eval harness --position-bias 0 (swap test quiet, length bias remains)" "$W" "12_eval_harness.py --position-bias 0" \
+  "no position bias detected" "LENGTH BIAS DETECTED"
+
 if "$PY" -c "import torch" >/dev/null 2>&1; then
   # 150 steps is enough to get from 4.17 (uniform) to under 2.7; the full
   # --quick preset is 300 steps and gets to about 2.3.
@@ -131,11 +168,32 @@ if "$PY" -c "import torch" >/dev/null 2>&1; then
   run "06 tiny gpt --sample (reload the checkpoint)" "" \
     "06_tiny_gpt.py --sample --device cpu --ckpt $CK --max-new-tokens 60 --prompt ROMEO:" \
     "loaded" "ROMEO:"
+
+  # Lab 09 imports lab 06's model. 120 pretraining steps and 60 fine-tuning
+  # steps per method keep this to a few seconds; --quick alone is 300 and 150.
+  run "09 lora fine-tune --quick (120 + 60 steps)" "" \
+    "09_lora_finetune.py --quick --pretrain-steps 120 --steps 60 --device cpu" \
+    "(B is zero, so the adapter is silent)" "~^  LoRA +3,072 +2\.8%" \
+    "Exactly the base model again." "MERGE CHECK: OK" "WHAT THIS LAB SHOWS"
+  # The lesson is in three inequalities, so check them as numbers: both methods
+  # learn the weather, and both get worse at Shakespeare.
+  line=$(grep -F "Held-out weather:" "$WORK/out.txt")
+  forgot=$(grep -F "FORGETTING:" "$WORK/out.txt")
+  if echo "$line" | sed -E 's/[^0-9.]+/ /g' | awk '{ exit !($2 < $1 && $3 < $1) }' &&
+     echo "$forgot" | grep -qE 'LoRA \+0\.[0-9]+, full fine-tuning \+[0-9]+\.[0-9]+'; then
+    printf '  ok             09 both methods learned the weather and both forgot Shakespeare\n'
+  else
+    printf '  FAIL           09 expected weather loss to fall and Shakespeare loss to rise for both methods\n'
+    printf '          %s\n          %s\n' "${line:-missing}" "${forgot:-missing}"
+    failures=$((failures + 1))
+  fi
 elif [ "${LABS_SKIP_TORCH:-0}" = "1" ]; then
   echo "  SKIP           06 tiny gpt: torch is not installed and LABS_SKIP_TORCH=1. LAB 06 WAS NOT RUN."
+  echo "  SKIP           09 lora fine-tune: torch is not installed and LABS_SKIP_TORCH=1. LAB 09 WAS NOT RUN."
 else
   echo "  FAIL           06 tiny gpt: torch is not installed (pip install torch, or set LABS_SKIP_TORCH=1 to skip)"
-  failures=$((failures + 1))
+  echo "  FAIL           09 lora fine-tune: torch is not installed (pip install torch, or set LABS_SKIP_TORCH=1 to skip)"
+  failures=$((failures + 2))
 fi
 
 echo "labs-check: $(( $(date +%s) - total_start ))s total"

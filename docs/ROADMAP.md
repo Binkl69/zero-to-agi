@@ -1,6 +1,7 @@
 # Roadmap: from "informed non-practitioner" to a road that does not stop at 4
 
-The 15 chapters as of v16 land a committed reader at roughly **Level 4** on this ladder:
+Chapters 1–15 land a committed reader at roughly **Level 4** on this ladder. Part VI (chapters
+16–20) and labs 09–12 are the road from 4 toward 5:
 
 | Level | | |
 |---|---|---|
@@ -23,9 +24,9 @@ Level 4 with a wall, or end at Level 4 with a clearly marked road to 6. This is 
 |---|---|---|
 | A | Chapter 1 enrichment — real decisions, not only toy switches | done |
 | B | Maths spine woven through all existing chapters | done (every chapter has its beat) |
-| C | Classical ML (2 chapters) | to do |
-| D | Production reality (3 chapters) | to do |
-| E | More labs — fine-tuning, RAG, agents, eval harness | to do |
+| C | Classical ML (2 chapters) | done: chapters 16–17 |
+| D | Production reality (3 chapters) | done: chapters 18–20 |
+| E | More labs — fine-tuning, RAG, agents, eval harness | done: labs 09–12 |
 
 ---
 
@@ -99,6 +100,9 @@ Sequenced so each depends only on earlier ones.
 ---
 
 ## C. Classical ML
+
+*Built as chapters 16 and 17, placed in a new Part VI after the frontier chapters so that no
+existing chapter was renumbered and no cross-reference broke.*
 
 Two chapters. The course currently goes perceptron → neural networks → transformers, which
 leaves a reader unable to recognise the majority of ML actually running in industry.
