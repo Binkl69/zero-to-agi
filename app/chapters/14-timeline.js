@@ -139,8 +139,24 @@
       desc: 'Positioned as the strongest coding and computer-use model of its generation, able to sustain focus on a single task for many hours, and the model behind the next wave of agent products. Mid-sized models were now doing what only the largest could a year earlier.' },
     { t: 2025.88, year: '2025', tag: 'product', title: 'Claude Opus 4.5 and Gemini 3 (November)',
       desc: 'Two frontier releases within a week of each other closed 2025. Anthropic\'s Opus 4.5 pushed agentic coding and long-horizon task reliability further; Google\'s Gemini 3 led on many reasoning and multimodal benchmarks. The pattern of the year: several labs at roughly the same frontier, leapfrogging every few months.' },
+    { t: 2025.94, year: '2025', tag: 'product', title: 'GPT-5.2 (December): OpenAI answers a "code red"',
+      desc: 'Three weeks after Gemini 3 went to the top of the public leaderboards, Sam Altman sent staff a "code red" memo: pause the side projects and fix ChatGPT. GPT-5.2 followed on 11 December in Instant, Thinking and Pro versions. OpenAI said the release had been planned for months. Either way, the lab that had set the pace since 2022 was now visibly reacting to someone else\'s.' },
+    { t: 2026.13, year: '2026', tag: 'product', title: 'Gemini 3.1 Pro (February)',
+      desc: 'Google\'s mid-cycle update, released in preview on 19 February, scored 77.1% on ARC-AGI-2, a test of abstract puzzle-solving on which its predecessor Gemini 3 Pro had managed 31.1% three months earlier. In May, at I/O, Google said its smaller Gemini 3.5 Flash beat 3.1 Pro on agentic benchmarks at lower cost. A reasoning score more than doubled in one season, and a flagship was overtaken by its own budget sibling in the next.' },
+    { t: 2026.265, year: '2026', tag: 'milestone', title: 'Claude Mythos Preview: a model its maker would not release',
+      desc: 'On 7 April Anthropic announced a model and, in the same breath, said the public could not have it. By the company\'s account Mythos Preview had found thousands of previously unknown security holes across every major operating system and browser, so access went only to about a dozen partners (Apple, Google, Microsoft, the Linux Foundation and others) under Project Glasswing, to patch software before attackers caught up. The evaluator METR put its task horizon at 16 hours or more, the top of what its tests could measure. GPT-2 was withheld in 2019 on a hunch. This time there was a list of bugs.' },
+    { t: 2026.31, year: '2026', tag: 'product', title: 'GPT-5.5 and Muse Spark (April)',
+      desc: 'Two labs reset in the same month. Meta\'s Muse Spark (8 April) was the first model from its new Superintelligence Labs and, unlike Llama, arrived as a product in Meta\'s apps and a private API rather than as weights to download. OpenAI\'s GPT-5.5 (23 April) was reported to be its first fully retrained base model since GPT-4.5, after four point releases on the old one, and came six weeks after GPT-5.4. Release cycles that once took a year were now measured in weeks.' },
+    { t: 2026.38, year: '2026', tag: 'milestone', title: 'A machine disproves an 80-year-old conjecture of Erdős',
+      desc: 'In 1946 Paul Erdős asked how many pairs among <i>n</i> points in the plane can sit exactly one unit apart, and conjectured that the answer grows barely faster than <i>n</i>. On 20 May OpenAI announced that one of its internal reasoning models had found a construction that beats the bound, disproving the conjecture. Outside mathematicians checked the proof; Fields medallist Tim Gowers called it "a milestone in AI mathematics", and Will Sawin sharpened the result within days. Models had been picking off minor open problems since January. This one was famous.' },
     { t: 2026.5, year: '2026', tag: 'product', title: 'The Claude 5 family, and a tier above Opus',
-      desc: 'Anthropic\'s fifth generation arrived through 2026: Claude Fable 5 and Claude Mythos 5 on 9 June — the same model at two levels of safeguard, sitting above the Opus class — then Sonnet 5 on 30 June, Opus 5 on 24 July, and Fable 5.1 and Mythos 5.1 on 1 September. Because this course was written while these were still arriving, this entry is deliberately brief: benchmark numbers date instantly and marketing claims are not history. Chapter 15 discusses what these models can and cannot do at the time of writing.' },
+      desc: 'Anthropic\'s fifth generation arrived through 2026: Claude Fable 5 and Claude Mythos 5 on 9 June — the same model at two levels of safeguard, sitting above the Opus class — then Sonnet 5 on 30 June, Opus 5 on 24 July, Fable 5.1 and Mythos 5.1 on 1 September, and Opus 5.5 on 22 September. Because this course was written while these were still arriving, this entry is deliberately brief: benchmark numbers date instantly and marketing claims are not history. Chapter 15 discusses what these models can and cannot do at the time of writing.' },
+    { t: 2026.52, year: '2026', tag: 'milestone', title: 'Washington steps in: a model release becomes a government decision',
+      desc: 'On 12 June, three days after Fable 5 and Mythos 5 launched, the US government placed both under export controls, and Anthropic, unable to check every user\'s nationality in real time, switched them off for everyone. The controls were lifted on 30 June after Anthropic added safeguards. Days earlier the administration had asked OpenAI to hold GPT-5.6 to a small set of approved partners; it went public on 9 July once the Commerce Department\'s testers had cleared it. In 2019 a lab decided alone whether a model was safe to ship. In 2026 the state had a say.' },
+    { t: 2026.54, year: '2026', tag: 'data', title: 'Kimi K3: 2.8 trillion parameters, open weights', scale: 2.8e12,
+      desc: 'Open models kept pace all year, mostly from China: Moonshot\'s Kimi K2.5 in January, Alibaba\'s Qwen3.5 in February, DeepSeek-V4 in April at 1.6 trillion parameters. Then Beijing\'s Moonshot AI announced Kimi K3 on 16 July and posted the weights on 27 July: a mixture-of-experts model of 2.8 trillion parameters, the largest open-weight model yet, though only a small fraction is active for any one token. The largest model whose size anyone outside a lab can check is now a free download.' },
+    { t: 2026.71, year: '2026', tag: 'product', title: 'GPT-6 and Gemini 4 (September)',
+      desc: 'OpenAI released GPT-6 Astra on 3 September and Google followed with Gemini 4 Argon on 30 September. Both went first to vetted cybersecurity customers and only weeks later to everyone else, GPT-6 reaching free ChatGPT users on 7 October: the staged release that began with Mythos had become the industry\'s habit. OpenAI\'s president announced that the "AGI era" had begun, and several reviewers doubted it. A confident announcement running ahead of the evidence is the oldest pattern in this timeline.' },
   ];
   /* extra points for the scale curve (not entries): today's estimated frontier */
   const EXTRA_POINTS = [
@@ -253,8 +269,18 @@
           label = { txt: txt, right: right };
           if (right) x1 = x + 9 + w + 5; else x0 = x - 9 - w - 5;
         }
+        const taken = (ln) => placed.some(p => p.lane === ln && p.x1 > x0 && p.x0 < x1);
         let lane = 0;
-        while (lane < maxLanes - 1 && placed.some(p => p.lane === lane && p.x1 > x0 && p.x0 < x1)) lane++;
+        while (lane < maxLanes && taken(lane)) lane++;
+        /* no lane left with room for the title (2025–26 is that crowded): keep the
+           dot, drop the title, and pack again on the dot's own width. The title is
+           still one hover away. */
+        if (lane === maxLanes && label) {
+          label = null; x0 = x - R - 1; x1 = x + R + 1;
+          lane = 0;
+          while (lane < maxLanes && taken(lane)) lane++;
+        }
+        if (lane === maxLanes) lane = maxLanes - 1;
         placed.push({ e, x, y: laneY0 - lane * laneGap, lane, r: R, label: label, x0: x0, x1: x1 });
       }
     }
@@ -861,7 +887,7 @@
     num: 14,
     part: 'V',
     title: '80 years in one scroll: the history of AI',
-    tagline: 'From a 1943 paper about neurons to models that write code for hours: sixty moments, two winters, and the five things that had to arrive at once.',
+    tagline: 'From a 1943 paper about neurons to models that write code for hours: seventy moments, two winters, and the five things that had to arrive at once.',
     minutes: 40,
     objectives: [
       'place the perceptron, backpropagation, AlexNet, the transformer and ChatGPT in order, and say what each one unlocked',
@@ -889,7 +915,7 @@
 
       root.append(
         ctx.callout('tryit', '🖐 Do this first — scroll eighty years in ten seconds',
-          '<b>1.</b> Start zoomed out and look at the green curve, the size of the largest model. It needs <b>fifty-four years</b> to climb its first five orders of magnitude, from the perceptron to AlexNet, and <b>fourteen</b> for the next four.<br>' +
+          '<b>1.</b> Start zoomed out and look at the green curve, the size of the largest model. It needs <b>fifty-four years</b> to climb its first five orders of magnitude, from the perceptron to AlexNet, and <b>fourteen</b> for nearly five more.<br>' +
           '<b>2.</b> Find the two gaps where almost nothing happens. Those are the AI winters, and the field ran out of money and credibility in both.<br>' +
           '<b>3.</b> Press <b>2010–2027</b> and switch the curve to <b>training compute</b>: nearly nine orders of magnitude in fourteen years, a new record almost every year.<br>' +
           '<b>4.</b> Click any entry to read what actually happened.'),
@@ -907,7 +933,7 @@
         ),
 
         ctx.section('The exponential, made visceral',
-          ctx.p('The green curve deserves a second look. Rosenblatt\'s perceptron had a few hundred adjustable weights. LeNet-5 had sixty thousand. AlexNet, sixty million. GPT-3, 175 billion. The largest models of 2026 are estimated at around a trillion. That is nearly ten orders of magnitude: not "a lot bigger" but bigger in the way three centuries are longer than one second. And the curve of training <em>compute</em>, the number of arithmetic operations spent on a single training run, is steeper still, because compute grows with both model size and data.'),
+          ctx.p('The green curve deserves a second look. Rosenblatt\'s perceptron had a few hundred adjustable weights. LeNet-5 had sixty thousand. AlexNet, sixty million. GPT-3, 175 billion. The largest published model of 2026, Kimi K3, has 2.8 trillion. That is nearly ten orders of magnitude: not "a lot bigger" but bigger in the way three centuries are longer than one second. And the curve of training <em>compute</em>, the number of arithmetic operations spent on a single training run, is steeper still, because compute grows with both model size and data.'),
           ctx.p('In 2018 OpenAI measured that the compute used in the largest training runs had doubled every 3.4 months between AlexNet (2012) and AlphaGo Zero (2017), a 300,000-fold increase in six years.'),
           ctx.p('That was far faster than Moore\'s law, because it was driven by spending and parallelism rather than by transistor density. Epoch AI\'s more recent estimates put frontier training compute growth at roughly four to five times per year since 2010, a doubling every six months or so. Both are approximate; neither has clearly stopped. The explorer below lets you feel what those numbers mean.'),
           ctx.callout('tryit', 'Try it', '<b>1.</b> Leave the start at 2012 and set the doubling time to 3.4 months. Read "your multiplier": about 4×10^15, four thousand trillion.<br><b>2.</b> Now set it to 24 months, Moore\'s law: about 160. Same fourteen years. That gap is why chips alone do not explain this.<br><b>3.</b> Slide the blue line until it lies along the pink dots, the real record runs, and read the doubling time you landed on. The readout\'s "records imply" is the same answer worked out for you.<br><b>4.</b> Move the start to 2020 and ask: how many doublings since GPT-3?'),
