@@ -5,7 +5,7 @@
 const fs = require('fs'); const path = require('path'); const http = require('http');
 const { chromium } = require('playwright-core');
 const ROOT = path.join(__dirname, '..');
-const EXE = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const launchOptions = require('./lib/browser.js');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
 const a = process.argv.slice(2);
 const id = a[0], figIdx = parseInt(a[1] || '1', 10);
@@ -16,7 +16,7 @@ const arg = (n, d) => { const m = a.find(x => x.startsWith('--' + n + '=')); ret
     fs.readFile(p, (e, d) => { if (e) { rs.writeHead(404); return rs.end(); } rs.writeHead(200, { 'content-type': MIME[path.extname(p)] || 'application/octet-stream', 'cache-control': 'no-store' }); rs.end(d); });
   });
   await new Promise(r => srv.listen(0, '127.0.0.1', r));
-  const browser = await chromium.launch({ executablePath: EXE, args: ['--no-sandbox'] });
+  const browser = await chromium.launch(launchOptions());
   const page = await browser.newPage({ viewport: { width: 1280, height: 1400 }, deviceScaleFactor: 1 });
   await page.goto('http://127.0.0.1:' + srv.address().port + '/#/ch/' + id, { waitUntil: 'load' });
   await page.evaluate(i => { location.hash = '#/ch/' + i; }, id);

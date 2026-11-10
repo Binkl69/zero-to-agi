@@ -28,6 +28,33 @@
   ZTA.isDone = (id) => !!store.get('done', {})[id];
   ZTA.setDone = (id, v) => { const d = store.get('done', {}); if (v) d[id] = true; else delete d[id]; store.set('done', d); ZTA.onProgress && ZTA.onProgress(); };
 
+  /* ---------- quiz memory ----------
+     Two things are remembered. `quizBest[chapterId]` is the best first-try score on a
+     chapter's quiz. `qstats[key]` is the history of one question (right, wrong, last seen),
+     keyed by a hash of its text so it survives questions being reordered or added; the
+     review page uses it to bring back what was missed. */
+  ZTA.qkey = (q) => { let hsh = 5381; const str = String(q); for (let i = 0; i < str.length; i++) hsh = ((hsh << 5) + hsh + str.charCodeAt(i)) | 0; return 'q' + (hsh >>> 0).toString(36); };
+  ZTA.recordAnswer = (q, right) => {
+    const all = store.get('qstats', {}), k = ZTA.qkey(q), cur = all[k] || { r: 0, w: 0 };
+    if (right) cur.r++; else cur.w++;
+    cur.last = right ? 1 : 0; cur.t = Date.now();
+    all[k] = cur; store.set('qstats', all);
+  };
+  ZTA.quizBest = (id) => store.get('quizBest', {})[id] || null;
+  ZTA.setQuizBest = (id, score, total) => {
+    const all = store.get('quizBest', {}), cur = all[id];
+    if (!cur || score > cur.score || total !== cur.total) { all[id] = { score, total }; store.set('quizBest', all); }
+  };
+  /* Shuffle answer options so the right one is not learnable by position. Left alone when
+     an option refers to the others by position ("all of the above"). Returns the new order
+     as indices into the original options. */
+  ZTA.optionOrder = (options) => {
+    const idx = options.map((_, i) => i);
+    if (options.some(o => /\b(above|below|all of these|none of these|both a|neither a)\b/i.test(String(o)))) return idx;
+    for (let i = idx.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+    return idx;
+  };
+
   /* ---------- DOM builder ---------- */
   function h(tag, attrs, ...children) {
     const el = document.createElement(tag);
@@ -51,8 +78,18 @@
   ZTA.h = h;
 
   /* ---------- helper factory (one per chapter render, handles cleanup) ---------- */
-  ZTA.makeCtx = function () {
+  ZTA.makeCtx = function (chapterId) {
     const cleanups = [];
+    /* Off-screen demos are paused. A chapter holds six to nine animated canvases and a
+       reader looks at one; running the rest costs a phone most of its frame rate and its
+       battery. `activeLoop` is whichever loop is executing right now, and every canvas
+       notes which loop paints on it, so a loop knows its own canvases without the chapter
+       having to say. A loop none of whose canvases is near the viewport skips its frame. */
+    let activeLoop = null;
+    const io = (typeof IntersectionObserver === 'function')
+      ? new IntersectionObserver((entries) => { for (const en of entries) en.target._off = !en.isIntersecting; }, { rootMargin: '250px 0px' })
+      : null;
+    if (io) cleanups.push(() => io.disconnect());
     function fmt(v, o) {
       if (o.fmt) return o.fmt(v);
       const step = o.step == null ? 1 : +o.step;
@@ -77,12 +114,23 @@
 
       /* canvas: logical size w×h, DPR-aware, scales to container width. Returns [canvasEl, ctx2d]. */
       canvas: (w, hgt) => {
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        /* The backing store is never less than 2× the logical size. A figure is stretched to
+           the column, which on a desktop is wider than its 720 logical pixels, and a 1×
+           store scaled up is what made every label look soft. (The headless checkers pin
+           the scale to 1 so their geometry stays in logical pixels.) */
+        const dpr = window.__ZTA_CANVAS_SCALE || Math.max(2, Math.min(window.devicePixelRatio || 1, 3));
         const el = h('canvas', { width: Math.round(w * dpr), height: Math.round(hgt * dpr) });
         el.style.aspectRatio = w + ' / ' + hgt;
         const c = el.getContext('2d');
         c.scale(dpr, dpr);
         el.W = w; el.H = hgt;
+        /* note which loop paints here (see `activeLoop` above) */
+        for (const name of ['clearRect', 'fillRect', 'beginPath']) {
+          const real = c[name];
+          if (typeof real !== 'function') continue;
+          c[name] = function () { if (activeLoop && activeLoop.lastCv !== el) { activeLoop.cvs.add(el); activeLoop.lastCv = el; } return real.apply(c, arguments); };
+        }
+        if (io) io.observe(el);
         // map a mouse/touch event to logical coords
         el.pos = (ev) => {
           const r = el.getBoundingClientRect();
@@ -136,10 +184,20 @@
       /* animation loop: fn(dt, t) — auto-stopped when the chapter unmounts. Returns controller. */
       loop: (fn) => {
         let running = true, raf = 0, last = performance.now(), t0 = last;
+        const self = { cvs: new Set(), lastCv: null };
+        const offscreen = () => {
+          if (!self.cvs.size || window.__ZTA_ALWAYS_RUN) return false;
+          for (const cv of self.cvs) if (cv._off !== true) return false;
+          return true;
+        };
         const step = (now) => {
           if (!running) return;
           const dt = Math.min(0.05, (now - last) / 1000); last = now;
-          try { fn(dt, (now - t0) / 1000); } catch (e) { console.error(e); running = false; return; }
+          if (!offscreen()) {
+            activeLoop = self; self.lastCv = null;
+            try { fn(dt, (now - t0) / 1000); } catch (e) { activeLoop = null; console.error(e); running = false; return; }
+            activeLoop = null;
+          }
           raf = requestAnimationFrame(step);
         };
         raf = requestAnimationFrame(step);
@@ -182,7 +240,7 @@
         };
         const chips = [];
         parts.forEach((pt) => {
-          if (typeof pt === 'string') { row.append(h('span', { class: 'decoder-glue' }, pt)); return; }
+          if (typeof pt === 'string') { row.append(h('span', { class: 'decoder-glue', html: pt })); return; }
           const chip = h('button', { class: 'decoder-sym', html: pt.sym });
           chips.push(chip);
           chip.addEventListener('click', () => {
@@ -259,18 +317,38 @@
         return box;
       },
 
-      /* quiz: [{q, options:[..], answer: index, explain}] */
+      /* quiz: [{q, options:[..], answer: index, explain}]
+         The first answer to each question is the one that counts, toward the score shown at
+         the end and toward the review page's memory of what was missed. Clicking again
+         afterwards still shows which option is right; it just cannot improve the score. */
       quiz: (questions, title) => {
         const box = h('div', { class: 'quiz' }, h('h3', {}, title || 'Check your understanding'));
+        const first = new Array(questions.length).fill(null);
+        const result = h('div', { class: 'quiz-result', role: 'status' });
+        const finish = () => {
+          if (first.some(v => v === null)) return;
+          const score = first.filter(Boolean).length, total = questions.length;
+          if (chapterId) ZTA.setQuizBest(chapterId, score, total);
+          result.innerHTML = '<b>' + score + ' of ' + total + ' on the first try.</b> ' +
+            (score === total ? 'Nothing to patch. On to the next chapter.'
+              : score >= total - 1 ? 'Solid. The one you missed will come back on the Review page.'
+              : 'Worth another look at the sections those questions came from. The ones you missed will come back on the Review page.');
+          result.classList.add('shown');
+          if (ZTA.onQuizDone) ZTA.onQuizDone(chapterId, score, total);
+        };
         questions.forEach((qq, qi) => {
-          const opts = qq.options.map((o) => h('button', { class: 'quiz-opt', html: o }));
+          const order = ZTA.optionOrder(qq.options);
+          const opts = order.map((oi) => h('button', { class: 'quiz-opt', html: qq.options[oi] }));
           const explain = h('div', { class: 'quiz-explain', style: { display: 'none' } });
           opts.forEach((b, i) => b.addEventListener('click', () => {
-            opts.forEach((x, j) => { x.classList.toggle('correct', j === qq.answer); x.classList.toggle('wrong', j === i && i !== qq.answer); });
-            explain.style.display = ''; explain.innerHTML = (i === qq.answer ? '✅ Correct. ' : '❌ Not quite. ') + (qq.explain || '');
+            const right = order[i] === qq.answer;
+            opts.forEach((x, j) => { x.classList.toggle('correct', order[j] === qq.answer); x.classList.toggle('wrong', j === i && !right); });
+            explain.style.display = ''; explain.innerHTML = (right ? '✅ Correct. ' : '❌ Not quite. ') + (qq.explain || '');
+            if (first[qi] === null) { first[qi] = right; ZTA.recordAnswer(qq.q, right); finish(); }
           }));
           box.append(h('div', { class: 'quiz-q' }, h('div', { class: 'q' }, (qi + 1) + '. ' + qq.q), opts, explain));
         });
+        box.append(result);
         return box;
       },
 

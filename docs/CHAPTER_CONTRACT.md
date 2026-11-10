@@ -14,12 +14,36 @@ no external libraries, no build step. The app must work from `file://` and from 
     part: 'I',                        // 'I' | 'II' | 'III' | 'IV' | 'V'
     title: 'Neural networks & backpropagation',
     tagline: 'One sentence a curious adult would find intriguing.',
+    minutes: 40,                      // honest time to read AND play
+    objectives: [                     // 3–4, each finishing "After this chapter you can…"
+      'explain why one hidden layer is enough to solve XOR',
+    ],
+    takeaways: [                      // 4–6 lines: the chapter, for revision. HTML allowed.
+      '<b>Backprop is the chain rule, reused.</b> Each slope is computed once and passed back.',
+    ],
     render(root, ctx) {
       // build DOM with ctx helpers and root.append(...)
     },
   });
 })();
 ```
+
+### What the shell adds around your chapter (`app/js/main.js`)
+
+You write content; the shell supplies the rest, the same way for every chapter:
+
+- **`minutes`, `objectives`, `takeaways`** are rendered as the time estimate in the kicker, a
+  "what you will be able to do" box above the first interactive, and a recap placed just ahead
+  of the quiz. `node scripts/smoke.js` fails a chapter that is missing any of them.
+- **Every `<h2>`** (every `ctx.section`) becomes an entry in the sidebar's section list, which
+  follows the reader's scroll. Section titles are navigation: make them say something.
+- **Every `<em>` whose text is a glossary term** becomes a hover/tap definition. So when you
+  introduce jargon with `<em>`, add it to `app/js/glossary.js` in the same change.
+- **The quiz** shuffles its options, scores the first answer to each question, marks the
+  chapter complete when finished, and feeds missed questions to the Review page. Do not write
+  options that depend on position ("both of the above").
+- **`ctx.loop` is paused while every canvas it paints is off-screen.** A phone cannot animate
+  nine canvases at once. Do not use a loop to advance something the reader cannot see.
 
 `render` is called every time the user opens the chapter and its DOM is discarded when they leave.
 Anything started with `ctx.loop` / `ctx.interval` is stopped automatically. Register any other
@@ -46,6 +70,10 @@ cleanup with `ctx.onCleanup(fn)`.
 | `ctx.tabs([{label, content}])` | tabbed panels. |
 | `ctx.quiz([{q, options:[...], answer: idx, explain}])` | 3–5 questions at the end of every chapter. |
 | `ctx.rand(a,b)`, `ctx.randn()`, `ctx.clamp`, `ctx.lerp`, `ctx.heat(v)`, `ctx.colors.*` | numerics + palette. |
+
+Canvases are drawn in logical pixels (the `w`×`h` you asked for) on a backing store at least
+2× that, so text stays sharp when a figure is stretched to the column. Never read
+`canvas.width` to lay something out; use `canvasEl.W` and `canvasEl.H`.
 
 Canvas background is `#0a0e16`; draw with `ctx.colors` (accent blue `#7c9cff`, green `#38d9a9`,
 warn yellow `#fbbf24`, danger red `#fb7185`, pink, purple, orange, muted grey). Text colour `#e6ebf5`.

@@ -96,7 +96,7 @@ module.exports = function instrumentSource() {
        covering most of the canvas counts as that start — including a clear that
        is too SMALL, which is the bug worth catching: the uncovered strip keeps
        last frame's pixels forever. */
-    if (x <= 1 && y <= 1 && w >= cv.width * 0.5 && h >= cv.height * 0.5) {
+    if (x <= 1 && y <= 1 && w >= (cv.W || cv.width) * 0.5 && h >= (cv.H || cv.height) * 0.5) {
       if (s.ops.length) s.last = s.ops;
       s.ops = []; s.seq = 0;
       if (window.__ZTA_RECORD) s.ops.push({ kind: 'clear', box: { x0: x, y0: y, x1: x + w, y1: y + h }, alpha: 1, clip: null, seq: s.seq++ });
